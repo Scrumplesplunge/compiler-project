@@ -1,5 +1,4 @@
 import Data.Char
-import Input
 import Reader
 
 -- Tokenization.
@@ -57,11 +56,12 @@ as_token (token_type, state) = Just (Token token_type $ location state, state)
 
 -- Match an exact token type.
 match_token :: TokenType -> String -> Reader Token
-match_token t value state = match t value state >>= as_token
+match_token t value = Reader (\input ->
+  run_reader (match t value) input >>= as_token)
 
 match_and_finish :: Reader a -> (a -> TokenType) -> Reader Token
-match_and_finish read f state =
-  read state >>= (\(x, state') -> as_token (f x, state'))
+match_and_finish read f = Reader (\input ->
+  run_reader (read >>= (return . f)) input >>= as_token)
 
 fail_token :: String -> Location -> Token
 fail_token message location =
@@ -70,10 +70,10 @@ fail_token message location =
 tokens :: Reader Token -> String -> [Token]
 tokens reader input = tokens' $ new_state input
   where tokens' (InputState [] _) = []
-        tokens' state =
-          case reader state of
-            Nothing -> [fail_token "Bad token" $ location state]
-            Just (x, state') -> x : tokens' state'
+        tokens' input' =
+          case run_reader reader input' of
+            Nothing -> [fail_token "Bad token" $ location input']
+            Just (x, input'') -> x : tokens' input''
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
@@ -133,9 +133,7 @@ read_ident =
 read_integer = match_and_finish (repeat1 (match_filter isDigit))
                                 (INTEGER . read)
 read_newline = match_token NEWLINE      "\n"
-read_spaces state =
-  repeat1 (match () " ") state >>= (\(xs, state') ->
-    as_token (SPACES (length xs), state'))
+read_spaces = match_and_finish (repeat1 (match () " ")) (SPACES . length)
 
 -- Read a single occam token.
 read_token = first_of (

@@ -1,55 +1,104 @@
 module Reader where
 
-import Input
+-- Tracking the position in the source.
+type LineNumber = Int
+type CharNumber = Int
+data Location = Location LineNumber CharNumber
 
-type Reader a = InputState -> Maybe (a, InputState)
+instance Show Location where
+  show (Location line char) =
+    "line " ++ show line ++ ", character " ++ show char
+
+start :: Location
+start = Location 1 1
+
+line :: Location -> LineNumber
+line (Location l c) = l
+
+char :: Location -> CharNumber
+char (Location l c) = c
+
+update :: Char -> Location -> Location
+update '\n' (Location l c) = Location (l + 1) 1
+update _ (Location l c) = Location l (c + 1)
+
+-- Reading the input.
+data InputState = InputState String Location
+  deriving Show
+
+newtype Reader a = Reader (InputState -> Maybe (a, InputState))
+
+-- Construct an input state.
+new_state :: String -> InputState
+new_state input = InputState input start
+
+-- Read a single character and advance the input.
+getch :: Reader Char
+getch = Reader (\input ->
+  case input of
+    (InputState [] _) -> Nothing
+    (InputState (x:xs) location) -> Just (x, InputState xs $ update x location))
+
+location :: InputState -> Location
+location (InputState i l) = l
+
+run_reader (Reader r) input = r input
+
+instance Functor Reader where
+  fmap f (Reader ra) = Reader (\input ->
+    ra input >>= (\(x, input') -> Just (f x, input')))
+
+instance Applicative Reader where
+  pure x = Reader (Just . (,) x)
+  (Reader rab) <*> (Reader ra) = Reader (\input ->
+    rab input >>= (\(fab, input') ->
+      ra input' >>= (\(a, input'') -> Just (fab a, input''))))
+
+instance Monad Reader where
+  return = pure
+  (Reader xm) >>= f = Reader (\input ->
+    xm input >>= (\(x, input') ->
+      run_reader (f x) input'))
+
+read_fail :: Reader a
+read_fail = Reader (const Nothing)
 
 -- Match an exact prefix.
 match :: a -> String -> Reader a
-match result value input = match' value input
-  where match' [] input' = Just (result, input')
-        match' (x:xs) input' =
-          getch input' >>= (\(y, input'') ->
-            if x == y then match' xs input'' else Nothing)
+match result value = match' value
+  where match' [] = Reader (\input -> Just (result, input))
+        match' (x:xs) =
+          getch >>= (\y -> if x == y then match' xs else read_fail)
 
 -- Match a character that passes a predicate
 match_filter :: (Char -> Bool) -> Reader Char
-match_filter f input =
-  getch input >>= (\(y, input') ->
-    if f y then Just (y, input') else Nothing)
+match_filter f = getch >>= (\x -> if f x then return x else read_fail)
 
 -- Try each reader in sequence until one succeeds.
 first_of :: [Reader a] -> Reader a
-first_of [] state = Nothing
-first_of (r:rs) state =
-  case r state of
-    Nothing -> first_of rs state
-    j -> j
-
--- Match each reader in sequence, succeeding only if all succeed.
-all_of :: [Reader a] -> Reader [a]
-all_of [] state = Just ([], state)
-all_of (r:rs) state =
-  r state >>= (\(x, state') ->
-    all_of rs state' >>= (\(xs, state'') ->
-      Just (x:xs, state'')))
+first_of [] = Reader (const Nothing)
+first_of (r:rs) = Reader (\input ->
+  case run_reader r input of
+    Nothing -> run_reader (first_of rs) input
+    j -> j)
 
 -- Read one element, followed by multiple elements.
 read_cons :: Reader a -> Reader [a] -> Reader [a]
-read_cons r rs state =
-  r state >>= (\(x, state') ->
-    rs state' >>= (\(xs, state'') ->
-      Just (x:xs, state'')))
+read_cons r rs = r >>= (\x -> rs >>= (return . (x:)))
+
+-- Match each reader in sequence, succeeding only if all succeed.
+all_of :: [Reader a] -> Reader [a]
+all_of [] = return []
+all_of (r:rs) = read_cons r (all_of rs)
 
 -- Repeat a reader until it fails. The resultant reader never fails.
 repeat0 :: Reader a -> Reader [a]
-repeat0 read input =
-  case read input of
+repeat0 read = Reader (\input ->
+  case run_reader read input of
     Nothing -> Just ([], input)
     Just (x, input') ->
-      repeat0 read input' >>= (\(xs, input'') ->
-        Just (x:xs, input''))
+      run_reader (repeat0 read >>= (return . (x:))) input')
 
 -- Like repeat, but must succeed at least once.
 repeat1 :: Reader a -> Reader [a]
-repeat1 read input = read_cons read (repeat0 read) input
+repeat1 read = read_cons read (repeat0 read)
