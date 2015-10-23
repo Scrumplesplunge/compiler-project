@@ -1,0 +1,4 @@
+PROC foo(VALUE x, CHAN y) = -- Some thing
+  WHILE TRUE
+    y ! 2
+:

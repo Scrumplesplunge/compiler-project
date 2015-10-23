@@ -4,6 +4,7 @@ module Reader where
 type LineNumber = Int
 type CharNumber = Int
 data Location = Location LineNumber CharNumber
+  deriving Eq
 
 instance Show Location where
   show (Location line char) =
@@ -45,23 +46,27 @@ location (InputState i l) = l
 run_reader (Reader r) input = r input
 
 instance Functor Reader where
-  fmap f (Reader ra) = Reader (\input ->
-    ra input >>= (\(x, input') -> Just (f x, input')))
-
-instance Applicative Reader where
-  pure x = Reader (Just . (,) x)
-  (Reader rab) <*> (Reader ra) = Reader (\input ->
-    rab input >>= (\(fab, input') ->
-      ra input' >>= (\(a, input'') -> Just (fab a, input''))))
+  fmap f ra = ra >>= return . f
 
 instance Monad Reader where
-  return = pure
+  return x = Reader (Just . (,) x)
   (Reader xm) >>= f = Reader (\input ->
-    xm input >>= (\(x, input') ->
-      run_reader (f x) input'))
+    xm input >>= (\(x, input') -> run_reader (f x) input'))
+
+instance Applicative Reader where
+  pure = return
+  rab <*> ra = rab >>= (\f -> ra >>= return . f)
 
 read_fail :: Reader a
 read_fail = Reader (const Nothing)
+
+-- Bind failure.
+infixl 1 >>!
+(>>!) :: Reader a -> Reader a -> Reader a
+(Reader ra) >>! (Reader rb) = Reader (\input ->
+  case ra input of
+    Nothing -> rb input
+    j -> j)
 
 -- Match an exact prefix.
 match :: a -> String -> Reader a
@@ -76,11 +81,8 @@ match_filter f = getch >>= (\x -> if f x then return x else read_fail)
 
 -- Try each reader in sequence until one succeeds.
 first_of :: [Reader a] -> Reader a
-first_of [] = Reader (const Nothing)
-first_of (r:rs) = Reader (\input ->
-  case run_reader r input of
-    Nothing -> run_reader (first_of rs) input
-    j -> j)
+first_of = foldr (>>!) read_fail
+--r >>! first_of rs
 
 -- Read one element, followed by multiple elements.
 read_cons :: Reader a -> Reader [a] -> Reader [a]
@@ -88,16 +90,11 @@ read_cons r rs = r >>= (\x -> rs >>= (return . (x:)))
 
 -- Match each reader in sequence, succeeding only if all succeed.
 all_of :: [Reader a] -> Reader [a]
-all_of [] = return []
-all_of (r:rs) = read_cons r (all_of rs)
+all_of = foldr read_cons (return [])
 
 -- Repeat a reader until it fails. The resultant reader never fails.
 repeat0 :: Reader a -> Reader [a]
-repeat0 read = Reader (\input ->
-  case run_reader read input of
-    Nothing -> Just ([], input)
-    Just (x, input') ->
-      run_reader (repeat0 read >>= (return . (x:))) input')
+repeat0 read = repeat1 read >>! return []
 
 -- Like repeat, but must succeed at least once.
 repeat1 :: Reader a -> Reader [a]

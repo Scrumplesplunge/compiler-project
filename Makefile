@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 all:
-	ghc Lexer.hs
+	ghc Parser.hs
 
 clean:
-	rm -rf *.hi *.o Lexer
+	rm -rf *.hi *.o Parser
