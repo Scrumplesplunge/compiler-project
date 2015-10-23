@@ -40,9 +40,6 @@ getch = Reader (\input ->
     (InputState [] _) -> Nothing
     (InputState (x:xs) location) -> Just (x, InputState xs $ update x location))
 
-location :: InputState -> Location
-location (InputState i l) = l
-
 run_reader (Reader r) input = r input
 
 instance Functor Reader where
@@ -56,6 +53,9 @@ instance Monad Reader where
 instance Applicative Reader where
   pure = return
   rab <*> ra = rab >>= (\f -> ra >>= return . f)
+
+location :: Reader Location
+location = Reader (\(InputState x l) -> Just (l, InputState x l))
 
 read_fail :: Reader a
 read_fail = Reader (const Nothing)

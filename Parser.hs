@@ -117,6 +117,4 @@ show_line (x:xs) = show x ++ "\n" ++ show_line xs
 -- Run the lexer!
 main = do
   chars <- getContents
-  let lines = break_lines $ Lexer.tokens Lexer.read_token chars
-  let processed_lines = process_indent . map normalize_line $ lines
-  putStr $ concat $ map show_line processed_lines
+  putStr . show . parse_indent . Lexer.tokens Lexer.read_token $ chars

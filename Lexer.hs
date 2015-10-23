@@ -72,17 +72,15 @@ token_location :: Token a -> Location
 token_location (Token _ l) = l
 
 -- Convert a token type and state into a token.
-as_token :: (a, InputState) -> Maybe (Token a, InputState)
-as_token (token_type, state) = Just (Token token_type $ location state, state)
+as_token :: Location -> a -> Token a
+as_token loc token_type = Token token_type loc
 
 -- Match an exact token type.
 match_token :: a -> String -> Reader (Token a)
-match_token t value = Reader (\input ->
-  run_reader (match t value) input >>= as_token)
+match_token t value = location >>= (\loc -> match t value >>= return . as_token loc)
 
 match_and_finish :: Reader a -> (a -> b) -> Reader (Token b)
-match_and_finish read f = Reader (\input ->
-  run_reader (read >>= (return . f)) input >>= as_token)
+match_and_finish read f = location >>= (\loc -> read >>= return . as_token loc . f)
 
 tokens :: Reader (Token a) -> String -> [Token a]
 tokens reader input = tokens' $ new_state input
@@ -156,14 +154,14 @@ read_spaces = match_and_finish (repeat1 (match () " ")) (SPACES . length)
 
 -- Read a single occam token.
 read_token = first_of (
-    read_keyword ++ read_symbol ++ [
+    read_keyword ++ [
       read_char,
       read_comment,
       read_ident,
       read_integer,
       read_newline,
       read_string,
-      read_spaces])
+      read_spaces] ++ read_symbol)
 
 -- For debugging purposes: output each of the token types.
 show_tokens :: Reader RawToken -> String -> IO ()
