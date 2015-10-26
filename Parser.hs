@@ -1,127 +1,134 @@
-{-# LANGUAGE GADTs #-}
-
 import IndentParser
-import Lexer
+import qualified Lexer
+import Parsing
 
--- Parse result.
-data Result a = Success a | Failure String
-  deriving (Eq, Show)
+-- Convenience function for matching token types.
+match_type :: (TokenType -> Bool) -> (TokenType -> a) -> Parser Token a
+match_type m f = Match (m . Lexer.token_type) >>> (\t -> f (Lexer.token_type t))
 
-instance Functor Result where
-  fmap f r = r >>= return . f
+-- TERMINAL PARSERS
+char_literal :: Parser Token Char
+char_literal = match_type
+  (\t -> case t of
+    CHAR _ -> True
+    _ -> False)
+  (\t -> let (CHAR x) = t in x)
 
-instance Monad Result where
-  return x = Success x
-  (Failure m) >>= f = Failure m
-  (Success x) >>= f = f x
+dedent :: Parser Token ()
+dedent = match_type (==DEDENT) (const ())
 
-instance Applicative Result where
-  pure = return
-  rf <*> rx = rf >>= (\f -> fmap f rx)
+ident :: Parser Token String
+ident = match_type
+  (\t -> case t of
+    IDENT _ -> True
+    _ -> False)
+  (\t -> let (IDENT x) = t in x)
 
-(Failure m) >>! xb = xb
-(Success x) >>! xb = Success x
+indent :: Parser Token ()
+indent = match_type (==INDENT) (const ())
 
--- Generic parser rules.
-data Parser a b where
-  Epsilon :: Parser a ()
-  Match :: (a -> Bool) -> Parser a a
-  Union :: [Parser a b] -> Parser a b
-  Concat :: Parser a b -> Parser a c -> Parser a (b, c)
-  Reduce :: (b -> c) -> Parser a b -> Parser a c
+integer :: Parser Token Integer
+integer = match_type
+  (\t -> case t of
+    INTEGER x -> True
+    _ -> False)
+  (\t -> let (INTEGER x) = t in x)
 
-infixr 4 |||
-(Union ps) ||| (Union qs) = Union (ps ++ qs)
-(Union ps) ||| q = Union (ps ++ [q])
-p ||| (Union qs) = Union (p:qs)
-p ||| q = Union [p, q]
+keyword :: Lexer.Keyword -> Parser Token ()
+keyword k = match_type (==(KEYWORD k)) (const ())
 
-infixr 5 >>>
-p >>> f = Reduce f p
+string_literal :: Parser Token String
+string_literal = match_type
+  (\t -> case t of
+    STRING x -> True
+    _ -> False)
+  (\t -> let (STRING x) = t in x)
 
-infixr 6 +++
-a +++ b = Concat a b
+symbol :: Lexer.Symbol -> Parser Token ()
+symbol s = match_type (==(SYMBOL s)) (const ())
 
-run_parser :: Parser a b -> [a] -> [(b, [a])]
-run_parser Epsilon xs = [((), xs)]
-run_parser (Match f) [] = []
-run_parser (Match f) (x:xs) = if f x then [(x, xs)] else []
-run_parser (Union []) xs = []
-run_parser (Union (p:ps)) xs = run_parser p xs ++ run_parser (Union ps) xs
-run_parser (Concat a b) xs =
-  run_parser a xs >>= (\(a', xs') ->
-    run_parser b xs' >>= (\(b', xs'') -> [((a', b'), xs'')]))
-run_parser (Reduce f p) xs =
-  run_parser p xs >>= (\(a, xs') -> [(f a, xs')])
-
-full_parse :: Parser a b -> [a] -> Maybe b
-full_parse p xs =
-  case [result | (result, []) <- run_parser p xs] of
-    [] -> Nothing
-    (x:xs) -> Just x
-
--- Parse an identifier.
-ident = Match (\t ->
-  case Lexer.token_type t of
-    IndentParser.IDENT _ -> True
-    _ -> False) >>> (\t ->
-      case Lexer.token_type t of
-        IndentParser.IDENT x -> x
-        _ -> error "This should never happen.")
-
--- Parse an integer.
-integer = Match (\t ->
-  case Lexer.token_type t of
-    IndentParser.INTEGER _ -> True
-    _ -> False) >>> (\t ->
-      case Lexer.token_type t of
-        IndentParser.INTEGER x -> x
-        _ -> error "This should never happen.")
-
--- Parse a symbol.
-symbol :: Lexer.Symbol -> Parser IndentParser.Token Lexer.Symbol
-symbol s = Match (\t ->
-  case Lexer.token_type t of
-    IndentParser.SYMBOL s' -> s == s'
-    _ -> False) >>> const s
-
--- Parse a newline.
-newline = Match (\t ->
-  case Lexer.token_type t of
-    IndentParser.NEWLINE -> True
-    _ -> False) >>> const ()
-
--- Demo parser.
+-- NONTERMINAL PARSERS
 data AST = Add AST AST
+         | Assignment AST AST
+         | Char Char
+         | Div AST AST
+         | Input AST AST
+         | Integer Integer
+         | Mul AST AST
+         | Output AST AST
+         | Parallel [AST]
+         | Sequence [AST]
+         | Skip
+         | Stop
+         | String String
+         | Sub AST AST
          | Variable String
-         | Value Integer
+  deriving Show
 
-instance Show AST where
-  show (Add a b) = "(" ++ show a ++ " + " ++ show b ++ ")"
-  show (Variable x) = x
-  show (Value x) = show x
+assignment :: Parser Token AST
+assignment =
+  ident +++ symbol Lexer.ASSIGN +++ expr             >>> (\(a, (_, b)) ->
+                                                           Assignment (Variable a) b)
 
-left :: Parser a b -> Parser a c -> ((b, c) -> b) -> Parser a b
-left p q f = Union extensions
-  where extensions = p : [e +++ q >>> f | e <- extensions]
+term :: Parser Token AST
+term = ident                                         >>> Variable
+   ||| integer                                       >>> Integer
+   ||| char_literal                                  >>> Char
+   ||| string_literal                                >>> String
+   ||| symbol Lexer.OPEN_PAREN +++ expr +++
+       symbol Lexer.CLOSE_PAREN                      >>> fst . snd
 
-line :: Parser IndentParser.Token AST
-line = expr +++ newline                                               >>> fst
+prod :: Parser Token AST
+prod = left
+  term
+    (symbol Lexer.MUL +++ term                       >>> flip Mul . snd
+    ||| symbol Lexer.DIV +++ term                    >>> flip Div . snd)
+    (\(a, b) -> b a)
 
-term :: Parser IndentParser.Token AST
-term = ident                                                          >>> Variable
-   ||| integer                                                        >>> Value
-   ||| symbol Lexer.OPEN_PAREN +++ expr +++ symbol Lexer.CLOSE_PAREN  >>> (\(_, (e, _)) -> e)
-
-expr :: Parser IndentParser.Token AST
+expr :: Parser Token AST
 expr = left
-         term (symbol Lexer.ADD +++ term)                                 (\(a, (_, b)) -> Add a b)
+        prod
+        (symbol Lexer.ADD +++ prod                   >>> flip Add . snd
+        ||| symbol Lexer.SUB +++ prod                >>> flip Sub . snd)
+        (\(a, b) -> b a)
+
+channel :: Parser Token AST
+channel = ident                                      >>> Variable
+
+input :: Parser Token AST
+input = channel +++ symbol Lexer.INPUT +++ ident     >>> (\(a, (_, b)) ->
+                                                           Input a (Variable b))
+
+output :: Parser Token AST
+output = channel +++ symbol Lexer.OUTPUT +++
+         expr                                        >>> (\(a, (_, b)) ->
+                                                           Output a b)
+
+sequence_block :: Parser Token AST
+sequence_block =
+  keyword Lexer.SEQ +++ indent +++
+  repeat0 process +++ dedent                         >>> (\((), ((), (ps, ()))) ->
+                                                           Sequence ps)
+
+parallel_block :: Parser Token AST
+parallel_block =
+  keyword Lexer.PAR +++ indent +++
+  repeat0 process +++ dedent                         >>> (\((), ((), (ps, ()))) ->
+                                                           Parallel ps)
+
+process :: Parser Token AST
+process = keyword Lexer.SKIP                         >>> const Skip
+      ||| keyword Lexer.STOP                         >>> const Stop
+      ||| assignment
+      ||| input
+      ||| output
+      ||| sequence_block
+      ||| parallel_block
 
 -- Run the lexer!
 main = do
   chars <- getContents
-  let raw_tokens = tokens read_token chars
+  let raw_tokens = Lexer.tokens Lexer.read_token chars
   let tokens = parse_indent raw_tokens
-  putStr . concat . map ((++"\n") . show) $ tokens
-  putStr "\n\n"
-  putStr . show $ full_parse line tokens
+  putStrLn . concat . map ((++"\n") . show) $ tokens
+  putStrLn . show $ full_parse process tokens

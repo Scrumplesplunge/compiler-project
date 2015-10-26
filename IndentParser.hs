@@ -5,9 +5,9 @@ import Reader
 import Data.Char
 
 -- Takes a line and returns how much it is indented by.
-indent :: [Lexer.RawToken] -> Int
-indent [] = 0
-indent (t:ts) =
+indent_level :: [Lexer.RawToken] -> Int
+indent_level [] = 0
+indent_level (t:ts) =
   case Lexer.token_type t of
     Lexer.SPACES s -> s
     _ -> 0
@@ -15,9 +15,8 @@ indent (t:ts) =
 -- Returns true if the line ends with a continuation token.
 continues :: [Lexer.RawToken] -> Bool
 continues [] = False
-continues [t] = False
-continues [s, t] = Lexer.is_continuation_token s
-continues (r:s:t:ts) = continues (s:t:ts)
+continues [t] = Lexer.is_continuation_token t
+continues (s:t:ts) = continues (t:ts)
 
 -- Break a sequence of raw tokens into separate lines, by splitting at the
 -- newline tokens.
@@ -25,7 +24,7 @@ break_lines :: [Lexer.RawToken] -> [[Lexer.RawToken]]
 break_lines = foldr f [[]]
   where f t (l:ls) =
           if Lexer.token_type t == Lexer.NEWLINE then
-            [t]:l:ls
+            []:l:ls
           else
             (t:l):ls
 
@@ -49,13 +48,13 @@ normalize_line (x:xs) =
     _ -> strip_spaces (x:xs)
 
 -- Token stream representation after indentation has been handled.
-data TokenType = CHAR String            -- <Character literal, processed>
+data TokenType = CHAR Char              -- <Character literal, processed>
                | DEDENT                 -- <decreased indentation>
                | IDENT String           -- 'x'
                | INDENT                 -- <increased indentation>
                | INTEGER Integer        -- '2'
                | KEYWORD Lexer.Keyword  -- <Any Keyword>
-               | NEWLINE                -- '\n'
+             --  | NEWLINE                -- '\n'
                | STRING String          -- <String literal, processed>
                | SYMBOL Lexer.Symbol    -- <Any symbol>
   deriving (Eq, Show)
@@ -84,12 +83,12 @@ convert :: [Lexer.RawToken] -> [Token]
 convert = map $ fmap f
   where f x =
           case x of
-            Lexer.CHAR c    -> CHAR $ interpret_escapes c
+            Lexer.CHAR c    -> CHAR . head $ interpret_escapes c
             Lexer.COMMENT c -> error "Comment in normalized token stream."
             Lexer.IDENT i   -> IDENT i
             Lexer.INTEGER i -> INTEGER i
             Lexer.KEYWORD k -> KEYWORD k
-            Lexer.NEWLINE   -> NEWLINE
+            Lexer.NEWLINE   -> error "Newline in normalized token stream."
             Lexer.SPACES n  -> error "Whitespace in normalized token stream."
             Lexer.STRING s  -> STRING $ interpret_escapes s
             Lexer.SYMBOL s  -> SYMBOL s
@@ -102,17 +101,19 @@ process_indent ls = process_indent' ls 0 False
 -- token, remove the NEWLINE.
 norm_cont :: Bool -> Int -> [[Lexer.RawToken]] -> [Token] -> [[Token]]
 norm_cont c new_indent ls l =
-  (if c then init l else l) : process_indent' ls new_indent c
+  l : process_indent' ls new_indent c
 
 -- Internals of process indent: Takes lines, indent, and whether or not to treat
 -- the first line as a continuation line, and produces lines of tokens with
 -- correct indentation.
 process_indent' :: [[Lexer.RawToken]] -> Int -> Bool -> [[Token]]
-process_indent' [] _ _ = []
+process_indent' [] _ True = []
+process_indent' [] previous_indent False =
+  [indent_by Reader.start (-previous_indent)]
 process_indent' (l:ls) previous_indent True =
-  if indent l < previous_indent then
+  if indent_level l < previous_indent then
     let (Lexer.Token t loc) = head l in
-      error $ "Bad indentation at " ++ show loc
+      error $ "Badly indented continuation line at " ++ show loc
   else
     norm_cont (continues l) previous_indent ls $ convert $ strip_spaces l
 process_indent' (l:ls) previous_indent False =
