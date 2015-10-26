@@ -88,7 +88,10 @@ tokens reader input = tokens' $ new_state input
         tokens' input' =
           case run_reader (repeat0 reader) input' of
             Nothing -> error "This should never happen."
-            Just (xs, input'') -> xs
+            Just (xs, InputState rs loc) ->
+              case rs of
+                [] -> xs
+                _ -> error $ "Illegal token at " ++ show loc
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
