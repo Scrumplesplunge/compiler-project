@@ -62,7 +62,6 @@ read_fail = Reader (const Nothing)
 
 -- Bind failure.
 infixl 1 >>!
-(>>!) :: Reader a -> Reader a -> Reader a
 (Reader ra) >>! (Reader rb) = Reader (\input ->
   case ra input of
     Nothing -> rb input
