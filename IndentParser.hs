@@ -19,6 +19,8 @@ continues [t] = False
 continues [s, t] = Lexer.is_continuation_token s
 continues (r:s:t:ts) = continues (s:t:ts)
 
+-- Break a sequence of raw tokens into separate lines, by splitting at the
+-- newline tokens.
 break_lines :: [Lexer.RawToken] -> [[Lexer.RawToken]]
 break_lines = foldr f [[]]
   where f t (l:ls) =
@@ -78,18 +80,19 @@ interpret_escapes (c:cs) = c : interpret_escapes cs
 -- Converts a raw token to its equivalent in the preprocessed format.
 -- This should only be called on tokens that can appear in a normalized line.
 -- Any other token is treated as an error.
-convert :: Lexer.RawType -> TokenType
-convert x =
-  case x of
-    Lexer.CHAR c    -> CHAR $ interpret_escapes c
-    Lexer.COMMENT c -> error "Comment in normalized token stream."
-    Lexer.IDENT i   -> IDENT i
-    Lexer.INTEGER i -> INTEGER i
-    Lexer.KEYWORD k -> KEYWORD k
-    Lexer.NEWLINE   -> NEWLINE
-    Lexer.SPACES n  -> error "Whitespace in normalized token stream."
-    Lexer.STRING s  -> STRING $ interpret_escapes s
-    Lexer.SYMBOL s  -> SYMBOL s
+convert :: [Lexer.RawToken] -> [Token]
+convert = map $ fmap f
+  where f x =
+          case x of
+            Lexer.CHAR c    -> CHAR $ interpret_escapes c
+            Lexer.COMMENT c -> error "Comment in normalized token stream."
+            Lexer.IDENT i   -> IDENT i
+            Lexer.INTEGER i -> INTEGER i
+            Lexer.KEYWORD k -> KEYWORD k
+            Lexer.NEWLINE   -> NEWLINE
+            Lexer.SPACES n  -> error "Whitespace in normalized token stream."
+            Lexer.STRING s  -> STRING $ interpret_escapes s
+            Lexer.SYMBOL s  -> SYMBOL s
 
 -- Remove leading whitespace from continuation lines.
 process_indent :: [[Lexer.RawToken]] -> [[Token]]
@@ -97,8 +100,8 @@ process_indent ls = process_indent' ls 0 False
 
 -- Normalize a continuation line. That is, if the line ends with a continuation
 -- token, remove the NEWLINE.
-f :: Bool -> Int -> [[Lexer.RawToken]] -> [Token] -> [[Token]]
-f c new_indent ls l =
+norm_cont :: Bool -> Int -> [[Lexer.RawToken]] -> [Token] -> [[Token]]
+norm_cont c new_indent ls l =
   (if c then init l else l) : process_indent' ls new_indent c
 
 -- Internals of process indent: Takes lines, indent, and whether or not to treat
@@ -111,12 +114,10 @@ process_indent' (l:ls) previous_indent True =
     let (Lexer.Token t loc) = head l in
       error $ "Bad indentation at " ++ show loc
   else
-    f (continues l) previous_indent ls $ map (fmap convert) $ strip_spaces l
-    -- map (fmap convert) (strip_spaces l) : process_indent' ls prev (continues l)
+    norm_cont (continues l) previous_indent ls $ convert $ strip_spaces l
 process_indent' (l:ls) previous_indent False =
   let (new_indent, ts) = process_line previous_indent l in
-    f (continues l) new_indent ls ts
-    -- ts : process_indent' ls new_indent (continues l)
+    norm_cont (continues l) new_indent ls ts
 
 -- Given a single line of RawTokens, and the indentation before it, produce the
 -- corresponding line of Tokens as well as the new indentation level, and
@@ -130,7 +131,7 @@ process_line indent (x:xs) =
     _ -> f 0 (x:xs)
   where l = Lexer.token_location x
         f :: Int -> [Lexer.RawToken] -> (Int, [Token])
-        f n ys = (n, indent_by l (n - indent) ++ map (fmap convert) ys)
+        f n ys = (n, indent_by l (n - indent) ++ convert ys)
 
 -- Indent (or dedent) by the given amount.
 indent_by :: Location -> Int -> [Token]
@@ -145,10 +146,4 @@ indent_by loc x =
 
 -- Turn a sequence of RawTokens into Tokens, by parsing the indentation.
 parse_indent :: [Lexer.RawToken] -> [Token]
-parse_indent =
-  concat . process_indent . map normalize_line . break_lines
-
--- Display the tokens on a line.
-show_line :: [Token] -> String
-show_line [] = "\n"
-show_line (x:xs) = show x ++ "\n" ++ show_line xs
+parse_indent = concat . process_indent . map normalize_line . break_lines
