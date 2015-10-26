@@ -29,6 +29,7 @@ data Parser a b where
   Match :: (a -> Bool) -> Parser a a
   Union :: [Parser a b] -> Parser a b
   Concat :: Parser a b -> Parser a c -> Parser a (b, c)
+  Star :: Parser a b -> Parser a [b]
   Reduce :: (b -> c) -> Parser a b -> Parser a c
 
 -- Syntax sugar for unions.
@@ -54,15 +55,14 @@ a +++ b = Concat a b
 --               parse_b  -- base case
 --               parse_b  -- repeated tail
 --               f        -- reducer.
-left :: Parser a b -> Parser a c -> ((b, c) -> b) -> Parser a b
-left p q f = Union extensions
-  where extensions = p : [e +++ q >>> f | e <- extensions]
+left :: Parser a b -> Parser a c -> (b -> c -> b) -> Parser a b
+left p q f = Concat p (Star q) >>> (\(a, bs) -> foldl f a bs)
 
 repeat0 :: Parser a b -> Parser a [b]
 repeat0 p = left
               (Epsilon >>> (const []))
               p
-              (uncurry . flip $ (:))
+              (flip $ (:))
               >>> reverse
 
 -- Evaluation rules for parsers.
@@ -74,6 +74,11 @@ run_parser (Union ps) xs = concat . transpose . map (flip run_parser xs) $ ps
 run_parser (Concat a b) xs =
   run_parser a xs >>= (\(a', xs') ->
     run_parser b xs' >>= (\(b', xs'') -> [((a', b'), xs'')]))
+run_parser (Star p) xs =
+  case run_parser p xs of
+    [] -> [([], xs)]
+    ps -> ps >>= (\(y, xs') ->
+            run_parser (Star p) xs' >>= (\(ys, xs'') -> [(y:ys, xs'')]))
 run_parser (Reduce f p) xs =
   run_parser p xs >>= (\(a, xs') -> [(f a, xs')])
 

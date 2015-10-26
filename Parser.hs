@@ -83,14 +83,14 @@ prod = left
   term
     (symbol Lexer.MUL +++ term                       >>> flip Mul . snd
     ||| symbol Lexer.DIV +++ term                    >>> flip Div . snd)
-    (\(a, b) -> b a)
+    (\a b -> b a)
 
 expr :: Parser Token AST
 expr = left
         prod
         (symbol Lexer.ADD +++ prod                   >>> flip Add . snd
         ||| symbol Lexer.SUB +++ prod                >>> flip Sub . snd)
-        (\(a, b) -> b a)
+        (\a b -> b a)
 
 channel :: Parser Token AST
 channel = ident                                      >>> Variable
