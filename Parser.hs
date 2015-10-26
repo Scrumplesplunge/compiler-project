@@ -59,4 +59,4 @@ main = do
   chars <- getContents
   let raw_tokens = tokens read_token chars
   let tokens = parse_indent raw_tokens
-  putStr . show $ tokens
+  putStr . concat . map ((++"\n") . show) $ tokens

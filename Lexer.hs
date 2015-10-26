@@ -38,6 +38,7 @@ data Symbol = ADD           -- '+'
             | OPEN_PAREN    -- '('
             | OPEN_SQUARE   -- '['
             | OUTPUT        -- '!'
+            | SEMICOLON     -- ';'
             | SUB           -- '-'
   deriving (Eq, Show)
 
@@ -64,6 +65,19 @@ instance Functor Token where
   fmap f (Token x l) = Token (f x) l
 
 type RawToken = Token RawType
+
+is_continuation_token :: RawToken -> Bool
+is_continuation_token (Token t l) =
+  case t of
+    SYMBOL ADD -> True
+    SYMBOL SUB -> True
+    SYMBOL MUL -> True
+    SYMBOL DIV -> True
+    SYMBOL COMMA -> True
+    SYMBOL SEMICOLON -> True
+    SYMBOL ASSIGN -> True
+    KEYWORD FOR -> True
+    _ -> False
 
 token_type :: Token a -> a
 token_type (Token t _) = t
@@ -122,6 +136,7 @@ read_symbol =
     (OPEN_PAREN,   "("),
     (OPEN_SQUARE,  "["),
     (OUTPUT,       "!"),
+    (SEMICOLON,    ";"),
     (SUB,          "-")]
 
 -- String/char literals.

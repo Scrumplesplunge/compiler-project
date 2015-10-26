@@ -4,6 +4,21 @@ import qualified Lexer
 import Reader
 import Data.Char
 
+-- Takes a line and returns how much it is indented by.
+indent :: [Lexer.RawToken] -> Int
+indent [] = 0
+indent (t:ts) =
+  case Lexer.token_type t of
+    Lexer.SPACES s -> s
+    _ -> 0
+
+-- Returns true if the line ends with a continuation token.
+continues :: [Lexer.RawToken] -> Bool
+continues [] = False
+continues [t] = False
+continues [s, t] = Lexer.is_continuation_token s
+continues (r:s:t:ts) = continues (s:t:ts)
+
 break_lines :: [Lexer.RawToken] -> [[Lexer.RawToken]]
 break_lines = foldr f [[]]
   where f t (l:ls) =
@@ -76,16 +91,37 @@ convert x =
     Lexer.STRING s  -> STRING $ interpret_escapes s
     Lexer.SYMBOL s  -> SYMBOL s
 
--- Given a list of lines of RawTokens, produce a list of lines of Tokens.
+-- Remove leading whitespace from continuation lines.
 process_indent :: [[Lexer.RawToken]] -> [[Token]]
-process_indent xs = process_indent' 0 xs
-  where process_indent' indent [] = [indent_by start (-indent)]
-        process_indent' indent (x:xs) =
-          let (indent', y) = process_line indent x
-          in y : process_indent' indent' xs
+process_indent ls = process_indent' ls 0 False
+
+-- Normalize a continuation line. That is, if the line ends with a continuation
+-- token, remove the NEWLINE.
+f :: Bool -> Int -> [[Lexer.RawToken]] -> [Token] -> [[Token]]
+f c new_indent ls l =
+  (if c then init l else l) : process_indent' ls new_indent c
+
+-- Internals of process indent: Takes lines, indent, and whether or not to treat
+-- the first line as a continuation line, and produces lines of tokens with
+-- correct indentation.
+process_indent' :: [[Lexer.RawToken]] -> Int -> Bool -> [[Token]]
+process_indent' [] _ _ = []
+process_indent' (l:ls) previous_indent True =
+  if indent l < previous_indent then
+    let (Lexer.Token t loc) = head l in
+      error $ "Bad indentation at " ++ show loc
+  else
+    f (continues l) previous_indent ls $ map (fmap convert) $ strip_spaces l
+    -- map (fmap convert) (strip_spaces l) : process_indent' ls prev (continues l)
+process_indent' (l:ls) previous_indent False =
+  let (new_indent, ts) = process_line previous_indent l in
+    f (continues l) new_indent ls ts
+    -- ts : process_indent' ls new_indent (continues l)
 
 -- Given a single line of RawTokens, and the indentation before it, produce the
--- corresponding line of Tokens and the new indentation level.
+-- corresponding line of Tokens as well as the new indentation level, and
+-- whether or not this line ended with a continuation token (in which case the
+-- following line ought to be treated accordingly)
 process_line :: Int -> [Lexer.RawToken] -> (Int, [Token])
 process_line indent [] = (indent, [])
 process_line indent (x:xs) =
@@ -109,7 +145,8 @@ indent_by loc x =
 
 -- Turn a sequence of RawTokens into Tokens, by parsing the indentation.
 parse_indent :: [Lexer.RawToken] -> [Token]
-parse_indent = concat . process_indent . map normalize_line . break_lines
+parse_indent =
+  concat . process_indent . map normalize_line . break_lines
 
 -- Display the tokens on a line.
 show_line :: [Token] -> String
