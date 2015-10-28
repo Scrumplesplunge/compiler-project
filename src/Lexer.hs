@@ -91,26 +91,16 @@ as_token loc token_type = Token token_type loc
 
 -- Match an exact token type.
 match_token :: a -> String -> Reader (Token a)
-match_token t value = location >>= (\loc -> match t value >>= return . as_token loc)
+match_token t value =
+  location >>= (\loc -> match t value >>= return . as_token loc)
 
 match_and_finish :: Reader a -> (a -> b) -> Reader (Token b)
-match_and_finish read f = location >>= (\loc -> read >>= return . as_token loc . f)
-
-tokens :: Reader (Token a) -> String -> [Token a]
-tokens reader input = tokens' $ new_state input
-  where tokens' (InputState [] _) = []
-        tokens' input' =
-          case run_reader (repeat0 reader) input' of
-            Nothing -> error "This should never happen."
-            Just (xs, InputState rs loc) ->
-              case rs of
-                [] -> xs
-                _ -> error $ "Illegal token at " ++ show loc
+match_and_finish read f =
+  location >>= (\loc -> read >>= return . as_token loc . f)
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
-read_keyword =
-  map match_keyword [
+read_keyword = map match_keyword [
     CHAN, DEF, FALSE, FOR, IF, PAR, PROC, SEQ, SKIP, STOP, TRUE, VAR, VALUE,
     WHILE]
 
@@ -145,29 +135,33 @@ match_char = first_of [
     all_of [match_filter ((==) '*'), match_filter (const True)]]
 
 read_char =
-  match_and_finish (all_of [match "'" "'", match_char, match "'" "'"])
-                   (CHAR . concat)
+  match_and_finish
+    (all_of [match "'" "'", match_char, match "'" "'"])
+    (CHAR . concat)
+
 read_string =
-  match_and_finish (all_of [
-    all_of [match "\"" "\""],
-    repeat0 match_char,
-    all_of [match "\"" "\""]]) (STRING . concat . map concat)
+  match_and_finish
+    (all_of [match ["\""] "\"", repeat0 match_char, match ["\""] "\""])
+    (STRING . concat . map concat)
 
 -- Other tokens.
 read_comment =
   match_and_finish
-    (read_cons (match '-' "-")
-               (read_cons (match '-' "-")
-                          (repeat0 (match_filter ((/=) '\n')))))
-    COMMENT
+    (all_of [match "-" "-", match "-" "-", repeat0 (match_filter (/='\n'))])
+    (COMMENT . concat)
+
 read_ident =
   match_and_finish
     (read_cons (match_filter isAlpha) (repeat0 $ match_filter identDigit))
     IDENT
   where identDigit x = isAlphaNum x || x == '.'
-read_integer = match_and_finish (repeat1 (match_filter isDigit))
-                                (INTEGER . read)
-read_newline = match_token NEWLINE      "\n"
+
+read_integer =
+  match_and_finish
+    (repeat1 (match_filter isDigit))
+    (INTEGER . read)
+
+read_newline = match_token NEWLINE "\n"
 read_spaces = match_and_finish (repeat1 (match () " ")) (SPACES . length)
 
 -- Read a single occam token.
@@ -181,9 +175,13 @@ read_token = first_of (
       read_string,
       read_spaces] ++ read_symbol)
 
--- For debugging purposes: output each of the token types.
-show_tokens :: Reader RawToken -> String -> IO ()
-show_tokens read_token =
-  putStr . concat . map (\(Token t (Location line char)) ->
-    show line ++ ":" ++ show char ++ ":\t" ++ show t ++ "\n") .
-  tokens read_token
+-- Repeatedly read tokens using the provided reader, and either return a list of
+-- the tokens which make up the entire string, or return an error message about
+-- the illegal token which prevents that from being the case.
+tokens :: Reader (Token a) -> String -> [Token a]
+tokens reader input = tokens' $ new_state input
+  where tokens' (InputState [] _) = []
+        tokens' input'@(InputState _ loc) =
+          case run_reader reader input' of
+            Nothing -> error $ "Illegal token at " ++ show loc 
+            Just (x, input'') -> x : tokens' input''

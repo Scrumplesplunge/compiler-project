@@ -81,7 +81,6 @@ match_filter f = getch >>= (\x -> if f x then return x else read_fail)
 -- Try each reader in sequence until one succeeds.
 first_of :: [Reader a] -> Reader a
 first_of = foldr (>>!) read_fail
---r >>! first_of rs
 
 -- Read one element, followed by multiple elements.
 read_cons :: Reader a -> Reader [a] -> Reader [a]
