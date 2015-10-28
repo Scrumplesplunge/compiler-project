@@ -49,6 +49,7 @@ symbol s = match_type (==(SYMBOL s)) (const ())
 
 -- NONTERMINAL PARSERS
 data AST = Add AST AST
+         | Argument VarType String
          | Assignment AST AST
          | Char Char
          | Div AST AST
@@ -57,6 +58,7 @@ data AST = Add AST AST
          | Mul AST AST
          | Output AST AST
          | Parallel [AST]
+         | Procedure String [AST] AST
          | Program [AST]
          | Sequence [AST]
          | Skip
@@ -64,6 +66,12 @@ data AST = Add AST AST
          | String String
          | Sub AST AST
          | Variable String
+  deriving Show
+
+data VarType = VALUE
+             | CHAN
+             | ARRAY VarType Integer
+             | VARARRAY VarType
   deriving Show
 
 assignment :: Parser Token AST
@@ -117,6 +125,25 @@ parallel_block =
   Star process +++ dedent                            >>> (\((), ((), (ps, ()))) ->
                                                            Parallel ps)
 
+procedure :: Parser Token AST
+procedure =
+  keyword Lexer.PROC +++ ident +++
+  symbol Lexer.OPEN_PAREN +++ formal_args +++
+  symbol Lexer.CLOSE_PAREN +++
+  symbol Lexer.COMP_EQ +++ indent +++
+  process +++ dedent +++ symbol Lexer.COLON          >>> (\((), (name, ((), (args, ((), ((), ((), (body, ((), ()))))))))) ->
+                                                           Procedure name args body)
+
+formal_args :: Parser Token [AST]
+formal_args = Epsilon ()                             >>> const []
+          ||| arg_decl +++
+              Star (symbol Lexer.COMMA +++
+                    arg_decl >>> snd)                >>> (\(a, as) -> a : as)
+
+arg_decl :: Parser Token AST
+arg_decl = keyword Lexer.VALUE +++ ident             >>> (\((), v) -> Argument VALUE v)
+       ||| keyword Lexer.CHAN +++ ident              >>> (\((), v) -> Argument CHAN v)
+
 process :: Parser Token AST
 process = keyword Lexer.SKIP                         >>> const Skip
       ||| keyword Lexer.STOP                         >>> const Stop
@@ -125,6 +152,7 @@ process = keyword Lexer.SKIP                         >>> const Skip
       ||| output
       ||| sequence_block
       ||| parallel_block
+      ||| procedure
 
 program :: Parser Token AST
 program = Star process                               >>> Program

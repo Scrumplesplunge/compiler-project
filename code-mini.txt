@@ -1,5 +1,9 @@
-PAR
-  SEQ
-    x := 2
-    y ? z
-  w ! 1
+-- This is some Occam procedure.
+
+PROC foo(VALUE x, CHAN y, CHAN w) =
+  PAR
+    SEQ
+      x := 2
+      y ? z
+    w ! 1
+:
