@@ -57,6 +57,7 @@ data AST = Add AST AST
          | Mul AST AST
          | Output AST AST
          | Parallel [AST]
+         | Program [AST]
          | Sequence [AST]
          | Skip
          | Stop
@@ -107,13 +108,13 @@ output = channel +++ symbol Lexer.OUTPUT +++
 sequence_block :: Parser Token AST
 sequence_block =
   keyword Lexer.SEQ +++ indent +++
-  repeat0 process +++ dedent                         >>> (\((), ((), (ps, ()))) ->
+  Star process +++ dedent                            >>> (\((), ((), (ps, ()))) ->
                                                            Sequence ps)
 
 parallel_block :: Parser Token AST
 parallel_block =
   keyword Lexer.PAR +++ indent +++
-  repeat0 process +++ dedent                         >>> (\((), ((), (ps, ()))) ->
+  Star process +++ dedent                            >>> (\((), ((), (ps, ()))) ->
                                                            Parallel ps)
 
 process :: Parser Token AST
@@ -125,10 +126,13 @@ process = keyword Lexer.SKIP                         >>> const Skip
       ||| sequence_block
       ||| parallel_block
 
+program :: Parser Token AST
+program = Star process                               >>> Program
+
 -- Run the lexer!
 main = do
   chars <- getContents
   let raw_tokens = Lexer.tokens Lexer.read_token chars
   let tokens = parse_indent raw_tokens
   putStrLn . concat . map ((++"\n") . show) $ tokens
-  putStrLn . show $ full_parse process tokens
+  putStrLn . show $ full_parse program tokens

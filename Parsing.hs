@@ -25,7 +25,7 @@ instance Applicative Result where
 
 -- Generic parser rules.
 data Parser a b where
-  Epsilon :: Parser a ()
+  Epsilon :: b -> Parser a b
   Match :: (a -> Bool) -> Parser a a
   Union :: [Parser a b] -> Parser a b
   Concat :: Parser a b -> Parser a c -> Parser a (b, c)
@@ -58,16 +58,9 @@ a +++ b = Concat a b
 left :: Parser a b -> Parser a c -> (b -> c -> b) -> Parser a b
 left p q f = Concat p (Star q) >>> (\(a, bs) -> foldl f a bs)
 
-repeat0 :: Parser a b -> Parser a [b]
-repeat0 p = left
-              (Epsilon >>> (const []))
-              p
-              (flip $ (:))
-              >>> reverse
-
 -- Evaluation rules for parsers.
 run_parser :: Parser a b -> [a] -> [(b, [a])]
-run_parser Epsilon xs = [((), xs)]
+run_parser (Epsilon x) xs = [(x, xs)]
 run_parser (Match f) [] = []
 run_parser (Match f) (x:xs) = if f x then [(x, xs)] else []
 run_parser (Union ps) xs = concat . transpose . map (flip run_parser xs) $ ps
