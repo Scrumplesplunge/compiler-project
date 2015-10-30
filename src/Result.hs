@@ -27,10 +27,14 @@ instance Applicative Result where
 (Success x) >>! xb = Success x
 
 -- Some will succeed if at least one of the list succeeds. Otherwise, it returns
--- the value given in the second argument.
+-- the failure associated with the furthest location in the text.
 successes :: [Result a] -> Result [a]
 successes [] = Failure Unknown "No options."
 successes (Failure loc m : xs) =
   case successes xs of
     Failure loc' m' -> if loc' < loc then Failure loc m else Failure loc' m'
     Success as -> Success as
+successes (Success a : xs) =
+  case successes xs of
+    Failure _ _ -> Success [a]
+    Success as -> Success (a:as)
