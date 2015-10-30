@@ -2,6 +2,7 @@ module Lexer where
 
 import Data.Char
 import Reader
+import Tokens
 
 -- Tokenization.
 data Keyword = CHAN
@@ -54,16 +55,6 @@ data RawType = CHAR String      -- <Character literal>
              | SYMBOL Symbol    -- <Any symbol>
   deriving (Eq, Show)
 
-data Token a = Token a Location
-  deriving Eq
-
-instance Show a => Show (Token a) where
-  show (Token x (Location l c)) =
-    show l ++ ":" ++ show c ++ ": " ++ show x
-
-instance Functor Token where
-  fmap f (Token x l) = Token (f x) l
-
 type RawToken = Token RawType
 
 is_continuation_token :: RawToken -> Bool
@@ -78,25 +69,6 @@ is_continuation_token (Token t l) =
     SYMBOL ASSIGN -> True
     KEYWORD FOR -> True
     _ -> False
-
-token_type :: Token a -> a
-token_type (Token t _) = t
-
-token_location :: Token a -> Location
-token_location (Token _ l) = l
-
--- Convert a token type and state into a token.
-as_token :: Location -> a -> Token a
-as_token loc token_type = Token token_type loc
-
--- Match an exact token type.
-match_token :: a -> String -> Reader (Token a)
-match_token t value =
-  location >>= (\loc -> match t value >>= return . as_token loc)
-
-match_and_finish :: Reader a -> (a -> b) -> Reader (Token b)
-match_and_finish read f =
-  location >>= (\loc -> read >>= return . as_token loc . f)
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
@@ -174,14 +146,3 @@ read_token = first_of (
       read_newline,
       read_string,
       read_spaces] ++ read_symbol)
-
--- Repeatedly read tokens using the provided reader, and either return a list of
--- the tokens which make up the entire string, or return an error message about
--- the illegal token which prevents that from being the case.
-tokens :: Reader (Token a) -> String -> [Token a]
-tokens reader input = tokens' $ new_state input
-  where tokens' (InputState [] _) = []
-        tokens' input'@(InputState _ loc) =
-          case run_reader reader input' of
-            Nothing -> error $ "Illegal token at " ++ show loc 
-            Just (x, input'') -> x : tokens' input''

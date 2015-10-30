@@ -1,14 +1,15 @@
 module IndentParser where
 
-import qualified Lexer
-import Reader
 import Data.Char
+import qualified Lexer
+import qualified Tokens
+import Reader
 
 -- Takes a line and returns how much it is indented by.
 indent_level :: [Lexer.RawToken] -> Int
 indent_level [] = 0
 indent_level (t:ts) =
-  case Lexer.token_type t of
+  case Tokens.token_type t of
     Lexer.SPACES s -> s
     _ -> 0
 
@@ -23,7 +24,7 @@ continues (s:t:ts) = continues (t:ts)
 break_lines :: [Lexer.RawToken] -> [[Lexer.RawToken]]
 break_lines = foldr f [[]]
   where f t (l:ls) =
-          if Lexer.token_type t == Lexer.NEWLINE then
+          if Tokens.token_type t == Lexer.NEWLINE then
             []:l:ls
           else
             (t:l):ls
@@ -32,7 +33,7 @@ break_lines = foldr f [[]]
 strip_spaces :: [Lexer.RawToken] -> [Lexer.RawToken]
 strip_spaces [] = []
 strip_spaces (x:xs) =
-  case Lexer.token_type x of
+  case Tokens.token_type x of
     Lexer.SPACES _ -> strip_spaces xs
     Lexer.COMMENT _ -> strip_spaces xs
     _ -> x : strip_spaces xs
@@ -43,7 +44,7 @@ strip_spaces (x:xs) =
 normalize_line :: [Lexer.RawToken] -> [Lexer.RawToken]
 normalize_line [] = []
 normalize_line (x:xs) =
-  case Lexer.token_type x of
+  case Tokens.token_type x of
     Lexer.SPACES _ -> x : strip_spaces xs
     _ -> strip_spaces (x:xs)
 
@@ -59,7 +60,7 @@ data TokenType = CHAR Char              -- <Character literal, processed>
                | SYMBOL Lexer.Symbol    -- <Any symbol>
   deriving (Eq, Show)
 
-type Token = Lexer.Token TokenType
+type Token = Tokens.Token TokenType
 
 -- Interpret escape sequences in string constants.
 interpret_escapes :: String -> String
@@ -112,7 +113,7 @@ process_indent' [] previous_indent False =
   [indent_by Reader.start (-previous_indent)]
 process_indent' (l:ls) previous_indent True =
   if indent_level l < previous_indent then
-    let (Lexer.Token t loc) = head l in
+    let (Tokens.Token t loc) = head l in
       error $ "Badly indented continuation line at " ++ show loc
   else
     norm_cont (continues l) previous_indent ls $ convert $ strip_spaces l
@@ -127,10 +128,10 @@ process_indent' (l:ls) previous_indent False =
 process_line :: Int -> [Lexer.RawToken] -> (Int, [Token])
 process_line indent [] = (indent, [])
 process_line indent (x:xs) =
-  case Lexer.token_type x of
+  case Tokens.token_type x of
     Lexer.SPACES s -> f s xs
     _ -> f 0 (x:xs)
-  where l = Lexer.token_location x
+  where l = Tokens.token_location x
         f :: Int -> [Lexer.RawToken] -> (Int, [Token])
         f n ys = (n, indent_by l (n - indent) ++ convert ys)
 
@@ -141,9 +142,9 @@ indent_by loc 1 = error $ "Bad indentation at " ++ show loc
 indent_by loc (-1) = error $ "Bad indentation at " ++ show loc
 indent_by loc x =
   if x < 0 then
-    Lexer.Token DEDENT loc : indent_by loc (x + 2)
+    Tokens.Token DEDENT loc : indent_by loc (x + 2)
   else
-    Lexer.Token INDENT loc : indent_by loc (x - 2)
+    Tokens.Token INDENT loc : indent_by loc (x - 2)
 
 -- Turn a sequence of RawTokens into Tokens, by parsing the indentation.
 parse_indent :: [Lexer.RawToken] -> [Token]

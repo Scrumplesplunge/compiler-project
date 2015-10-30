@@ -3,25 +3,7 @@
 module Parsing where
 
 import Data.List
-
--- Parse result.
-data Result a = Success a | Failure String
-  deriving (Eq, Show)
-
-instance Functor Result where
-  fmap f r = r >>= return . f
-
-instance Monad Result where
-  return x = Success x
-  (Failure m) >>= f = Failure m
-  (Success x) >>= f = f x
-
-instance Applicative Result where
-  pure = return
-  rf <*> rx = rf >>= (\f -> fmap f rx)
-
-(Failure m) >>! xb = xb
-(Success x) >>! xb = Success x
+import Result
 
 -- Generic parser rules.
 data Parser a b where

@@ -3,12 +3,23 @@ module Reader where
 -- Tracking the position in the source.
 type LineNumber = Int
 type CharNumber = Int
-data Location = Location LineNumber CharNumber
+data Location = Location LineNumber CharNumber | EOF | Unknown
   deriving Eq
 
 instance Show Location where
   show (Location line char) =
     "line " ++ show line ++ ", character " ++ show char
+  show EOF = "end of input"
+  show Unknown = "unknown location"
+
+instance Ord Location where
+  compare Unknown Unknown = EQ
+  compare Unknown _ = LT
+  compare (Location l c) Unknown = GT
+  compare (Location l1 c1) (Location l2 c2) = compare (l1, c1) (l2, c2)
+  compare (Location l c) EOF = LT
+  compare EOF EOF = EQ
+  compare EOF _ = GT
 
 start :: Location
 start = Location 1 1

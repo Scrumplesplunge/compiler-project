@@ -1,10 +1,12 @@
 import IndentParser
-import qualified Lexer
 import Parsing
+import qualified Lexer
+import qualified Tokens
 
 -- Convenience function for matching token types.
 match_type :: (TokenType -> Bool) -> (TokenType -> a) -> Parser Token a
-match_type m f = Match (m . Lexer.token_type) >>> (\t -> f (Lexer.token_type t))
+match_type m f =
+  Match (m . Tokens.token_type) >>> (\t -> f (Tokens.token_type t))
 
 -- TERMINAL PARSERS
 char_literal :: Parser Token Char
@@ -160,7 +162,7 @@ program = Star process                               >>> Program
 -- Run the lexer!
 main = do
   chars <- getContents
-  let raw_tokens = Lexer.tokens Lexer.read_token chars
+  let raw_tokens = Tokens.tokens Lexer.read_token chars
   let tokens = parse_indent raw_tokens
   putStrLn . concat . map ((++"\n") . show) $ tokens
   putStrLn . show $ full_parse program tokens
