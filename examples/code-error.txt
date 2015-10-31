@@ -2,7 +2,7 @@
 
 PROC foo(VALUE x,
          CHAN y,
-         CHAN w) =
+         CHAN w) :=
   PAR
     SEQ
       x := 2

@@ -4,50 +4,51 @@ import qualified Lexer
 import qualified Tokens
 
 -- Convenience function for matching token types.
-match_type :: (TokenType -> Bool) -> (TokenType -> a) -> Parser Token a
-match_type m f =
-  Match (m . Tokens.token_type) >>> (\t -> f (Tokens.token_type t))
+match_type ::
+    String -> (TokenType -> Bool) -> (TokenType -> a) -> Parser Token a
+match_type name m f =
+  Match name (m . Tokens.token_type) >>> (\t -> f (Tokens.token_type t))
 
 -- TERMINAL PARSERS
 char_literal :: Parser Token Char
-char_literal = match_type
+char_literal = match_type "character literal"
   (\t -> case t of
     CHAR _ -> True
     _ -> False)
   (\t -> let (CHAR x) = t in x)
 
 dedent :: Parser Token ()
-dedent = match_type (==DEDENT) (const ())
+dedent = match_type "dedent" (==DEDENT) (const ())
 
 ident :: Parser Token String
-ident = match_type
+ident = match_type "identifier"
   (\t -> case t of
     IDENT _ -> True
     _ -> False)
   (\t -> let (IDENT x) = t in x)
 
 indent :: Parser Token ()
-indent = match_type (==INDENT) (const ())
+indent = match_type "indent" (==INDENT) (const ())
 
 integer :: Parser Token Integer
-integer = match_type
+integer = match_type "integer"
   (\t -> case t of
     INTEGER x -> True
     _ -> False)
   (\t -> let (INTEGER x) = t in x)
 
 keyword :: Lexer.Keyword -> Parser Token ()
-keyword k = match_type (==(KEYWORD k)) (const ())
+keyword k = match_type (show k) (==(KEYWORD k)) (const ())
 
 string_literal :: Parser Token String
-string_literal = match_type
+string_literal = match_type "string literal"
   (\t -> case t of
     STRING x -> True
     _ -> False)
   (\t -> let (STRING x) = t in x)
 
 symbol :: Lexer.Symbol -> Parser Token ()
-symbol s = match_type (==(SYMBOL s)) (const ())
+symbol s = match_type (show s) (==(SYMBOL s)) (const ())
 
 -- NONTERMINAL PARSERS
 data AST = Add AST AST
@@ -98,10 +99,10 @@ prod = left
 
 expr :: Parser Token AST
 expr = left
-        prod
-        (symbol Lexer.ADD +++ prod                   >>> flip Add . snd
-        ||| symbol Lexer.SUB +++ prod                >>> flip Sub . snd)
-        (\a b -> b a)
+         prod
+         (symbol Lexer.ADD +++ prod                  >>> flip Add . snd
+         ||| symbol Lexer.SUB +++ prod               >>> flip Sub . snd)
+         (\a b -> b a)
 
 channel :: Parser Token AST
 channel = ident                                      >>> Variable
@@ -157,7 +158,7 @@ process = keyword Lexer.SKIP                         >>> const Skip
       ||| procedure
 
 program :: Parser Token AST
-program = Star process                               >>> Program
+program = process +++ Star process                   >>> Program . uncurry (:)
 
 -- Run the lexer!
 main = do

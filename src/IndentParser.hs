@@ -75,6 +75,7 @@ interpret_escapes ('*':e:cs) = x : interpret_escapes cs
               '"' -> '"'
               '*' -> '*'
               _ -> '?'
+
 interpret_escapes (c:cs) = c : interpret_escapes cs
 
 -- Converts a raw token to its equivalent in the preprocessed format.

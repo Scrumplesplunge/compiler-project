@@ -38,3 +38,13 @@ successes (Success a : xs) =
   case successes xs of
     Failure _ _ -> Success [a]
     Success as -> Success (a:as)
+
+-- Extract the rightmost failure.
+failure :: [Result a] -> Result a
+failure rs = failure' rs (Failure Unknown "Generic failure.")
+  where failure' [] f = f
+        failure' (Failure loc' m' : xs) (Failure loc m) =
+          if loc' > loc then
+            failure' xs (Failure loc' m')
+          else
+            failure' xs (Failure loc m)

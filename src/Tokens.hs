@@ -6,8 +6,7 @@ data Token a = Token a Location
   deriving Eq
 
 instance Show a => Show (Token a) where
-  show (Token x (Location l c)) =
-    show l ++ ":" ++ show c ++ ": " ++ show x
+  show (Token x loc) = show x
 
 instance Functor Token where
   fmap f (Token x l) = Token (f x) l
