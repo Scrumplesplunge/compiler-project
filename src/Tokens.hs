@@ -23,8 +23,7 @@ as_token loc token_type = Token token_type loc
 
 -- Match an exact token type.
 match_token :: a -> String -> Reader (Token a)
-match_token t value =
-  location >>= (\loc -> match t value >>= return . as_token loc)
+match_token t value = match_and_finish (match t value) id
 
 match_and_finish :: Reader a -> (a -> b) -> Reader (Token b)
 match_and_finish read f =

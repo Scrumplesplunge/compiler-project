@@ -72,7 +72,7 @@ is_continuation_token (Token t l) =
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
-read_keyword = map match_keyword [
+read_keyword = first_of $ map match_keyword [
     CHAN, DEF, FALSE, FOR, IF, PAR, PROC, SEQ, SKIP, STOP, TRUE, VAR, VALUE,
     WHILE]
 
@@ -122,10 +122,12 @@ read_comment =
     (all_of [match "-" "-", match "-" "-", repeat0 (match_filter (/='\n'))])
     (COMMENT . concat)
 
-read_ident =
+read_ident_or_keyword =
   match_and_finish
     (read_cons (match_filter isAlpha) (repeat0 $ match_filter identDigit))
-    IDENT
+    (\x -> case run_reader read_keyword (new_state x) of
+             Just (Token (KEYWORD k) loc, InputState [] _) -> KEYWORD k
+             _ -> IDENT x)
   where identDigit x = isAlphaNum x || x == '.'
 
 read_integer =
@@ -137,11 +139,10 @@ read_newline = match_token NEWLINE "\n"
 read_spaces = match_and_finish (repeat1 (match () " ")) (SPACES . length)
 
 -- Read a single occam token.
-read_token = first_of (
-    read_keyword ++ [
+read_token = first_of ([
       read_char,
       read_comment,
-      read_ident,
+      read_ident_or_keyword,
       read_integer,
       read_newline,
       read_string,
