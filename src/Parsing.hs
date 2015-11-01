@@ -89,9 +89,9 @@ run_parser (Reduce f p) xs =
   run_parser p xs >>= return . (fmap (\(a, xs') -> (f a, xs')))
 
 -- Run a parser and take the first parse which consumes all input.
-full_parse :: Show a => Parser (Token a) b -> [Token a] -> Result b
+full_parse :: Show a => Parser (Token a) b -> [Token a] -> b
 full_parse p xs =
   let ps = run_parser p xs in
     case [full | Success (full, []) <- ps] of
-      [] -> failure ps >>= error "This should never happen."
-      (x:xs) -> Success x
+      [] -> let (Failure l m) = failure ps in error . show $ (Failure l m :: Result ())
+      (x:xs) -> x

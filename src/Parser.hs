@@ -1,5 +1,7 @@
-import IndentParser
+module Parser where
+
 import Parsing
+import IndentParser
 import qualified Lexer
 import qualified Tokens
 
@@ -159,11 +161,3 @@ process = keyword Lexer.SKIP                         >>> const Skip
 
 program :: Parser Token AST
 program = process +++ Star process                   >>> Program . uncurry (:)
-
--- Run the lexer!
-main = do
-  chars <- getContents
-  let raw_tokens = Tokens.tokens Lexer.read_token chars
-  let tokens = parse_indent raw_tokens
-  putStrLn . concat . map ((++"\n") . show) $ tokens
-  putStrLn . show $ full_parse program tokens
