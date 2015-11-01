@@ -55,10 +55,20 @@ data TokenType = CHAR Char              -- <Character literal, processed>
                | INDENT                 -- <increased indentation>
                | INTEGER Integer        -- '2'
                | KEYWORD Lexer.Keyword  -- <Any Keyword>
-             --  | NEWLINE                -- '\n'
                | STRING String          -- <String literal, processed>
                | SYMBOL Lexer.Symbol    -- <Any symbol>
-  deriving (Eq, Show)
+  deriving Eq
+
+-- Prettier definition of show, for error messages.
+instance Show TokenType where
+  show (CHAR c) = "character literal " ++ show c
+  show DEDENT = "dedent"
+  show (IDENT i) = "identifier '" ++ i ++ "'"
+  show INDENT = "indent"
+  show (INTEGER i) = "integer '" ++ show i ++ "'"
+  show (KEYWORD k) = "keyword '" ++ show k ++ "'"
+  show (STRING s) = "string literal " ++ show s
+  show (SYMBOL s) = "symbol " ++ show s
 
 type Token = Tokens.Token TokenType
 

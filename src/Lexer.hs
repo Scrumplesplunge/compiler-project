@@ -41,7 +41,29 @@ data Symbol = ADD           -- '+'
             | OUTPUT        -- '!'
             | SEMICOLON     -- ';'
             | SUB           -- '-'
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show Symbol where
+  show ADD = "'+'"
+  show ASSIGN = "':='"
+  show CLOSE_PAREN = "')'"
+  show CLOSE_SQUARE = "']'"
+  show COLON = "':'"
+  show COMMA = "','"
+  show COMP_EQ = "'='"
+  show COMP_GE = "'>='"
+  show COMP_GT = "'>'"
+  show COMP_LE = "'<='"
+  show COMP_LT = "'<'"
+  show COMP_NE = "'<>'"
+  show DIV = "'/'"
+  show INPUT = "'?'"
+  show MUL = "'*'"
+  show OPEN_PAREN = "'('"
+  show OPEN_SQUARE = "'['"
+  show OUTPUT = "'!'"
+  show SEMICOLON = "';'"
+  show SUB = "'-'"
 
 -- Raw token types include blocks of whitespace.
 data RawType = CHAR String      -- <Character literal>

@@ -60,7 +60,7 @@ run_parser (Match m f) (x:xs) =
     [Success (x, xs)]
   else
     [Failure (token_location x)
-             ("Expected " ++ m ++ ", got " ++ show (token_type x))]
+             ("Unexpected " ++ show (token_type x))]
 
 -- A union can succeed with any possible parses of any of its constituents.
 run_parser (Union ps) xs = concat . map (flip run_parser xs) $ ps
