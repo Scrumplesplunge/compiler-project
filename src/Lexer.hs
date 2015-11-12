@@ -5,11 +5,14 @@ import Reader
 import Tokens
 
 -- Tokenization.
-data Keyword = CHAN
+data Keyword = AND
+             | CHAN
              | DEF
              | FALSE
              | FOR
              | IF
+             | NOT
+             | OR
              | PAR
              | PROC
              | SEQ
@@ -23,6 +26,9 @@ data Keyword = CHAN
 
 data Symbol = ADD           -- '+'
             | ASSIGN        -- ':='
+            | BITWISE_AND   -- '/\'
+            | BITWISE_OR    -- '\/'
+            | BITWISE_XOR   -- '><'
             | CLOSE_PAREN   -- ')'
             | CLOSE_SQUARE  -- ']'
             | COLON         -- ':'
@@ -43,27 +49,35 @@ data Symbol = ADD           -- '+'
             | SUB           -- '-'
   deriving Eq
 
+symbol_map = [
+  (ADD,          "+"),
+  (ASSIGN,       ":="),
+  (BITWISE_AND,  "/\\"),
+  (BITWISE_OR,   "\\/"),
+  (BITWISE_XOR,  "><"),
+  (CLOSE_PAREN,  ")"),
+  (CLOSE_SQUARE, "]"),
+  (COLON,        ":"),
+  (COMMA,        ","),
+  (COMP_EQ,      "="),
+  (COMP_GE,      ">="),
+  (COMP_GT,      ">"),
+  (COMP_LE,      "<="),
+  (COMP_LT,      "<"),
+  (COMP_NE,      "<>"),
+  (DIV,          "/"),
+  (INPUT,        "?"),
+  (MUL,          "*"),
+  (OPEN_PAREN,   "("),
+  (OPEN_SQUARE,  "["),
+  (OUTPUT,       "!"),
+  (SEMICOLON,    ";"),
+  (SUB,          "-")]
+
 instance Show Symbol where
-  show ADD = "'+'"
-  show ASSIGN = "':='"
-  show CLOSE_PAREN = "')'"
-  show CLOSE_SQUARE = "']'"
-  show COLON = "':'"
-  show COMMA = "','"
-  show COMP_EQ = "'='"
-  show COMP_GE = "'>='"
-  show COMP_GT = "'>'"
-  show COMP_LE = "'<='"
-  show COMP_LT = "'<'"
-  show COMP_NE = "'<>'"
-  show DIV = "'/'"
-  show INPUT = "'?'"
-  show MUL = "'*'"
-  show OPEN_PAREN = "'('"
-  show OPEN_SQUARE = "'['"
-  show OUTPUT = "'!'"
-  show SEMICOLON = "';'"
-  show SUB = "'-'"
+  show x = case lookup x symbol_map of
+             Nothing -> "???"
+             Just y -> "'" ++ y ++ "'"
 
 -- Raw token types include blocks of whitespace.
 data RawType = CHAR String      -- <Character literal>
@@ -101,27 +115,7 @@ read_keyword = first_of $ map match_keyword [
 -- Symbols.
 match_symbol (symbol, value) = match_token (SYMBOL symbol) value
 read_symbol =
-  map match_symbol [
-    (ADD,          "+"),
-    (ASSIGN,       ":="),
-    (CLOSE_PAREN,  ")"),
-    (CLOSE_SQUARE, "]"),
-    (COLON,        ":"),
-    (COMMA,        ","),
-    (COMP_EQ,      "="),
-    (COMP_GE,      ">="),
-    (COMP_GT,      ">"),
-    (COMP_LE,      "<="),
-    (COMP_LT,      "<"),
-    (COMP_NE,      "<>"),
-    (DIV,          "/"),
-    (INPUT,        "?"),
-    (MUL,          "*"),
-    (OPEN_PAREN,   "("),
-    (OPEN_SQUARE,  "["),
-    (OUTPUT,       "!"),
-    (SEMICOLON,    ";"),
-    (SUB,          "-")]
+  map match_symbol symbol_map
 
 -- String/char literals.
 match_char = first_of [

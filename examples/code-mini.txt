@@ -5,7 +5,12 @@ PROC foo(VALUE x,
          CHAN w) =
   PAR
     SEQ
-      x := 2
+      x := 2 * 5 + 3
       y ? z
     w ! 1
 :
+
+CHAN a :
+CHAN b :
+
+foo(2, a, b)

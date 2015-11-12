@@ -43,8 +43,11 @@ successes (Success a : xs) =
 failure :: [Result a] -> Result a
 failure rs = failure' rs (Failure Unknown "Generic failure.")
   where failure' [] f = f
-        failure' (Failure loc' m' : xs) (Failure loc m) =
-          if loc' > loc then
-            failure' xs (Failure loc' m')
-          else
-            failure' xs (Failure loc m)
+        failure' (x:xs) (Failure loc m) =
+          case x of
+            Failure loc' m' ->
+              if loc' > loc then
+                failure' xs (Failure loc' m')
+              else
+                failure' xs (Failure loc m)
+            _ -> failure' xs (Failure loc m)
