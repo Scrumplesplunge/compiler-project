@@ -1,0 +1,19 @@
+# Direct instructions for the transputer processor.
+
+J     (0x00)  # Jump
+LDLP  (0x10)  # Load local pointer
+PFIX  (0x20)  # Prefix
+LDNL  (0x30)  # Load non-local
+LDC   (0x40)  # Load constant
+LDNLP (0x50)  # Load non-local pointer
+NFIX  (0x60)  # Negative prefix
+LDL   (0x70)  # Load local
+ADC   (0x80)  # Add constant
+CALL  (0x90)  # Call subroutine
+CJ    (0xA0)  # Conditional jump
+AJW   (0xB0)  # Adjust workspace
+EQC   (0xC0)  # Equals constant
+STL   (0xD0)  # Store local
+STNL  (0xE0)  # Store non-local
+OPR   (0xF0)  # Operate
+

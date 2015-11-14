@@ -1,0 +1,7 @@
+# These are instructions that are executed via the FPENTRY operation.
+
+FPUSQRTFIRST (1)  # Square-root initialisation.
+FPUSQRTSTEP  (2)  # Square-root iteration step.
+FPUSQRTLAST  (3)  # Square-root finalisation.
+FPURP        (4)  # Set rounding mode to +infinity.
+FPURM        (5)  # Set rounding mode to -infinity.
