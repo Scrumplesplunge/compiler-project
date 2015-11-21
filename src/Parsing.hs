@@ -31,6 +31,10 @@ p >>> f = Reduce f p
 infixr 6 +++
 a +++ b = Concat a b
 
+-- Repeat a parser at least once.
+plus :: (Eq a, Eq b) => Parser a b -> Parser a [b]
+plus p = p +++ Star p >>> uncurry (:)
+
 -- Handle left recursion: this works by turning:
 --   parse_a = parse_b
 --         ||| parse_a +++ parse_b     >>> f

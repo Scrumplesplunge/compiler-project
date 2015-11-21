@@ -72,8 +72,10 @@ data Process = Alternation Range [(Condition, String, Process)]
 data Program = Program Process
   deriving (Eq, Show)
 
-data VarType = VALUE
+data VarType = ARRAY VarType Integer
              | CHAN
-             | ARRAY VarType Integer
+             | PROC [VarType]
+             | VALUE
+             | VAR
              | VARARRAY VarType
   deriving (Eq, Show)
