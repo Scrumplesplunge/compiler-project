@@ -1,16 +1,14 @@
 -- This is some Occam procedure.
 
 PROC foo(VALUE x,
-         CHAN y,
-         CHAN w) =
+         CHAN y, w) =
   PAR
     SEQ
-      x := 2 * 5 + 3
+      x := 2 * (5 + 3)
       y ? z
     w ! 1
 :
 
-CHAN a :
-CHAN b :
+CHAN a, b :
 
 foo(2, a, b)

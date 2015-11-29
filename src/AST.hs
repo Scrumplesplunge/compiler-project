@@ -1,81 +1,126 @@
 module AST where
 
--- Literal values (except booleans)
-data Literal = Char Char
-             | Integer Integer
-             | String String
+import Reader
+
+type Name = String
+
+-- AST Node tagged with a location.
+data L a = L a Location
   deriving (Eq, Show)
 
--- Boolean condition.
-data Condition = And Condition Condition
-               | BitwiseAnd Expr Expr
-               | BitwiseOr Expr Expr
-               | BitwiseXor Expr Expr
-               | CompareEQ Expr Expr
-               | CompareGE Expr Expr
-               | CompareGT Expr Expr
-               | CompareLE Expr Expr
-               | CompareLT Expr Expr
-               | CompareNE Expr Expr
-               | Not Condition
-               | Or Condition Condition
-               | Xor Condition Condition
-               | Invariably Bool          -- Literal booleans.
-  deriving (Eq, Show)
+instance Functor L where
+  fmap f (L a loc) = L (f a) loc
 
--- Pure computation (that is, no side-effects!)
-data Expr = Add Expr Expr
-          | Condition Condition
-          | Div Expr Expr
-          | Literal Literal
-          | Mul Expr Expr
-          | Neg Expr
-          | RArray Expr
-          | RVariable String
-          | Sub Expr Expr
-  deriving (Eq, Show)
+location :: L a -> Location
+location (L _ loc) = loc
 
--- Things that can be assigned to variables.
-data RValue = Expr Expr
-  deriving (Eq, Show)
-
--- Things that can be assigned to.
-data LValue = LArray Expr
-            | LVariable String
-  deriving (Eq, Show)
-
--- For loop ranges.
-type Range = Maybe (String, Expr, Expr)
-
--- Definitions.
-data Definition = DefineChannel String
-                | DefineConstant String Expr
-                | DefineProcedure String [(VarType, String)] Process
-                | DefineVariable String
-  deriving (Eq, Show)
-
--- Algorithms.
-data Process = Alternation Range [(Condition, String, Process)]
-             | Assignment LValue RValue
-             | Call String [RValue]
-             | Definition Definition Process
-             | If Range [(Condition, Process)]
-             | Input RValue LValue
-             | Output LValue RValue
-             | Parallel Range [Process]
-             | Sequence Range [Process]
+-- Generic process.
+data Process = Alt Alternative
+             | Assign (L Expression) (L Expression)
+             | Call Name [L Expression]
+             | Definition [L Definition] (L Process)
+             | Delay (L Expression)
+             | If Condition
+             | Input (L Expression) (L Expression)
+             | Output (L Expression) (L Expression)
+             | Par (Replicable (L Process))
+             | PriorityAlt (Alternative)
+             | PriorityPar (Replicable (L Process))
+             | Seq (Replicable (L Process))
              | Skip
              | Stop
-             | While Condition Process
+             | Timer (L Expression)
+             | While (L Expression) (L Process)
   deriving (Eq, Show)
 
-data Program = Program Process
+-- Syntactic literal value.
+data Literal = Bool Bool
+             | Char Char
+             | Integer Integer
+             | String String
+             | Table ArrayType [L Expression]
   deriving (Eq, Show)
 
-data VarType = ARRAY VarType Integer
-             | CHAN
-             | PROC [VarType]
-             | VALUE
+-- Side-effect free calculation.
+data Expression = Add [L Expression]
+                | After (L Expression) (L Expression)
+                | And [L Expression]
+                | Any
+                | BitwiseAnd [L Expression]
+                | BitwiseOr [L Expression]
+                | BitwiseXor [L Expression]
+                | CompareEQ (L Expression) (L Expression)
+                | CompareGE (L Expression) (L Expression)
+                | CompareGT (L Expression) (L Expression)
+                | CompareLE (L Expression) (L Expression)
+                | CompareLT (L Expression) (L Expression)
+                | CompareNE (L Expression) (L Expression)
+                | Index (L Expression) (ArrayType, (L Expression))
+                | Literal Literal
+                | Mul [L Expression]
+                | Neg (L Expression)
+                | Not (L Expression)
+                | Or [L Expression]
+                | ShiftLeft (L Expression) (L Expression)
+                | ShiftRight (L Expression) (L Expression)
+                | Slice (L Expression) (ArrayType, L Expression, L Expression)
+                | Variable Name
+  deriving (Eq, Show)
+
+-- i = a FOR b
+data Replicator = Range (L Name) (L Expression) (L Expression)
+  deriving (Eq, Show)
+
+-- Helper for blocks that can be replicated.
+data Replicable a = Basic [a]
+                  | Replicated Replicator a
+  deriving (Eq, Show)
+
+-- Helper for blocks which have syntax approximately like:
+-- A = foo
+--       B
+-- B = A
+--   | bar
+--       baz
+data Nestable a b = Block b (L Process)
+                  | Nested a
+  deriving (Eq, Show)
+
+-- ALT
+data Alternative = Alternative (Replicable (Nestable (L Alternative) (L Guard)))
+  deriving (Eq, Show)
+
+data Guard = BasicGuard (L AtomicGuard)
+           | PrefixedGuard (L Expression) (L AtomicGuard)
+  deriving (Eq, Show)
+
+data AtomicGuard = DelayGuard (L Expression)
+                 | InputGuard (L Expression) [L Expression]
+                 | SkipGuard
+  deriving (Eq, Show)
+
+-- IF
+data Condition = Condition (Replicable (Nestable (L Condition) (L Expression)))
+  deriving (Eq, Show)
+
+data RawType = CHAN
+             | CONST
              | VAR
-             | VARARRAY VarType
   deriving (Eq, Show)
+
+-- Name definition/declarations, as well as placement.
+data Definition = DefineSingle RawType Name
+                | DefineVector RawType Name (L Expression)
+                | DefineConstant Name (L Expression)
+                | DefineProcedure Name [Formal] Process
+  deriving (Eq, Show)
+
+data Formal = Single RawType Name
+            | Vector RawType Name
+  deriving (Eq, Show)
+
+-- Types that can appear in array definitions, selections, and slices.
+data ArrayType = BYTE | INT
+  deriving (Eq, Show)
+
+data Program = System (Replicable (L Program))

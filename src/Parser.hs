@@ -2,264 +2,288 @@ module Parser where
 
 import AST
 import Parsing
+import Prelude hiding (sequence)
 import IndentParser
 import qualified Lexer
 import qualified Tokens
 
 -- Convenience function for matching token types.
 match_type :: Eq a =>
-              String -> (TokenType -> Bool) -> (TokenType -> a) -> Parser Token a
+              String -> (TokenType -> Bool) -> (TokenType -> a) -> Parser Token (L a)
 match_type name m f =
-  Match name (m . Tokens.token_type) >>> (\t -> f (Tokens.token_type t))
+  Match name (m . Tokens.token_type) >>> (\(Tokens.Token t loc) -> L (f t) loc)
 
 -- TERMINAL PARSERS
-char_literal :: Parser Token Char
-char_literal = match_type "character literal"
-  (\t -> case t of
-    CHAR _ -> True
-    _ -> False)
-  (\t -> let (CHAR x) = t in x)
+char :: Parser Token (L Char)
+char = match_type "character literal" matcher reducer
+  where matcher (CHAR _) = True
+        matcher _ = False
+        reducer (CHAR x) = x
+        reducer _ = error "char::reducer applied to non-char."
 
 -- Decreased indentation.
-dedent :: Parser Token ()
+dedent :: Parser Token (L ())
 dedent = match_type "dedent" (==DEDENT) (const ())
 
 -- Identifier.
-ident :: Parser Token String
-ident = match_type "identifier"
-  (\t -> case t of
-    IDENT _ -> True
-    _ -> False)
-  (\t -> let (IDENT x) = t in x)
+name :: Parser Token (L String)
+name = match_type "identifier" matcher reducer
+  where matcher (IDENT _) = True
+        matcher _ = False
+        reducer (IDENT x) = x
 
 -- Increased indentation.
-indent :: Parser Token ()
+indent :: Parser Token (L ())
 indent = match_type "indent" (==INDENT) (const ())
 
 -- Integer literal.
-integer :: Parser Token Integer
-integer = match_type "integer"
-  (\t -> case t of
-    INTEGER x -> True
-    _ -> False)
-  (\t -> let (INTEGER x) = t in x)
+numeral :: Parser Token (L Integer)
+numeral = match_type "integer" matcher reducer
+  where matcher (INTEGER x) = True
+        matcher _ = False
+        reducer (INTEGER x) = x
 
 -- Arbitrary keyword.
-keyword :: Lexer.Keyword -> Parser Token ()
+keyword :: Lexer.Keyword -> Parser Token (L ())
 keyword k = match_type (show k) (==(KEYWORD k)) (const ())
 
 -- String literal.
-string_literal :: Parser Token String
-string_literal = match_type "string literal"
-  (\t -> case t of
-    STRING x -> True
-    _ -> False)
-  (\t -> let (STRING x) = t in x)
+string :: Parser Token (L String)
+string = match_type "string literal" matcher reducer
+  where matcher (STRING x) = True
+        matcher _ = False
+        reducer (STRING x) = x
 
 -- Arbitrary symbol.
-symbol :: Lexer.Symbol -> Parser Token ()
+symbol :: Lexer.Symbol -> Parser Token (L ())
 symbol s = match_type (show s) (==(SYMBOL s)) (const ())
 
+-- List of at least one p, separated by q's.
+list :: (Eq a, Eq b) => Parser Token a -> Parser Token b -> Parser Token [a]
+list p q = p +++ Star (q +++ p >>> snd)                                         >>> uncurry (:)
+
 -- Comma-separated sequence.
-comma_separated :: Eq t => Parser Token t -> Parser Token [t]
-comma_separated p =
-      p                                                    >>> (:[])
-  ||| p +++ Star (symbol Lexer.COMMA +++ p >>> snd)        >>> uncurry (:)
+comma_separated :: Eq a => Parser Token a -> Parser Token [a]
+comma_separated p = list p $ symbol Lexer.COMMA
+
+-- Parsers for the helper constructs in the AST.
+nestable :: (Eq a, Eq b) => Parser Token (L a) -> Parser Token (L b) -> Parser Token (Nestable (L a) (L b))
+nestable p q = p                                                                >>> Nested
+           ||| q +++ indent +++
+                 process +++ dedent                                             >>> (\(a, (_, (p, _))) -> Block a p)
+
+replicable :: Eq a => Parser Token a -> Parser Token (Replicable a)
+replicable p = indent +++
+                 Star p +++ dedent                                              >>> (\(_, (ps, _)) -> Basic ps)
+           ||| replicator +++ indent +++
+                 p +++ dedent                                                   >>> (\(r, (_, (p, _))) -> Replicated r p)
+
+replicator :: Parser Token Replicator
+replicator = name +++ symbol Lexer.COMP_EQ +++ symbol Lexer.OPEN_SQUARE +++
+             expression +++ keyword Lexer.FOR +++ expression +++
+             symbol Lexer.CLOSE_SQUARE                                          >>> (\(n, (_, (_, (a, (_, (b, _)))))) -> Range n a b)
 
 -- NONTERMINAL PARSERS
 
--- A sequence of argument expressions.
-actual_args :: Parser Token [RValue]
-actual_args = Epsilon []
-          ||| comma_separated rvalue
+process :: Parser Token (L Process)
+process = action
+      ||| keyword Lexer.PRI +++ alternative                                     >>> fmap PriorityAlt . snd
+      ||| alternative                                                           >>> fmap Alt
+      ||| definitions
+      ||| conditional                                                           >>> fmap If
+      ||| keyword Lexer.PRI +++ parallel                                        >>> fmap PriorityPar . snd
+      ||| parallel                                                              >>> fmap Par
+      ||| sequence                                                              >>> fmap Seq
+      ||| repetition
 
--- Assignment process.
-assignment :: Parser Token Process
-assignment =
-  lvalue +++ symbol Lexer.ASSIGN +++ rvalue                >>> (\(a, (_, b)) ->
-                                                                 Assignment a b)
+action :: Parser Token (L Process)
+action = assign
+     ||| call
+     ||| delay
+     ||| input
+     ||| output
+     ||| skip
+     ||| stop
+     ||| timer
 
--- The OR of one or more conjunctions.
-cond :: Parser Token Condition
-cond = conjunction
-   ||| conjunction +++ keyword Lexer.OR +++ cond           >>> (\(a, (_, b)) -> Or a b)
+-- List of at least two p's, separated by q's. This is to stop ambiguity in
+-- expression, between the associative operator lists.
+list2 :: (Eq a, Eq b) => Parser Token a -> Parser Token b -> Parser Token [a]
+list2 p q = p +++ q +++ p +++ Star (q +++ p >>> snd)                            >>> (\(a, (b, (c, ds))) -> a : c : ds)
 
--- The AND of one or more simple expressions.
-conjunction :: Parser Token Condition
-conjunction =
-       simple_cond
-   ||| simple_cond +++ keyword Lexer.AND +++
-       conjunction                                         >>> (\(a, (_, b)) -> And a b)
+expression :: Parser Token (L Expression)
+expression = list2 operand (symbol Lexer.ADD)                                   >>> (\xs -> L (Add xs) (location (head xs)))
+         ||| operand +++ keyword Lexer.AFTER +++ operand                        >>> (\(a, (_, b)) -> L (After a b) (location a))
+         ||| list2 operand (keyword Lexer.AND)                                  >>> (\xs -> L (And xs) (location (head xs)))
+         ||| list2 operand (symbol Lexer.BITWISE_AND)                           >>> (\xs -> L (BitwiseAnd xs) (location (head xs)))
+         ||| list2 operand (symbol Lexer.BITWISE_OR)                            >>> (\xs -> L (BitwiseOr xs) (location (head xs)))
+         ||| list2 operand (symbol Lexer.BITWISE_XOR)                           >>> (\xs -> L (BitwiseXor xs) (location (head xs)))
+         ||| operand +++ symbol Lexer.COMP_EQ +++ operand                       >>> (\(a, (_, b)) -> L (CompareEQ a b) (location a))
+         ||| operand +++ symbol Lexer.COMP_GE +++ operand                       >>> (\(a, (_, b)) -> L (CompareGE a b) (location a))
+         ||| operand +++ symbol Lexer.COMP_GT +++ operand                       >>> (\(a, (_, b)) -> L (CompareGT a b) (location a))
+         ||| operand +++ symbol Lexer.COMP_LE +++ operand                       >>> (\(a, (_, b)) -> L (CompareLE a b) (location a))
+         ||| operand +++ symbol Lexer.COMP_LT +++ operand                       >>> (\(a, (_, b)) -> L (CompareLT a b) (location a))
+         ||| operand +++ symbol Lexer.COMP_NE +++ operand                       >>> (\(a, (_, b)) -> L (CompareNE a b) (location a))
+         ||| list2 operand (symbol Lexer.MUL)                                   >>> (\xs -> L (Mul xs) (location (head xs)))
+         ||| symbol Lexer.SUB +++ operand                                       >>> (\(a, b) -> L (Neg b) (location a))
+         ||| keyword Lexer.NOT +++ operand                                      >>> (\(a, b) -> L (Not b) (location a))
+         ||| list2 operand (keyword Lexer.OR)                                   >>> (\xs -> L (Or xs) (location (head xs)))
+         ||| operand +++ symbol Lexer.SHIFT_LEFT +++ operand                    >>> (\(a, (_, b)) -> L (ShiftLeft a b) (location a))
+         ||| operand +++ symbol Lexer.SHIFT_RIGHT +++ operand                   >>> (\(a, (_, b)) -> L (ShiftRight a b) (location a))
+         ||| operand
 
--- Occam CHAN.
-define_channel :: Parser Token [Definition]
-define_channel =
-  keyword Lexer.CHAN +++ comma_separated ident             >>> map DefineChannel . snd
+selector :: Parser Token (ArrayType, L Expression)
+selector = symbol Lexer.OPEN_SQUARE +++ array_type +++ expression +++
+           symbol Lexer.CLOSE_SQUARE                                            >>> (\(_, (t, (e, _))) -> (t, e))
 
--- Occam DEF.
-define_constant :: Parser Token [Definition]
-define_constant =
-  keyword Lexer.DEF +++ comma_separated
-      (ident +++ symbol Lexer.COMP_EQ +++ expr
-           >>> (\(a, (_, b)) -> (a, b)))                   >>> map (uncurry DefineConstant) . snd
+slicer :: Parser Token (ArrayType, L Expression, L Expression)
+slicer = symbol Lexer.OPEN_SQUARE +++ array_type +++ expression +++
+         keyword Lexer.FOR +++ expression +++ symbol Lexer.CLOSE_SQUARE         >>> (\(_, (t, (a, (_, (b, _))))) -> (t, a, b))
 
--- Occam PROC.
-define_procedure :: Parser Token Definition
-define_procedure =
-  keyword Lexer.PROC +++ ident +++
-  symbol Lexer.OPEN_PAREN +++ formal_args +++
-  symbol Lexer.CLOSE_PAREN +++
-  symbol Lexer.COMP_EQ +++ indent +++
-  process +++ dedent +++ symbol Lexer.COLON                >>> (\(_, (name, (_, (args, (_, (_, (_, (body, (_, _))))))))) ->
-                                                                 DefineProcedure name args body)
+data PartType = Selector (ArrayType, L Expression)
+              | Slicer (ArrayType, L Expression, L Expression)
+  deriving Eq
 
--- Occam VAR.
-define_variable :: Parser Token [Definition]
-define_variable =
-  keyword Lexer.VAR +++ comma_separated ident              >>> map DefineVariable . snd
+operand :: Parser Token (L Expression)
+operand = left term
+              (     selector >>> Selector
+                ||| slicer   >>> Slicer)
+              (\a b ->
+                case b of
+                  Selector s ->
+                    L (Index a s) (location a)
+                  Slicer s ->
+                    L (Slice a s) (location a))
 
--- Any of the above definitions.
-definition :: Parser Token Process
-definition =
-  define_constant +++ symbol Lexer.COLON +++ process       >>> (\(cs, (_, p)) -> foldr Definition p cs)
-  define_procedure +++ symbol Lexer.COLON +++ process      >>> (\(a, (_, p)) -> Definition a p)
-  define_variable +++ symbol Lexer.COLON +++ process       >>> (\(vs, (_, p)) -> foldr Definition p vs)
+term :: Parser Token (L Expression)
+term = name                                                                     >>> fmap Variable
+   ||| numeral                                                                  >>> fmap (Literal . Integer)
+   ||| keyword Lexer.TRUE                                                       >>> fmap (Literal . Bool . const True)
+   ||| keyword Lexer.ANY                                                        >>> fmap (const Any)
+   ||| keyword Lexer.FALSE                                                      >>> fmap (Literal . Bool . const False)
+   ||| char                                                                     >>> fmap (Literal . Char)
+   ||| string                                                                   >>> fmap (Literal . String)
+   ||| keyword Lexer.TABLE +++ symbol Lexer.OPEN_SQUARE +++
+       array_type +++ comma_separated expression +++ symbol Lexer.CLOSE_SQUARE  >>> (\(a, (_, (t, (es, _)))) ->
+                                                                                      L (Literal (Table INT es)) (location a))
+   ||| symbol Lexer.OPEN_PAREN +++ expression +++ symbol Lexer.CLOSE_PAREN      >>> fst . snd
 
--- A sum of one or more products.
-expr :: Parser Token Expr
-expr = left
-         prod
-         (symbol Lexer.ADD +++ prod                        >>> (\(_, b) -> (Lexer.ADD, b))
-         ||| symbol Lexer.SUB +++ prod                     >>> (\(_, b) -> (Lexer.SUB, b)))
-         (\a (t, b) ->
-           case t of
-             Lexer.ADD -> Add a b
-             Lexer.SUB -> Sub a b)
+array_type :: Parser Token ArrayType
+array_type = keyword Lexer.BYTE                                                 >>> const BYTE
+         ||| Epsilon ()                                                         >>> const INT
 
--- A sequence of argument names with their types.
-formal_args :: Parser Token [(VarType, String)]
-formal_args = Epsilon []
-          ||| typed_decl +++
-              Star (symbol Lexer.COMMA +++
-                    typed_decl >>> snd)                    >>> (\(a, as) -> a : as)
+-- a := b
+assign :: Parser Token (L Process)
+assign = expression +++ symbol Lexer.ASSIGN +++ expression                      >>> (\(a, (_, b)) ->
+                                                                                      L (Assign a b) (location a))
 
--- Read from a channel.
-input :: Parser Token Process
-input = rvalue +++ symbol Lexer.INPUT +++ lvalue           >>> (\(a, (_, b)) ->
-                                                                 Input a b)
+-- proc(a, b, c)
+call :: Parser Token (L Process)
+call = name                                                                     >>> fmap (flip Call [])
+   ||| name +++ symbol Lexer.OPEN_PAREN +++ comma_separated expression +++
+       symbol Lexer.CLOSE_PAREN                                                 >>> (\(L n loc, (_, (es, _))) ->
+                                                                                      L (Call n es) loc)
 
--- Something which can be assigned to.
-lvalue :: Parser Token LValue
-lvalue = ident                                             >>> LVariable
+-- TIME ? AFTER x
+delay :: Parser Token (L Process)
+delay = keyword Lexer.TIME +++ symbol Lexer.INPUT +++ keyword Lexer.AFTER +++
+        expression                                                              >>> (\(a, (_, (_, e))) ->
+                                                                                      L (Delay e) (location a))
 
--- Write to a channel.
-output :: Parser Token Process
-output = lvalue +++ symbol Lexer.OUTPUT +++
-         rvalue                                            >>> (\(a, (_, b)) ->
-                                                                 Output a b)
+-- chan ? var1; var2; var3
+input :: Parser Token (L Process)
+input = expression +++ symbol Lexer.INPUT +++
+        list expression (symbol Lexer.SEMICOLON)                                >>> (\(a, (_, bs)) ->
+                                                                                      L (Seq (Basic (map (\b -> L (Input a b) (location a)) bs))) (location a))
 
--- Occam PAR.
-parallel_block :: Parser Token Process
-parallel_block =
-      keyword Lexer.PAR +++ indent +++
-      Star process +++ dedent                              >>> (\(_, (_, (ps, _))) ->
-                                                                 Parallel Nothing ps)
-  ||| keyword Lexer.PAR +++ range +++ indent +++
-      Star process +++ dedent                              >>> (\(_, (r, (_, (ps, _)))) ->
-                                                                 Parallel r ps)
+-- chan ! expr1; expr2; expr3
+output :: Parser Token (L Process)
+output = expression +++ symbol Lexer.OUTPUT +++
+         list expression (symbol Lexer.SEMICOLON)                               >>> (\(a, (_, bs)) ->
+                                                                                      L (Seq (Basic (map (\b -> L (Output a b) (location a)) bs))) (location a))
 
--- Call an occam PROC.
-procedure_call :: Parser Token Process
-procedure_call =
-  ident +++ symbol Lexer.OPEN_PAREN +++
-  actual_args +++ symbol Lexer.CLOSE_PAREN                 >>> (\(name, (_, (as, _))) ->
-                                                                 Call name as)
+-- SKIP
+skip :: Parser Token (L Process)
+skip = keyword Lexer.SKIP                                                       >>> fmap (const Skip)
 
--- Arbitrary Occam process.
-process :: Parser Token Process
-process = keyword Lexer.SKIP                               >>> const Skip
-      ||| keyword Lexer.STOP                               >>> const Stop
-      ||| assignment
-      ||| input
-      ||| output
-      ||| sequence_block
-      ||| parallel_block
-      ||| procedure_call
-      ||| while_stmt
-      ||| definition
+-- STOP
+stop :: Parser Token (L Process)
+stop = keyword Lexer.STOP                                                       >>> fmap (const Stop)
 
--- A product of one or more terms.
-prod :: Parser Token Expr
-prod = left
-         term
-         (symbol Lexer.MUL +++ term                        >>> (\(_, b) ->
-                                                                 (Lexer.MUL, b))
-         ||| symbol Lexer.DIV +++ term                     >>> (\(_, b) ->
-                                                           (Lexer.DIV, b)))
-         (\a (t, b) ->
-           case t of
-             Lexer.MUL -> Mul a b
-             Lexer.DIV -> Div a b)
+-- TIME ? x
+timer :: Parser Token (L Process)
+timer = keyword Lexer.TIME +++ symbol Lexer.INPUT +++ expression                >>> (\(a, (_, e)) -> L (Timer e) (location a))
 
--- For now, an Occam program is simply a single process.
-program :: Parser Token Process
-program = process
+-- ALT
+alternative :: Parser Token (L Alternative)
+alternative = keyword Lexer.ALT +++ replicable (nestable alternative guard)     >>> (\(a, b) -> L (Alternative b) (location a))
 
--- A range of the form <var> = [<expr> FOR <expr>].
-range :: Parser Token Range
-range =
-  ident +++ symbol Lexer.OPEN_SQUARE +++ expr +++
-  keyword Lexer.FOR +++ expr +++
-  symbol Lexer.CLOSE_SQUARE                                >>> (\(a, (_, (b, (_, (c, _))))) ->
-                                                                 Just (a, b, c))
+guard :: Parser Token (L Guard)
+guard = atomic_guard                                                            >>> (\g -> L (BasicGuard g) (location g))
+    ||| expression +++ symbol Lexer.AMPERSAND +++ atomic_guard                  >>> (\(e, (_, g)) -> L (PrefixedGuard e g) (location e))
 
--- Something which can be assigned to variables.
-rvalue :: Parser Token RValue
-rvalue = expr                                              >>> Expr
+atomic_guard :: Parser Token (L AtomicGuard)
+atomic_guard = expression +++ symbol Lexer.INPUT +++
+               list expression (symbol Lexer.SEMICOLON)                         >>> (\(a, (_, bs)) -> L (InputGuard a bs) (location a))
+           ||| keyword Lexer.TIME +++ symbol Lexer.INPUT +++
+               keyword Lexer.AFTER +++ expression                               >>> (\(a, (_, (_, e))) -> L (DelayGuard e) (location a))
+           ||| keyword Lexer.SKIP                                               >>> fmap (const SkipGuard)
 
--- Occam SEQ.
-sequence_block :: Parser Token Process
-sequence_block =
-      keyword Lexer.SEQ +++ indent +++
-      Star process +++ dedent                              >>> (\(_, (_, (ps, _))) ->
-                                                                 Sequence Nothing ps)
-  ||| keyword Lexer.SEQ +++ range +++ indent +++
-      Star process +++ dedent                              >>> (\(_, (r, (_, (ps, _)))) ->
-                                                                 Sequence r ps)
+-- Definitions
 
--- A simple condition expression.
-simple_cond :: Parser Token Condition
-simple_cond =
-       keyword Lexer.TRUE                                  >>> (\a -> Invariably True)
-   ||| keyword Lexer.FALSE                                 >>> (\a -> Invariably False)
-   ||| expr +++ symbol Lexer.COMP_EQ +++ expr              >>> (\(a, (_, b)) -> CompareEQ a b)
-   ||| expr +++ symbol Lexer.COMP_LT +++ expr              >>> (\(a, (_, b)) -> CompareLT a b)
-   ||| expr +++ symbol Lexer.COMP_LE +++ expr              >>> (\(a, (_, b)) -> CompareLE a b)
-   ||| expr +++ symbol Lexer.COMP_GT +++ expr              >>> (\(a, (_, b)) -> CompareGE a b)
-   ||| expr +++ symbol Lexer.COMP_GE +++ expr              >>> (\(a, (_, b)) -> CompareGT a b)
-   ||| expr +++ symbol Lexer.COMP_NE +++ expr              >>> (\(a, (_, b)) -> CompareNE a b)
-   ||| keyword Lexer.NOT +++ simple_cond                   >>> (\((), a) -> Not a)
-   ||| symbol Lexer.OPEN_PAREN +++ cond +++
-       symbol Lexer.CLOSE_PAREN                            >>> fst . snd
+definitions :: Parser Token (L Process)
+definitions = definition +++ symbol Lexer.COLON +++ process                     >>> (\(ds, (_, p)) ->
+                                                                                      L (Definition ds p) (location (head ds)))
 
--- An atomic, but not necessarily terminal, expression.
-term :: Parser Token Expr
-term = ident                                               >>> RVariable
-   ||| integer                                             >>> Literal . Integer
-   ||| char_literal                                        >>> Literal . Char
-   ||| string_literal                                      >>> Literal . String
-   ||| symbol Lexer.OPEN_PAREN +++ expr +++
-       symbol Lexer.CLOSE_PAREN                            >>> fst . snd
-   ||| symbol Lexer.SUB +++ term                           >>> Neg . snd
+definition :: Parser Token [L Definition]
+definition = keyword Lexer.CHAN +++ names CHAN                                  >>> snd
+         ||| keyword Lexer.VAR +++ names VAR                                    >>> snd
+         ||| (keyword Lexer.CONST ||| keyword Lexer.DEF) +++ comma_separated (
+               name +++ symbol Lexer.COMP_EQ +++ expression                     >>> (\(L a loc, (_, e)) -> L (DefineConstant a e) loc)
+             )                                                                  >>> snd
+         ||| procedure_definition
+  where names t = comma_separated (
+                        name +++ symbol Lexer.OPEN_SQUARE +++ expression +++
+                        symbol Lexer.CLOSE_SQUARE                               >>> (\(L a loc, (_, (e, _))) -> L (DefineVector t a e) loc)
+                    ||| name                                                    >>> (\(L a loc) -> L (DefineSingle t a) loc)
+                  )
 
--- A single argument name with the corresponding type.
-typed_decl :: Parser Token (VarType, String)
-typed_decl = keyword Lexer.VALUE +++ ident                 >>> (\(_, v) -> (VALUE, v))
-         ||| keyword Lexer.CHAN +++ ident                  >>> (\(_, v) -> (CHAN, v))
+procedure_definition :: Parser Token [L Definition]
+procedure_definition = keyword Lexer.PROC +++ name +++ formals +++
+                       symbol Lexer.COMP_EQ +++ indent +++
+                         process +++ dedent                                     >>> (\(p, (L n _, (fs, (_, (_, (L b _, _)))))) ->
+                                                                                      [L (DefineProcedure n fs b) (location p)])
 
--- Unbounded loop.
-while_stmt :: Parser Token Process
-while_stmt =
-  keyword Lexer.WHILE +++ cond +++ indent +++
-  process +++ dedent                                       >>> (\(_, (c, (_, (p, _)))) ->
-                                                                 While c p)
+formals :: Parser Token [Formal]
+formals = symbol Lexer.OPEN_PAREN +++ comma_separated formal +++
+          symbol Lexer.CLOSE_PAREN                                              >>> concat . fst . snd
+      ||| Epsilon []
+
+formal :: Parser Token [Formal]
+formal = keyword Lexer.CHAN +++ names CHAN                                      >>> snd
+     ||| keyword Lexer.VALUE +++ names CONST                                    >>> snd
+     ||| keyword Lexer.VAR +++ names VAR                                        >>> snd
+  where names t = comma_separated (
+                        name +++ symbol Lexer.OPEN_SQUARE +++
+                        symbol Lexer.CLOSE_SQUARE                               >>> (\(L a loc, (_, _)) -> Vector t a)
+                    ||| name                                                    >>> (\(L a loc) -> Single t a)
+                  )
+
+-- IF
+conditional :: Parser Token (L Condition)
+conditional = keyword Lexer.IF +++
+              replicable (nestable conditional expression)                      >>> (\(a, b) -> L (Condition b) (location a))
+
+-- PAR
+parallel :: Parser Token (L (Replicable (L Process)))
+parallel = keyword Lexer.PAR +++ replicable process                             >>> (\(a, b) -> L b (location a))
+
+-- SEQ
+sequence :: Parser Token (L (Replicable (L Process)))
+sequence = keyword Lexer.SEQ +++ replicable process                             >>> (\(a, b) -> L b (location a))
+
+-- WHILE
+repetition :: Parser Token (L Process)
+repetition = keyword Lexer.WHILE +++ expression +++ indent +++
+               process +++ dedent                                               >>> (\(a, (e, (_, (p, _)))) ->
+                                                                                      L (While e p) (location a))

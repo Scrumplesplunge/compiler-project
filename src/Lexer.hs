@@ -5,26 +5,21 @@ import Reader
 import Tokens
 
 -- Tokenization.
-data Keyword = AND
-             | CHAN
-             | DEF
-             | FALSE
-             | FOR
-             | IF
-             | NOT
-             | OR
-             | PAR
-             | PROC
-             | SEQ
-             | SKIP
-             | STOP
-             | TRUE
-             | VALUE
-             | VAR
-             | WHILE
+data Keyword =
+      AFTER | ALT   | AND    | ANY  | AT    | BYTE | CHAN
+    | CONST | DEF   | FALSE  | FOR  | IF    | NOT  | OR
+    | PAR   | PLACE | PLACED | PRI  | PROC  | SEQ  | SKIP
+    | STOP  | TABLE | TIME   | TRUE | VALUE | VAR  | WHILE
   deriving (Eq, Show)
 
+keywords = [
+      AFTER,  ALT,    AND,     ANY,   AT,     BYTE,  CHAN,
+      CONST,  DEF,    FALSE,   FOR,   IF,     NOT,   OR,
+      PAR,    PLACE,  PLACED,  PRI,   PROC,   SEQ,   SKIP,
+      STOP,   TABLE,  TIME,    TRUE,  VALUE,  VAR,   WHILE]
+
 data Symbol = ADD           -- '+'
+            | AMPERSAND     -- '&'
             | ASSIGN        -- ':='
             | BITWISE_AND   -- '/\'
             | BITWISE_OR    -- '\/'
@@ -46,11 +41,14 @@ data Symbol = ADD           -- '+'
             | OPEN_SQUARE   -- '['
             | OUTPUT        -- '!'
             | SEMICOLON     -- ';'
+            | SHIFT_LEFT    -- '<<'
+            | SHIFT_RIGHT   -- '>>'
             | SUB           -- '-'
   deriving Eq
 
 symbol_map = [
   (ADD,          "+"),
+  (AMPERSAND,    "&"),
   (ASSIGN,       ":="),
   (BITWISE_AND,  "/\\"),
   (BITWISE_OR,   "\\/"),
@@ -72,6 +70,8 @@ symbol_map = [
   (OPEN_SQUARE,  "["),
   (OUTPUT,       "!"),
   (SEMICOLON,    ";"),
+  (SHIFT_LEFT,   "<<"),
+  (SHIFT_RIGHT,  ">>"),
   (SUB,          "-")]
 
 instance Show Symbol where
@@ -108,14 +108,11 @@ is_continuation_token (Token t l) =
 
 -- Keywords.
 match_keyword keyword = match_token (KEYWORD keyword) (show keyword)
-read_keyword = first_of $ map match_keyword [
-    CHAN, DEF, FALSE, FOR, IF, PAR, PROC, SEQ, SKIP, STOP, TRUE, VAR, VALUE,
-    WHILE]
+read_keyword = first_of $ map match_keyword keywords
 
 -- Symbols.
 match_symbol (symbol, value) = match_token (SYMBOL symbol) value
-read_symbol =
-  map match_symbol symbol_map
+read_symbol = map match_symbol symbol_map
 
 -- String/char literals.
 match_char = first_of [
