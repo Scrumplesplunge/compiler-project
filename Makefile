@@ -5,7 +5,7 @@ SOURCES = $(wildcard src/*.hs)
 all: bin/Parser
 
 bin/Parser: ${SOURCES} | bin build
-	ghc -hidir build -odir build -o $@ $^
+	ghc -O1 -hidir build -odir build -o $@ $^
 
 build:
 	mkdir build

@@ -111,28 +111,79 @@ action = assign
 list2 :: (Eq a, Eq b) => Parser Token a -> Parser Token b -> Parser Token [a]
 list2 p q = p +++ q +++ p +++ Star (q +++ p >>> snd)                            >>> (\(a, (b, (c, ds))) -> a : c : ds)
 
+-- Most of the rules for expression start with the rule 'operand', which may be
+-- arbitrarily expensive to check, and leads to a large amount of backtracking.
+-- By replacing all these rules with one rule which reads the operand, followed
+-- by a choice between all the available tails, the performance is significantly
+-- improved.
+data ExprType = OPERAND
+              | ADD [L Expression]
+              | AFTER (L Expression)
+              | AND [L Expression]
+              | BITWISE_AND [L Expression]
+              | BITWISE_OR [L Expression]
+              | BITWISE_XOR [L Expression]
+              | COMP_EQ (L Expression)
+              | COMP_GE (L Expression)
+              | COMP_GT (L Expression)
+              | COMP_LE (L Expression)
+              | COMP_LT (L Expression)
+              | COMP_NE (L Expression)
+              | DIV (L Expression)
+              | MOD (L Expression)
+              | MUL [L Expression]
+              | OR [L Expression]
+              | SHIFT_LEFT (L Expression)
+              | SHIFT_RIGHT (L Expression)
+  deriving Eq
+
+finish_expression :: (L Expression, ExprType) -> L Expression
+finish_expression (a, expr_type) =
+  case expr_type of
+    OPERAND        -> a
+    ADD bs         -> L (Add (a : bs))        (location a)
+    AFTER b        -> L (After a b)           (location a)
+    AND bs         -> L (And (a : bs))        (location a)
+    BITWISE_AND bs -> L (BitwiseAnd (a : bs)) (location a)
+    BITWISE_OR bs  -> L (BitwiseOr (a : bs))  (location a)
+    BITWISE_XOR bs -> L (BitwiseXor (a : bs)) (location a)
+    COMP_EQ b      -> L (CompareEQ a b)       (location a)
+    COMP_GE b      -> L (CompareGE a b)       (location a)
+    COMP_GT b      -> L (CompareGT a b)       (location a)
+    COMP_LE b      -> L (CompareLE a b)       (location a)
+    COMP_LT b      -> L (CompareLT a b)       (location a)
+    COMP_NE b      -> L (CompareNE a b)       (location a)
+    DIV b          -> L (Div a b)             (location a)
+    MOD b          -> L (Mod a b)             (location a)
+    MUL bs         -> L (Mul (a : bs))        (location a)
+    OR bs          -> L (Or (a : bs))         (location a)
+    SHIFT_LEFT b   -> L (ShiftLeft a b)       (location a)
+    SHIFT_RIGHT b  -> L (ShiftRight a b)      (location a)
+
 expression :: Parser Token (L Expression)
-expression = list2 operand (symbol Lexer.ADD)                                   >>> (\xs -> L (Add xs) (location (head xs)))
-         ||| operand +++ keyword Lexer.AFTER +++ operand                        >>> (\(a, (_, b)) -> L (After a b) (location a))
-         ||| list2 operand (keyword Lexer.AND)                                  >>> (\xs -> L (And xs) (location (head xs)))
-         ||| list2 operand (symbol Lexer.BITWISE_AND)                           >>> (\xs -> L (BitwiseAnd xs) (location (head xs)))
-         ||| list2 operand (symbol Lexer.BITWISE_OR)                            >>> (\xs -> L (BitwiseOr xs) (location (head xs)))
-         ||| list2 operand (symbol Lexer.BITWISE_XOR)                           >>> (\xs -> L (BitwiseXor xs) (location (head xs)))
-         ||| operand +++ symbol Lexer.COMP_EQ +++ operand                       >>> (\(a, (_, b)) -> L (CompareEQ a b) (location a))
-         ||| operand +++ symbol Lexer.COMP_GE +++ operand                       >>> (\(a, (_, b)) -> L (CompareGE a b) (location a))
-         ||| operand +++ symbol Lexer.COMP_GT +++ operand                       >>> (\(a, (_, b)) -> L (CompareGT a b) (location a))
-         ||| operand +++ symbol Lexer.COMP_LE +++ operand                       >>> (\(a, (_, b)) -> L (CompareLE a b) (location a))
-         ||| operand +++ symbol Lexer.COMP_LT +++ operand                       >>> (\(a, (_, b)) -> L (CompareLT a b) (location a))
-         ||| operand +++ symbol Lexer.COMP_NE +++ operand                       >>> (\(a, (_, b)) -> L (CompareNE a b) (location a))
-         ||| operand +++ symbol Lexer.DIV +++ operand                           >>> (\(a, (_, b)) -> L (Div a b) (location a))
-         ||| operand +++ symbol Lexer.MOD +++ operand                           >>> (\(a, (_, b)) -> L (Mod a b) (location a))
-         ||| list2 operand (symbol Lexer.MUL)                                   >>> (\xs -> L (Mul xs) (location (head xs)))
-         ||| symbol Lexer.SUB +++ operand                                       >>> (\(a, b) -> L (Neg b) (location a))
+expression = symbol Lexer.SUB +++ operand                                       >>> (\(a, b) -> L (Neg b) (location a))
          ||| keyword Lexer.NOT +++ operand                                      >>> (\(a, b) -> L (Not b) (location a))
-         ||| list2 operand (keyword Lexer.OR)                                   >>> (\xs -> L (Or xs) (location (head xs)))
-         ||| operand +++ symbol Lexer.SHIFT_LEFT +++ operand                    >>> (\(a, (_, b)) -> L (ShiftLeft a b) (location a))
-         ||| operand +++ symbol Lexer.SHIFT_RIGHT +++ operand                   >>> (\(a, (_, b)) -> L (ShiftRight a b) (location a))
-         ||| operand
+         ||| operand +++ (
+                   Epsilon OPERAND
+               ||| plus (symbol Lexer.ADD +++ operand >>> snd)                  >>> ADD
+               ||| keyword Lexer.AFTER +++ operand                              >>> AFTER . snd
+               ||| plus (keyword Lexer.AND +++ operand >>> snd)                 >>> AND
+               ||| plus (symbol Lexer.BITWISE_AND +++ operand >>> snd)          >>> BITWISE_AND
+               ||| plus (symbol Lexer.BITWISE_OR +++ operand >>> snd)           >>> BITWISE_OR
+               ||| plus (symbol Lexer.BITWISE_XOR +++ operand >>> snd)          >>> BITWISE_XOR
+               ||| symbol Lexer.COMP_EQ +++ operand                             >>> COMP_EQ . snd
+               ||| symbol Lexer.COMP_GE +++ operand                             >>> COMP_GE . snd
+               ||| symbol Lexer.COMP_GT +++ operand                             >>> COMP_GT . snd
+               ||| symbol Lexer.COMP_LE +++ operand                             >>> COMP_LE . snd
+               ||| symbol Lexer.COMP_LT +++ operand                             >>> COMP_LT . snd
+               ||| symbol Lexer.COMP_NE +++ operand                             >>> COMP_NE . snd
+               ||| symbol Lexer.DIV +++ operand                                 >>> DIV . snd
+               ||| symbol Lexer.MOD +++ operand                                 >>> MOD . snd
+               ||| plus (symbol Lexer.MUL +++ operand >>> snd)                  >>> MUL
+               ||| plus (keyword Lexer.OR +++ operand >>> snd)                  >>> OR
+               ||| symbol Lexer.SHIFT_LEFT +++ operand                          >>> SHIFT_LEFT . snd
+               ||| symbol Lexer.SHIFT_RIGHT +++ operand                         >>> SHIFT_RIGHT . snd
+             )                                                                  >>> finish_expression
 
 selector :: Parser Token (ArrayType, L Expression)
 selector = symbol Lexer.OPEN_SQUARE +++ array_type +++ expression +++

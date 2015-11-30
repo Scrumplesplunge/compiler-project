@@ -75,7 +75,7 @@ run_parser' (Match m f) (x:xs) =
              ("Unexpected " ++ show (token_type x))]
 
 -- A union can succeed with any possible parses of any of its constituents.
-run_parser' (Union ps) xs = concat . map (flip run_parser xs) $ ps
+run_parser' (Union ps) xs = concat . transpose . map (flip run_parser xs) $ ps
 
 -- A concatenation can succeed only for successful parses of the second
 -- immediately following any successful parse of the first.
