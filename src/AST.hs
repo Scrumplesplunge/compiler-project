@@ -55,8 +55,10 @@ data Expression = Add [L Expression]
                 | CompareLE (L Expression) (L Expression)
                 | CompareLT (L Expression) (L Expression)
                 | CompareNE (L Expression) (L Expression)
+                | Div (L Expression) (L Expression)
                 | Index (L Expression) (ArrayType, (L Expression))
                 | Literal Literal
+                | Mod (L Expression) (L Expression)
                 | Mul [L Expression]
                 | Neg (L Expression)
                 | Not (L Expression)
@@ -64,6 +66,7 @@ data Expression = Add [L Expression]
                 | ShiftLeft (L Expression) (L Expression)
                 | ShiftRight (L Expression) (L Expression)
                 | Slice (L Expression) (ArrayType, L Expression, L Expression)
+                | Sub (L Expression) (L Expression)
                 | Variable Name
   deriving (Eq, Show)
 

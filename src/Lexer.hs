@@ -36,6 +36,7 @@ data Symbol = ADD           -- '+'
             | COMP_NE       -- '<>'
             | DIV           -- '/'
             | INPUT         -- '?'
+            | MOD           -- '\'
             | MUL           -- '*'
             | OPEN_PAREN    -- '('
             | OPEN_SQUARE   -- '['
@@ -46,32 +47,34 @@ data Symbol = ADD           -- '+'
             | SUB           -- '-'
   deriving Eq
 
+-- These are sorted by symbol length so that longer symbols are favoured.
 symbol_map = [
-  (ADD,          "+"),
-  (AMPERSAND,    "&"),
   (ASSIGN,       ":="),
   (BITWISE_AND,  "/\\"),
   (BITWISE_OR,   "\\/"),
   (BITWISE_XOR,  "><"),
+  (COMP_GE,      ">="),
+  (COMP_LE,      "<="),
+  (COMP_NE,      "<>"),
+  (SHIFT_LEFT,   "<<"),
+  (SHIFT_RIGHT,  ">>"),
+  (ADD,          "+"),
+  (AMPERSAND,    "&"),
   (CLOSE_PAREN,  ")"),
   (CLOSE_SQUARE, "]"),
   (COLON,        ":"),
   (COMMA,        ","),
   (COMP_EQ,      "="),
-  (COMP_GE,      ">="),
   (COMP_GT,      ">"),
-  (COMP_LE,      "<="),
   (COMP_LT,      "<"),
-  (COMP_NE,      "<>"),
   (DIV,          "/"),
   (INPUT,        "?"),
+  (MOD,          "\\"),
   (MUL,          "*"),
   (OPEN_PAREN,   "("),
   (OPEN_SQUARE,  "["),
   (OUTPUT,       "!"),
   (SEMICOLON,    ";"),
-  (SHIFT_LEFT,   "<<"),
-  (SHIFT_RIGHT,  ">>"),
   (SUB,          "-")]
 
 instance Show Symbol where
@@ -112,7 +115,7 @@ read_keyword = first_of $ map match_keyword keywords
 
 -- Symbols.
 match_symbol (symbol, value) = match_token (SYMBOL symbol) value
-read_symbol = map match_symbol symbol_map
+read_symbol = first_of $ map match_symbol symbol_map
 
 -- String/char literals.
 match_char = first_of [
@@ -159,4 +162,5 @@ read_token = first_of ([
       read_integer,
       read_newline,
       read_string,
-      read_spaces] ++ read_symbol)
+      read_spaces,
+      read_symbol])
