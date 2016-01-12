@@ -19,7 +19,7 @@ type Environment = [(AST.Name, NameInfo)]
 data State = State { environment :: Environment, has_error :: Bool }
 
 instance Show State where
-  show s = concat . Data.List.intersperse "\n" . map display $ environment s
+  show s = concat . Data.List.intersperse "\n" . reverse . map display $ environment s
     where display (n, (t, loc)) =
             show_compact loc ++ ":\t" ++ show n ++ " :: " ++ show t
 
@@ -243,8 +243,6 @@ check_definition ((L d loc) : ds) p = do
         proc' <- check_process proc
         return (PROC formals' proc'))
       add_name name (t, loc)
-    _ ->
-      print_fatal loc ("Unimplemented branch for definition " ++ show d)
   check_definition ds p
 
 check_formal :: L AST.Formal -> SemanticAnalyser Type
@@ -404,7 +402,7 @@ check_rvalue (L expr loc) = do
       b' <- check_rvalue b
       return (Sub a' b')
     AST.Variable x -> do
-      check_name (\t -> t == INT || t == BYTE) loc x
+      check_name (const True) loc x
       return (Name x)
 
 -- Check that a constant expression is actually constant, and return the
@@ -492,7 +490,8 @@ check_and_compute_constexpr (L expr loc) =
         AST.Char c -> return (INT, Integer . toInteger . ord $ c)
         AST.Integer i -> return (INT, Integer $ value i)
         AST.String s ->
-          return (BYTE_ARRAY . CompileTime . toInteger $ (length s), ByteArray s)
+          return (BYTE_ARRAY . CompileTime . toInteger $ (length s),
+                  ByteArray s)
         AST.Table AST.INT es -> do
           vs <- mapM check_and_compute_value es
           return (INT_ARRAY . CompileTime . toInteger $ length vs, Array vs)

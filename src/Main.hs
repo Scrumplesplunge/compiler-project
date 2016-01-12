@@ -14,4 +14,4 @@ main = do
   let x = full_parse process tokens
   (res, state) <- run_analyser (check_process x)
   putStrLn . ("\nFinal Tree:\n\n" ++) . show $ res
-  putStrLn . ("\n\nFinal State:\n\n" ++) . show $ state
+  putStrLn . ("\nFinal State:\n\n" ++) . show $ state
