@@ -12,5 +12,6 @@ main = do
   let raw_tokens = Tokens.tokens Lexer.read_token chars
   let tokens = parse_indent raw_tokens
   let x = full_parse process tokens
-  ((), state) <- run_analyser (check_process x)
-  putStrLn . ("\nFinal State:\n\n" ++) . show $ state
+  (res, state) <- run_analyser (check_process x)
+  putStrLn . ("\nFinal Tree:\n\n" ++) . show $ res
+  putStrLn . ("\n\nFinal State:\n\n" ++) . show $ state

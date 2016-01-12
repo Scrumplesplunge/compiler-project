@@ -232,10 +232,11 @@ assign = expression +++ symbol Lexer.ASSIGN +++ expression                      
 
 -- proc(a, b, c)
 call :: Parser Token (L Process)
-call = name                                                                     >>> fmap (flip Call [])
+call = name                                                                     >>> (\(L n loc) ->
+                                                                                      L (Call (L n loc) []) loc)
    ||| name +++ symbol Lexer.OPEN_PAREN +++ comma_separated expression +++
        symbol Lexer.CLOSE_PAREN                                                 >>> (\(L n loc, (_, (es, _))) ->
-                                                                                      L (Call n es) loc)
+                                                                                      L (Call (L n loc) es) loc)
 
 -- TIME ? AFTER x
 delay :: Parser Token (L Process)
@@ -290,7 +291,7 @@ definitions = definition +++ symbol Lexer.COLON +++ process                     
 
 definition :: Parser Token [L Definition]
 definition = keyword Lexer.CHAN +++ names CHAN                                  >>> snd
-         ||| keyword Lexer.VAR +++ names VAR                                    >>> snd
+         ||| keyword Lexer.VAR +++ names VALUE                                  >>> snd
          ||| (keyword Lexer.CONST ||| keyword Lexer.DEF) +++ comma_separated (
                name +++ symbol Lexer.COMP_EQ +++ expression                     >>> (\(L a loc, (_, e)) -> L (DefineConstant a e) loc)
              )                                                                  >>> snd
@@ -304,22 +305,24 @@ definition = keyword Lexer.CHAN +++ names CHAN                                  
 procedure_definition :: Parser Token [L Definition]
 procedure_definition = keyword Lexer.PROC +++ name +++ formals +++
                        symbol Lexer.COMP_EQ +++ indent +++
-                         process +++ dedent                                     >>> (\(p, (L n _, (fs, (_, (_, (L b _, _)))))) ->
-                                                                                      [L (DefineProcedure n fs b) (location p)])
+                         process +++ dedent                                     >>> (\(L _ loc, (L n _, (fs, (_, (_, (p, _)))))) ->
+                                                                                      [L (DefineProcedure n fs p) loc])
 
-formals :: Parser Token [Formal]
+formals :: Parser Token [L Formal]
 formals = symbol Lexer.OPEN_PAREN +++ comma_separated formal +++
           symbol Lexer.CLOSE_PAREN                                              >>> concat . fst . snd
       ||| Epsilon []
 
-formal :: Parser Token [Formal]
+formal :: Parser Token [L Formal]
 formal = keyword Lexer.CHAN +++ names CHAN                                      >>> snd
-     ||| keyword Lexer.VALUE +++ names CONST                                    >>> snd
-     ||| keyword Lexer.VAR +++ names VAR                                        >>> snd
+         -- TODO: Currently ignoring the distinction between CONST and VAR
+         -- arguments.
+     ||| keyword Lexer.VALUE +++ names VALUE                                    >>> snd
+     ||| keyword Lexer.VAR +++ names VALUE                                      >>> snd
   where names t = comma_separated (
                         name +++ symbol Lexer.OPEN_SQUARE +++
-                        symbol Lexer.CLOSE_SQUARE                               >>> (\(L a loc, (_, _)) -> Vector t a)
-                    ||| name                                                    >>> (\(L a loc) -> Single t a)
+                        symbol Lexer.CLOSE_SQUARE                               >>> (\(L a loc, (_, _)) -> L (Vector t a) loc)
+                    ||| name                                                    >>> (\(L a loc) -> L (Single t a) loc)
                   )
 
 -- IF

@@ -12,6 +12,11 @@ instance Show Location where
   show EOF = "end of input"
   show Unknown = "unknown location"
 
+show_compact :: Location -> String
+show_compact (Location line char) = show line ++ ":" ++ show char
+show_compact EOF = "EOF"
+show_compact Unknown = "??"
+
 instance Ord Location where
   compare Unknown Unknown = EQ
   compare Unknown _ = LT

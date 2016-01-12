@@ -13,10 +13,8 @@ PROC offset(VALUE ki, CHAN west) =     -- east column: source k offsets
     west ! ki
 :
 
-PROC multiplier(VALUE aij, CHAN north, CHAN south, CHAN west, CHAN east) =
-  VAR xj :
-  VAR aij.times.xj :
-  VAR yi :           -- responsible for a values
+PROC multiplier(VALUE aij, CHAN north, south, west, east) =
+  VAR xj, aij.times.xj, yi :           -- responsible for a values
   SEQ
     north ? xj
     WHILE TRUE
@@ -36,12 +34,11 @@ PROC sink(CHAN north) =                -- south row
 :
 
 DEF n = 3 :
-VAR a[n * n] :
-VAR k[n] :
+VAR a[n * n], k[n] :
 SEQ
   -- initialize a and k
-  
-  CHAN north.south[n * (n + 1)],  east.west[n * (n + 1)] :
+ 
+  CHAN north.south[n * (n + 1)], east.west[n * (n + 1)] :
   PAR
     PAR j = [0 FOR n]
       produce.xj(j, north.south[j])
@@ -50,11 +47,11 @@ SEQ
       offset(k[i], east.west[(n * n) + i])
     PAR i = [0 FOR n]
       PAR j = [0 FOR n]
-        multiplier( a[(n * i) + j],
-                    north.south [(n * i) + j],
-                    north.south [(n * (i + 1)) + j],
-                    east.west   [i + (n * j)],  
-                    east.west   [i + (n * (j + 1))] )
+        multiplier(a[(n * i) + j],
+                   north.south [(n * i) + j],
+                   north.south [(n * (i + 1)) + j],
+                   east.west   [i + (n * j)],
+                   east.west   [i + (n * (j + 1))] )
     PAR j = [0 FOR n]
       sink(north.south[(n * n) + j])
 

@@ -14,10 +14,13 @@ instance Functor L where
 location :: L a -> Location
 location (L _ loc) = loc
 
+node :: L a -> a
+node (L x _) = x
+
 -- Generic process.
 data Process = Alt Alternative
              | Assign (L Expression) (L Expression)
-             | Call Name [L Expression]
+             | Call (L Name) [L Expression]
              | Definition [L Definition] (L Process)
              | Delay (L Expression)
              | If Condition
@@ -85,8 +88,8 @@ data Replicable a = Basic [a]
 -- B = A
 --   | bar
 --       baz
-data Nestable a b = Block b (L Process)
-                  | Nested a
+data Nestable a b = Nested a
+                  | Block b (L Process)
   deriving (Eq, Show)
 
 -- ALT
@@ -108,14 +111,14 @@ data Condition = Condition (Replicable (Nestable (L Condition) (L Expression)))
 
 data RawType = CHAN
              | CONST
-             | VAR
+             | VALUE
   deriving (Eq, Show)
 
 -- Name definition/declarations, as well as placement.
 data Definition = DefineSingle RawType Name
                 | DefineVector RawType Name (L Expression)
                 | DefineConstant Name (L Expression)
-                | DefineProcedure Name [Formal] Process
+                | DefineProcedure Name [L Formal] (L Process)
   deriving (Eq, Show)
 
 data Formal = Single RawType Name
