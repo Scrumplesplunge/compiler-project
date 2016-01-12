@@ -11,17 +11,19 @@ import Reader hiding (location)
 import Result
 
 -- Information associated with a defined name.
-type NameInfo = (Type, Location)
+type NameInfo = (Type, Scope, Location)
 
 -- All names defined thus far.
 type Environment = [(AST.Name, NameInfo)]
 
-data State = State { environment :: Environment, has_error :: Bool }
+data State =
+  State { environment :: Environment, scope :: Scope, has_error :: Bool }
 
 instance Show State where
-  show s = concat . Data.List.intersperse "\n" . reverse . map display $ environment s
-    where display (n, (t, loc)) =
-            show_compact loc ++ ":\t" ++ show n ++ " :: " ++ show t
+  show s = concat . Data.List.intersperse "\n" .
+           reverse . map display $ environment s
+    where display (n, (t, s, loc)) = show_compact loc ++ ":\t" ++ show s ++
+                                     " " ++ show n ++ " :: " ++ show t
 
 data SemanticAnalyser a = S (State -> IO (a, State))
 
@@ -40,7 +42,7 @@ instance Monad SemanticAnalyser where
       case f x of
         S xm' -> xm' state')
 
-empty_state = State { environment = [], has_error = False }
+empty_state = State { environment = [], scope = Global, has_error = False }
 
 -- Print messages.
 print_note :: String -> SemanticAnalyser ()
@@ -70,6 +72,15 @@ type_mismatch loc expected actual =
   print_fatal loc
               ("Expected " ++ show expected ++ ", got " ++ show actual ++ ".")
 
+-- Enter a local scope.
+local :: SemanticAnalyser a -> SemanticAnalyser a
+local analyser = do
+  S (\state -> return ((), state { scope = Local }))
+  new_scope analyser
+
+get_scope :: SemanticAnalyser Scope
+get_scope = S (\state -> return (scope state, state))
+
 -- Get the current state of the environment.
 get_env :: SemanticAnalyser Environment
 get_env = S (\state -> return (environment state, state))
@@ -87,15 +98,15 @@ new_scope analyser =
 
 -- Set the current environment.
 add_name :: AST.Name -> NameInfo -> SemanticAnalyser ()
-add_name name (t, loc) = do
+add_name name (t, s, loc) = do
   result <- find name
   case result of
     Nothing -> return ()
-    Just (_, loc') ->
+    Just (_, _, loc') ->
       print_warning loc (
           "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
           show loc' ++ ".")
-  get_env >>= (\env -> set_env ((name, (t, loc)) : env))
+  get_env >>= (\env -> set_env ((name, (t, s, loc)) : env))
 
 -- Look up a name in the environment.
 find :: AST.Name -> SemanticAnalyser (Maybe NameInfo)
@@ -107,10 +118,10 @@ run_analyser (S xm) = xm empty_state
 -- Helpers for the replicable and nestable types.
 check_replicator :: AST.Replicator -> SemanticAnalyser Replicator
 check_replicator (AST.Range (L n loc') a b) = do
-  add_name n (INT, loc')
+  add_name n (INT, Local, loc')
   a' <- check_rvalue a
   b' <- check_rvalue b
-  return (Range n a' b')
+  return (Range (Local, n) a' b')
 
 check_replicable :: (a -> SemanticAnalyser a2) -> AST.Replicable a
                  -> SemanticAnalyser (Replicable a2)
@@ -134,13 +145,14 @@ check_nestable check_a check_b (AST.Block b p) = do
   return (Block b' p')
 
 -- Check that a name is defined.
-check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser ()
+check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser Name
 check_name check_type loc x = do
   x' <- find x
   case x' of
-    Nothing ->
+    Nothing -> do
       print_error loc ("Undefined name " ++ show x)
-    Just (t, loc') ->
+      return (Global, "")
+    Just (t, s, loc') -> do
       case t of
         CONST t' _ ->
           if check_type t' then
@@ -156,6 +168,7 @@ check_name check_type loc x = do
             print_error loc
                 ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
             print_note (show x ++ " is defined at " ++ show loc')
+      return (s, x)
 
 check_process :: L AST.Process -> SemanticAnalyser Process
 check_process (L p loc) =
@@ -211,11 +224,15 @@ check_assign l r = do
   r' <- check_rvalue r
   return (Assign l' r')
 
-check_call :: L Name -> [L AST.Expression] -> SemanticAnalyser Process
+check_call :: L AST.Name -> [L AST.Expression] -> SemanticAnalyser Process
 check_call (L n loc) es = do
   -- TODO: Type-check the arguments.
+  n' <- check_name (\t ->
+    case t of
+      PROC _ _ -> True
+      _ -> False) loc n
   es' <- mapM check_rvalue es
-  return (Call n es')
+  return (Call n' es')
 
 check_definition :: [L AST.Definition] -> L AST.Process
                  -> SemanticAnalyser Process
@@ -224,31 +241,36 @@ check_definition ((L d loc) : ds) p = do
   case d of
     AST.DefineSingle t name -> do
       -- Define the variable.
-      add_name name (raw_type t, loc)
+      s <- get_scope
+      add_name name (raw_type t, s, loc)
     AST.DefineVector t name l_expr -> do
       -- Compute the (constant) size of the vector.
       (t', value) <- check_and_compute_constexpr l_expr
       case value of
-        Integer size ->
+        Integer size -> do
           -- Define the array.
-          add_name name (INT_ARRAY (CompileTime size), loc)
+          s <- get_scope
+          add_name name (INT_ARRAY (CompileTime size), s, loc)
         _ -> type_mismatch (AST.location l_expr) INT t'
     AST.DefineConstant name l_expr -> do
       -- Compute the constant value.
       (t, value) <- check_and_compute_constexpr l_expr
-      add_name name (CONST t value, loc)
+      s <- get_scope
+      add_name name (CONST t value, s, loc)
     AST.DefineProcedure name formals proc -> do
       t <- new_scope (do
         formals' <- mapM check_formal formals
         proc' <- check_process proc
         return (PROC formals' proc'))
-      add_name name (t, loc)
+      s <- get_scope
+      add_name name (t, s, loc)
   check_definition ds p
 
 check_formal :: L AST.Formal -> SemanticAnalyser Type
 check_formal (L (AST.Single r n) loc) = do
   let t = raw_type r
-  add_name n (t, loc)
+  s <- get_scope
+  add_name n (t, s, loc)
   return t
 
 check_formal (L (AST.Vector r n) loc) = do
@@ -256,7 +278,8 @@ check_formal (L (AST.Vector r n) loc) = do
              BYTE -> BYTE_ARRAY Runtime
              CHAN -> CHAN_ARRAY Runtime
              INT -> INT_ARRAY Runtime)
-  add_name n (t, loc)
+  s <- get_scope
+  add_name n (t, s, loc)
   return t
 
 check_delay :: L AST.Expression -> SemanticAnalyser Process
@@ -402,8 +425,8 @@ check_rvalue (L expr loc) = do
       b' <- check_rvalue b
       return (Sub a' b')
     AST.Variable x -> do
-      check_name (const True) loc x
-      return (Name x)
+      x' <- check_name (const True) loc x
+      return (Name x')
 
 -- Check that a constant expression is actually constant, and return the
 -- calculated compile-time value.
@@ -577,7 +600,7 @@ check_and_compute_constexpr (L expr loc) =
         Nothing -> do
           print_error loc ("Undefined name '" ++ n ++ "'.")
           return (INT, Integer 0)
-        Just (t, loc') ->
+        Just (t, s, loc') ->
           case t of
             CONST def_type def_value -> return (def_type, def_value)
             _ -> do
@@ -609,8 +632,8 @@ check_channel (L chan loc) = do
   -- A channel is either named, or a member of an array.
   case chan of
     AST.Variable x -> do
-      check_name (== CHAN) loc x
-      return (Name x)
+      x' <- check_name (== CHAN) loc x
+      return (Name x')
     AST.Index r (t, i) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT indexing.
@@ -627,11 +650,11 @@ check_channel_array (L chan_array loc) = do
   -- A channel array is either a named array or a slice.
   case chan_array of
     AST.Variable x -> do
-      check_name (\t ->
+      x' <- check_name (\t ->
         case t of
           CHAN_ARRAY _ -> True
           _ -> False) loc x
-      return (Name x)
+      return (Name x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.
@@ -651,14 +674,14 @@ check_lvalue (L expr loc) = do
   case expr of
     AST.Any -> return Any
     AST.Variable x -> do
-      check_name (\t ->
+      x' <- check_name (\t ->
         case t of
           BYTE -> True
           BYTE_ARRAY _ -> True
           INT -> True
           INT_ARRAY _ -> True
           _ -> False) loc x
-      return (Name x)
+      return (Name x')
     AST.Index r (t, i) -> do
       -- TODO: Check that access type matches, or at least that cross-type
       -- access support is present.
@@ -677,12 +700,12 @@ check_array (L r loc) = do
   -- An array is either a named array or a slice.
   case r of
     AST.Variable x -> do
-      check_name (\t ->
+      x' <- check_name (\t ->
         case t of
           BYTE_ARRAY _ -> True
           INT_ARRAY _ -> True
           _ -> False) loc x
-      return (Name x)
+      return (Name x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.

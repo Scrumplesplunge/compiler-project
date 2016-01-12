@@ -5,6 +5,10 @@ import Data.Bits
 import Data.List
 import qualified Data.ByteString as S
 
+-- Scope of a variable.
+data Scope = Global | Local
+  deriving (Eq, Show)
+
 -- Size information for an array.
 data Size = CompileTime Integer
           | Runtime
@@ -43,7 +47,7 @@ raw_type AST.CHAN = CHAN
 raw_type AST.VALUE = INT
 raw_type t = error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
 
-type Name = String
+type Name = (Scope, String)
 
 -- i = a FOR b
 data Replicator = Range Name Expression Expression
