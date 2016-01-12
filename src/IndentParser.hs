@@ -140,7 +140,12 @@ process_line :: Int -> [Lexer.RawToken] -> (Int, [Token])
 process_line indent [] = (indent, [])
 process_line indent (x:xs) =
   case Tokens.token_type x of
-    Lexer.SPACES s -> f s xs
+    Lexer.SPACES s ->
+      if xs == [] then
+        -- Don't alter the indentation because of a whitespace-only line.
+        (indent, [])
+      else
+        f s xs
     _ -> f 0 (x:xs)
   where l = Tokens.token_location x
         f :: Int -> [Lexer.RawToken] -> (Int, [Token])

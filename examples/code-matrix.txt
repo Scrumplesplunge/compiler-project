@@ -37,7 +37,7 @@ DEF n = 3 :
 VAR a[n * n], k[n] :
 SEQ
   -- initialize a and k
- 
+
   CHAN north.south[n * (n + 1)], east.west[n * (n + 1)] :
   PAR
     PAR j = [0 FOR n]
