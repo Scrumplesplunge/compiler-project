@@ -17,10 +17,10 @@ STARTP          ( 13)  # ---- | Start process with workspace A at code offset B.
 OUTBYTE         ( 14)  # ---- | B ! low byte A
 OUTWORD         ( 15)  # ---- | B ! A
 SETERR          ( 16)  # ---- | Set the error flag.
-# ???           ( 17)  # ---- | Unused code.
+# ???           ( 17)  # -??- | Unused code.
 RESETCH         ( 18)  # ---- | Reset channel A.
 CSUB0           ( 19)  # ---- | if (!(0 <= B && B < A)) ERR = 1;
-# ???           ( 20)  # ---- | Unused code.
+# ???           ( 20)  # -??- | Unused code.
 STOPP           ( 21)  # ---- | Stop the currently running process.
 LADD            ( 22)  # ---- | A = A + B + lsb C, check overflow.
 STLB            ( 23)  # ---- | back(LPQ) = A
@@ -173,3 +173,7 @@ FPLDNLMULDB     (168)  # +FPU | floating point load non-local and multiply doubl
 FPLDNLADDSN     (170)  # +FPU | floating point load non-local and add single
 FPENTRY         (171)  # +FPU | floating point unit entry
 FPLDNLMULSN     (172)  # +FPU | floating point load non-local and multiply single
+
+PUTC            (901)  # META | Print a byte to the console.
+PRINTDEC        (902)  # META | Print a word to the console (decimal).
+PRINTHEX        (903)  # META | Print a word to the console (hexadecimal).
