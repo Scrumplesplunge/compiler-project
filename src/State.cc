@@ -351,7 +351,7 @@ void State::setError() {
 }
 
 void State::deschedule() {
-  // Descheduling simply requires us to not reschedule the process.
+  write(Wptr - 4, Iptr);        // Save the instruction pointer.
   resumeNext();
 }
 
@@ -398,10 +398,6 @@ int32_t State::time() {
 
 int32_t State::Wdesc() {
   return Wptr | priority;
-}
-
-bool State::channelReady(int32_t address) {
-  UNIMPLEMENTED("channelReady");
 }
 
 bool State::isExternalChannel(int32_t address) {

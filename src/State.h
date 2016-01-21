@@ -42,12 +42,11 @@ class State {
 
   // Return true if the address stored in the channel is the address of another
   // processes workspace.
-  bool channelReady(int32_t address);
   bool isExternalChannel(int32_t address);
   bool after(int32_t a, int32_t b);  // True iff time a is after time b.
 
   void enqueueProcess(int32_t desc);
-  int32_t dequeueProcess(int32_t priority);
+  int32_t dequeueProcess(int32_t pri);
 
   void push(int32_t x);  // Push a value onto the register stack.
   int32_t pop();         // Pop a value off the register stack.

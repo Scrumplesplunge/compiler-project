@@ -1,5 +1,6 @@
 #include "State.h"
 
+#include <iostream>
 #include <stdexcept>
 #include <stdio.h>
 
@@ -109,12 +110,14 @@ DEFINE_INDIRECT(DIFF) {
 
 // Disable channel.
 DEFINE_INDIRECT(DISC) {
-  if (B && channelReady(C) && read(Wptr) == NoneSelected) {
-    write(Wptr, A);
-    A = True;
-  } else {
-    A = False;
-  }
+  UNIMPLEMENTED("DISC - Disable channel.");
+  // TODO: Fix this implementation.
+  // if (B && read(Wptr) == NoneSelected) {
+  //   write(Wptr, A);
+  //   A = True;
+  // } else {
+  //   A = False;
+  // }
 }
 
 // Disable skip.
@@ -276,7 +279,7 @@ DEFINE_INDIRECT(IN) {
       deschedule();
     } else {
       // A process is waiting. The communication can proceed.
-      int32_t source = read(chan_value - 12);
+      int32_t source = read((chan_value & ~0x3) - 12);
 
       // TODO: Special behaviour is required to handle alt constructs.
       if (source == Enabling || source == Waiting || source == Ready)
@@ -286,6 +289,9 @@ DEFINE_INDIRECT(IN) {
         writeByte(C + i, readByte(source + i));
       // Reschedule the other thread.
       schedule(chan_value);
+
+      // Reset the channel.
+      write(B, NotProcess);
     }
   }
 }
@@ -423,7 +429,7 @@ DEFINE_INDIRECT(OUT) {
       deschedule();
     } else {
       // A process is waiting. The communication can proceed.
-      int32_t dest = read(chan_value - 12);
+      int32_t dest = read((chan_value & ~0x3) - 12);
 
       // TODO: Special behaviour is required to handle alt constructs.
       if (dest == Enabling || dest == Waiting || dest == Ready)
@@ -433,6 +439,9 @@ DEFINE_INDIRECT(OUT) {
         writeByte(dest + i, readByte(C + i));
       // Reschedule the other thread.
       schedule(chan_value);
+
+      // Reset the channel.
+      write(B, NotProcess);
     }
   }
 }
@@ -444,7 +453,15 @@ DEFINE_INDIRECT(OUTBYTE) {
 
 // Output word.
 DEFINE_INDIRECT(OUTWORD) {
-  UNIMPLEMENTED("OUTWORD - Output word.");
+  int32_t word = pop();
+  int32_t chan = pop();
+  write(Wptr, word);
+
+  push(Wptr);
+  push(chan);
+  push(4);
+
+  DIRECT(OUT);
 }
 
 DEFINE_INDIRECT(POSTNORMSN) UNIMPLEMENTED_FP;  // Post-normalise correction.
