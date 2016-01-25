@@ -1,4 +1,4 @@
-#include "State.h"
+#include "VM.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -110,14 +110,14 @@ DEFINE_INDIRECT(DIFF) {
 
 // Disable channel.
 DEFINE_INDIRECT(DISC) {
-  UNIMPLEMENTED("DISC - Disable channel.");
-  // TODO: Fix this implementation.
-  // if (B && read(Wptr) == NoneSelected) {
-  //   write(Wptr, A);
-  //   A = True;
-  // } else {
-  //   A = False;
-  // }
+  // A channel guard is detectably ready if the value stored in the channel does
+  // not match the current workspace descriptor.
+  if (B && read(Wptr) == NoneSelected && read(C) != Wdesc()) {
+    write(Wptr, A);
+    A = True;
+  } else {
+    A = False;
+  }
 }
 
 // Disable skip.
@@ -133,12 +133,14 @@ DEFINE_INDIRECT(DISS) {
 
 // Disable timer.
 DEFINE_INDIRECT(DIST) {
-  if (B && read(Wptr) == NoneSelected && after(time(), C)) {
-    write(Wptr, A);
-    A = True;
-  } else {
-    A = False;
-  }
+  UNIMPLEMENTED("DIST - Disable timer.");
+  // TODO: Check this.
+  // if (B && read(Wptr) == NoneSelected && after(time(), C)) {
+  //   write(Wptr, A);
+  //   A = True;
+  // } else {
+  //   A = False;
+  // }
 }
 
 // Divide.
@@ -177,17 +179,19 @@ DEFINE_INDIRECT(ENBS) {
 
 // Enable timer.
 DEFINE_INDIRECT(ENBT) {
-  if (A) {
-    if (read(Wptr - 16) == TimeNotSet) {
-      // Time not set: set the time.
-      write(Wptr - 16, TimeSet);
-      write(Wptr - 20, B);
-    } else if (after(read(Wptr - 20), B)) {
-      // Time set, but the new one is sooner.
-      write(Wptr - 20, B);
-    }
-  }
-  B = C;
+  UNIMPLEMENTED("ENBT - Enable timer.");
+  // TODO: Check this (it doesn't set the state to Ready?)
+  // if (A) {
+  //   if (read(Wptr - 16) == TimeNotSet) {
+  //     // Time not set: set the time.
+  //     write(Wptr - 16, TimeSet);
+  //     write(Wptr - 20, B);
+  //   } else if (after(read(Wptr - 20), B)) {
+  //     // Time set, but the new one is sooner.
+  //     write(Wptr - 20, B);
+  //   }
+  // }
+  // B = C;
 }
 
 // End process.

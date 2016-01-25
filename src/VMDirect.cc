@@ -1,4 +1,4 @@
-#include "State.h"
+#include "VM.h"
 
 using namespace std;
 
@@ -46,6 +46,7 @@ DEFINE_DIRECT(EQC) {
 // Jump.
 DEFINE_DIRECT(J) {
   Iptr += Oreg;
+  Oreg = 0;
   yield();
 }
 

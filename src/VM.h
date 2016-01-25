@@ -5,7 +5,7 @@
 #include <memory>
 #include <stdint.h>
 
-class State {
+class VM {
  public:
   static const int32_t Enabling;      // Enabling state of alternative.
   static const int32_t False;         // Truth values.
@@ -19,7 +19,7 @@ class State {
   static const int32_t True;          // Truth values.
   static const int32_t Waiting;       // Waiting state of alternative.
 
-  State(int32_t memory_size);  // Must be at least 4k.
+  VM(int32_t memory_size);  // Must be at least 4k.
 
   std::string toString();
 

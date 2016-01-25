@@ -1,5 +1,5 @@
 #include "operations.h"
-#include "State.h"
+#include "VM.h"
 
 #include <ctype.h>
 #include <iostream>
@@ -22,12 +22,12 @@ int main() {
   }
 
   // Run it!
-  State state(1 << 20);
-  //cout << state.toString();
-  while (state.Iptr < operations.size()) {
-    //cout << "    \t" << operations[state.Iptr].toString() << "\n";
-    state.perform(operations[state.Iptr]);
-    //cout << state.toString();
+  VM vm(1 << 20);
+  //cout << vm.toString();
+  while (vm.Iptr < operations.size()) {
+    //cout << "   " << operations[vm.Iptr].toString() << "\n";
+    vm.perform(operations[vm.Iptr]);
+    //cout << vm.toString();
   }
 
   return 0;

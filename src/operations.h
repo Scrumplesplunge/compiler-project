@@ -87,9 +87,9 @@ bool parseOperations(std::istream& input, std::vector<Operation>* output);
 #define DECLARE_INDIRECT(name) void perform_##name()
 #define DECLARE_UNIT(name)     void perform_##name()
 
-#define DEFINE_DIRECT(name)   void State::perform_##name()
-#define DEFINE_INDIRECT(name) void State::perform_##name()
-#define DEFINE_UNIT(name)     void State::perform_##name()
+#define DEFINE_DIRECT(name)   void VM::perform_##name()
+#define DEFINE_INDIRECT(name) void VM::perform_##name()
+#define DEFINE_UNIT(name)     void VM::perform_##name()
 
 #define DIRECT(name)   perform_##name()
 #define INDIRECT(name) perform_##name()

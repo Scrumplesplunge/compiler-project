@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++11 -I gen -Os -s -flto -Wl,--gc-sections -fdata-sections -ffunction-sections
+CXXFLAGS = -std=c++11 -I gen -pg -Os -s -flto -Wl,--gc-sections -fdata-sections -ffunction-sections
 TOOLS = ../tools
 ENUM = ${TOOLS}/bin/enum
 
@@ -8,9 +8,9 @@ ${ENUM}:
 	@echo "Building enum compiler.."
 	make -C ../tools bin/enum
 
-bin/vm: src/vm.cc src/State.cc src/operations.cc gen/Direct.cc  \
+bin/vm: src/vm.cc src/VM.cc src/operations.cc gen/Direct.cc  \
 	      gen/Indirect.cc gen/Unit.cc src/VMDirect.cc src/VMIndirect.cc \
-	    | bin src/State.h src/operations.h gen/Direct.h gen/Indirect.h gen/Unit.h
+	    | bin src/VM.h src/operations.h gen/Direct.h gen/Indirect.h gen/Unit.h
 	${CXX} ${CXXFLAGS} $^ -o $@
 
 gen/%.h: gen/%.cc

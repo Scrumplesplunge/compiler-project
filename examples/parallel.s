@@ -1,7 +1,10 @@
-           ldc 3                  # Load the number of processes to wait for.
+INIT:      ajw 64                 # Position the initial workspace.
+           
+START:     ldc 3                  # Load the number of processes to wait for.
            stl 1                  # Store in Wptr[1].
            ldc END - HERE         # Load END address.
            ldpi
+
 HERE:      stl 0                  # Store in Wptr[0].
 
            ldc PROC_1 - STARTP_1  # Load offset to PROC_1.

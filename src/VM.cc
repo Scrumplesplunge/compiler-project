@@ -1,4 +1,4 @@
-#include "State.h"
+#include "VM.h"
 
 #include <iostream>
 #include <sstream>
@@ -7,17 +7,17 @@
 
 using namespace std;
 
-const int32_t State::Enabling     = 0x80000001;
-const int32_t State::False        = 0x00000000;
-const int32_t State::MemStart     = 0x80000070;
-const int32_t State::MostNeg      = 0x80000000;
-const int32_t State::NoneSelected = 0xFFFFFFFF;
-const int32_t State::NotProcess   = 0x80000000;
-const int32_t State::Ready        = 0x80000003;
-const int32_t State::TimeNotSet   = 0xFFFFFFFF;
-const int32_t State::TimeSet      = 0xFFFFFFFE;
-const int32_t State::True         = 0xFFFFFFFF;
-const int32_t State::Waiting      = 0x80000002;
+const int32_t VM::Enabling     = 0x80000001;
+const int32_t VM::False        = 0x00000000;
+const int32_t VM::MemStart     = 0x80000070;
+const int32_t VM::MostNeg      = 0x80000000;
+const int32_t VM::NoneSelected = 0xFFFFFFFF;
+const int32_t VM::NotProcess   = 0x80000000;
+const int32_t VM::Ready        = 0x80000003;
+const int32_t VM::TimeNotSet   = 0xFFFFFFFF;
+const int32_t VM::TimeSet      = 0xFFFFFFFE;
+const int32_t VM::True         = 0xFFFFFFFF;
+const int32_t VM::Waiting      = 0x80000002;
 
 static string addressString(int32_t address) {
   uint32_t raw = static_cast<uint32_t>(address);
@@ -30,7 +30,7 @@ static string addressString(int32_t address) {
   return "0x" + string(out, 8);
 }
 
-State::State(int32_t memory_size)
+VM::VM(int32_t memory_size)
     : memory_size_(memory_size),
       memory_(new int32_t[(memory_size + 3) / 4]) {
   if (memory_size < 0x1000)
@@ -49,17 +49,17 @@ State::State(int32_t memory_size)
   TptrLoc[0] = TptrLoc[1] = NotProcess;
 }
 
-string State::toString() {
+string VM::toString() {
   stringstream out;
   out << "Wptr = " << addressString(Wptr) << "  "
       << "Iptr = " << addressString(Iptr) << "  "
-      << "A = " << A << "  "
-      << "B = " << B << "  "
-      << "C = " << C;
+      << "A = " << addressString(A) << "  "
+      << "B = " << addressString(B) << "  "
+      << "C = " << addressString(C);
   return out.str();
 }
 
-void State::enqueueProcess(int32_t desc) {
+void VM::enqueueProcess(int32_t desc) {
   int32_t pri = desc & 0x3;
   if (pri != 0 && pri != 1)
     throw runtime_error("Bad priority level: " + to_string(pri));
@@ -75,7 +75,7 @@ void State::enqueueProcess(int32_t desc) {
   BptrReg[pri] = desc;
 }
 
-int32_t State::dequeueProcess(int32_t pri) {
+int32_t VM::dequeueProcess(int32_t pri) {
   if (pri != 0 && pri != 1)
     throw runtime_error("Bad priority level: " + to_string(pri));
 
@@ -88,21 +88,21 @@ int32_t State::dequeueProcess(int32_t pri) {
   return desc;
 }
 
-void State::push(int32_t x) {
+void VM::push(int32_t x) {
   C = B;
   B = A;
   A = x;
 }
 
-int32_t State::pop() {
+int32_t VM::pop() {
   int32_t x = A;
   A = B;
   B = C;
   return x;
 }
 
-int32_t& State::operator[](int32_t address) {
-  if (address >= memory_size_ + MostNeg && false) {
+int32_t& VM::operator[](int32_t address) {
+  if (address >= memory_size_ + MostNeg) {
     throw runtime_error(
         "Address " + addressString(address) + " >= " +
         to_string(memory_size_) + " + " + addressString(MostNeg) + " = " +
@@ -117,11 +117,13 @@ int32_t& State::operator[](int32_t address) {
   return memory_[address];
 }
 
-int32_t State::read(int32_t address) {
+int32_t VM::read(int32_t address) {
+  // cout << "Mem[" << addressString(address) << "] -> "
+  //      << addressString((*this)[address]) << "\n";
   return (*this)[address];
 }
 
-int8_t State::readByte(int32_t address) {
+int8_t VM::readByte(int32_t address) {
   int32_t word = read(address);
   // Extract the byte. The least significant byte has the lowest address.
   // These type conversions are necessary: We want a logical right-shift (which
@@ -130,11 +132,13 @@ int8_t State::readByte(int32_t address) {
       static_cast<int8_t>(static_cast<uint32_t>(word) >> (8 * (address & 0x3)));
 }
 
-void State::write(int32_t address, int32_t value) {
+void VM::write(int32_t address, int32_t value) {
+  // cout << "Mem[" << addressString(address) << "] <- "
+  //      << addressString(value) << "\n";
   (*this)[address] = value;
 }
 
-void State::writeByte(int32_t address, int8_t value) {
+void VM::writeByte(int32_t address, int8_t value) {
   // Read the current word value, substitute the appropriate byte with the new
   // value, and write back to memory.
   int32_t word = read(address);
@@ -143,7 +147,7 @@ void State::writeByte(int32_t address, int8_t value) {
   write(address, (word & mask) | (value << shift));
 }
 
-void State::perform(const Operation& operation) {
+void VM::perform(const Operation& operation) {
   Iptr++;
 
   switch (operation.type()) {
@@ -173,7 +177,7 @@ void State::perform(const Operation& operation) {
   }
 }
 
-void State::performDirect(Direct op, int32_t argument) {
+void VM::performDirect(Direct op, int32_t argument) {
   Oreg |= argument;
   switch (op) {
     // See VMDirect.cc
@@ -199,7 +203,7 @@ void State::performDirect(Direct op, int32_t argument) {
   }
 }
 
-void State::performIndirect(Indirect op) {
+void VM::performIndirect(Indirect op) {
   switch (op) {
     // See VMIndirect.cc
     case ADD:           INDIRECT(ADD);            break;
@@ -342,20 +346,20 @@ void State::performIndirect(Indirect op) {
   }
 }
 
-void State::performUnit(Unit op) UNIMPLEMENTED_FP;
+void VM::performUnit(Unit op) UNIMPLEMENTED_FP;
 
-void State::setError() {
+void VM::setError() {
   Error = true;
   if (HaltOnError)
     throw runtime_error("An error occurred and HaltOnError is set.");
 }
 
-void State::deschedule() {
+void VM::deschedule() {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   resumeNext();
 }
 
-void State::schedule(int32_t desc) {
+void VM::schedule(int32_t desc) {
   int32_t new_priority = desc & 0x3;
   int32_t new_Wptr = desc & ~0x3;
 
@@ -364,13 +368,13 @@ void State::schedule(int32_t desc) {
   enqueueProcess(desc);
 }
 
-void State::schedule() {
+void VM::schedule() {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   write(Wptr - 8, NotProcess);  // This process is at the back of the queue.
   schedule(Wdesc());
 }
 
-void State::resumeNext() {
+void VM::resumeNext() {
   int32_t next_Wdesc;
   if (FptrReg[0] != NotProcess) {
     next_Wdesc = dequeueProcess(0);
@@ -383,24 +387,24 @@ void State::resumeNext() {
   Iptr = read(Wptr - 4);
 }
 
-void State::yield() {
+void VM::yield() {
   schedule();
   resumeNext();
 }
 
-void State::stop() {
+void VM::stop() {
   deschedule();
 }
 
-int32_t State::time() {
+int32_t VM::time() {
   return ClockReg[priority];
 }
 
-int32_t State::Wdesc() {
+int32_t VM::Wdesc() {
   return Wptr | priority;
 }
 
-bool State::isExternalChannel(int32_t address) {
+bool VM::isExternalChannel(int32_t address) {
   switch (address) {
     // These are the memory-mapped addresses of the external channels.
     case 0x80000000: case 0x80000004: case 0x80000008: case 0x8000000C:
@@ -411,7 +415,7 @@ bool State::isExternalChannel(int32_t address) {
   }
 }
 
-bool State::after(int32_t a, int32_t b) {
+bool VM::after(int32_t a, int32_t b) {
   uint32_t offset = static_cast<uint32_t>(a) - static_cast<uint32_t>(b);
   return (offset < 0x80000000);
 }
