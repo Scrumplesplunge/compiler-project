@@ -2,6 +2,7 @@ import Data.Tree
 import IndentParser
 import Parser
 import Parsing
+import SemanticAnalyser
 import Semantics
 import qualified Lexer
 import qualified Tokens

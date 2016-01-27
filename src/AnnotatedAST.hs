@@ -2,12 +2,10 @@ module AnnotatedAST where
 
 import qualified AST
 import Data.Bits
+import Data.Char
 import Data.List
+import Text.Printf
 import qualified Data.ByteString as S
-
--- Scope of a variable.
-data Scope = Global | Local
-  deriving (Eq, Show)
 
 -- Size information for an array.
 data Size = CompileTime Integer
@@ -47,7 +45,7 @@ raw_type AST.CHAN = CHAN
 raw_type AST.VALUE = INT
 raw_type t = error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
 
-type Name = (Scope, String)
+type Name = String
 
 -- i = a FOR b
 data Replicator = Range Name Expression Expression
@@ -68,7 +66,8 @@ data Nestable a b = Nested a
                   | Block b Process
   deriving (Eq, Show)
 
-data Process = Alt Alternative
+data Process = Allocate Integer Process
+             | Alt Alternative
              | Assign Expression Expression
              | Call Name [Expression]
              | Delay Expression
@@ -131,41 +130,41 @@ data Condition = Condition (Replicable (Nestable Condition Expression))
 
 -- Compile-time constant value.
 data Value = Integer Integer
-           | Array [Integer]
-           | ChanArray [Integer]
-           | ByteArray String
+           | Address Integer
   deriving Eq
 
 instance Show Value where
-  show (Integer v) = show v
-  show (Array vs) = show vs
-  show (ByteArray cs) = show cs
+  show (Integer i) = show i
+  show (Address a) = printf "0x%08x" (a + if a < 0 then two_pow_32 else 0)
 
 -- Constant values.
 two_pow_32 = 0x100000000 :: Integer
 two_pow_31 = 0x10000000  :: Integer
-true       = 0xFFFFFFFF  :: Integer
-false      = 0x00000000  :: Integer
+mem_start  = value 0x80000070
+true       = value 0xFFFFFFFF
+false      = value 0x00000000
 
 -- Compile-time computation on values.
-value a = a `mod` two_pow_32
-val_add a b = (a + b) `mod` two_pow_32
+-- TODO: Adjust these to agree with the transputer calculations.
+value a = if x >= two_pow_31 then x - two_pow_32 else x
+  where x = a `mod` two_pow_32
+val_add a b = value (a + b)
 val_and a b = if a == true then b else false
-val_bitwise_and a b = (a .&. b) `mod` two_pow_32
-val_bitwise_or a b = (a .|. b) `mod` two_pow_32
-val_bitwise_xor a b = (xor a b) `mod` two_pow_32
+val_bitwise_and a b = value (a .&. b)
+val_bitwise_or a b = value (a .|. b)
+val_bitwise_xor a b = value (xor a b)
 val_compare_eq a b = if a == b then true else false
 val_compare_ge a b = if a >= b then true else false
 val_compare_gt a b = if a > b then true else false
 val_compare_le a b = if a <= b then true else false
 val_compare_lt a b = if a < b then true else false
 val_compare_ne a b = if a /= b then true else false
-val_div a b = (a `div` b) `mod` two_pow_32
-val_mod a b = (a `mod` b) `mod` two_pow_32
-val_mul a b = (a * b) `mod` two_pow_32
-val_neg a = (-a) `mod` two_pow_32
-val_not a = (complement a) `mod` two_pow_32
+val_div a b = value (a `div` b)
+val_mod a b = value (a `mod` b)
+val_mul a b = value (a * b)
+val_neg a = value (-a)
+val_not a = value (complement a)
 val_or a b = if a == false then b else true
-val_shift_left a b = (shift a (fromInteger b)) `mod` two_pow_32
-val_shift_right a b = (shift a (-fromInteger b)) `mod` two_pow_32
-val_sub a b = (a - b) `mod` two_pow_32
+val_shift_left a b = value (shift a (fromInteger b))
+val_shift_right a b = value (shift a (-fromInteger b))
+val_sub a b = value (a - b)

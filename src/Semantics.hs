@@ -1,127 +1,23 @@
 module Semantics where
 
-import Control.Monad
-import Data.Bits
+-- import Control.Monad
+-- import Data.Bits
 import Data.Char
 import qualified Data.List
 import AST (L (L))
 import qualified AST
 import AnnotatedAST
+import SemanticAnalyser
 import Reader hiding (location)
 import Result
-
--- Information associated with a defined name.
-type NameInfo = (Type, Scope, Location)
-
--- All names defined thus far.
-type Environment = [(AST.Name, NameInfo)]
-
-data State =
-  State { environment :: Environment, scope :: Scope, has_error :: Bool }
-
-instance Show State where
-  show s = concat . Data.List.intersperse "\n" .
-           reverse . map display $ environment s
-    where display (n, (t, s, loc)) = show_compact loc ++ ":\t" ++ show s ++
-                                     " " ++ show n ++ " :: " ++ show t
-
-data SemanticAnalyser a = S (State -> IO (a, State))
-
-instance Functor SemanticAnalyser where
-  fmap f xm = xm >>= return . f
-
-instance Applicative SemanticAnalyser where
-  pure = return
-  sf <*> sx = sf >>= (\f -> fmap f sx)
-
-instance Monad SemanticAnalyser where
-  return x = S (\state -> return (x, state))
-  (S xm) >>= f = S (\state ->
-    do
-      (x, state') <- xm state
-      case f x of
-        S xm' -> xm' state')
-
-empty_state = State { environment = [], scope = Global, has_error = False }
-
--- Print messages.
-print_note :: String -> SemanticAnalyser ()
-print_note message =
-  S (\state -> do
-    putStrLn ("Note: " ++ message)
-    return ((), state))
-
-print_warning :: Location -> String -> SemanticAnalyser ()
-print_warning loc message =
-  S (\state -> do
-    putStrLn ("Warning at " ++ show loc ++ ": " ++ message)
-    return ((), state))
-
-print_error :: Location -> String -> SemanticAnalyser ()
-print_error loc message =
-  S (\state -> do
-    putStrLn ("Error at " ++ show loc ++ ": " ++ message)
-    return ((), state { has_error = True }))
-
-print_fatal :: Location -> String -> SemanticAnalyser a
-print_fatal loc message =
-  S (\state -> error ("FATAL Error at " ++ show loc ++ ": " ++ message))
-
-type_mismatch :: Location -> Type -> Type -> SemanticAnalyser a
-type_mismatch loc expected actual =
-  print_fatal loc
-              ("Expected " ++ show expected ++ ", got " ++ show actual ++ ".")
-
--- Enter a local scope.
-local :: SemanticAnalyser a -> SemanticAnalyser a
-local analyser = do
-  S (\state -> return ((), state { scope = Local }))
-  new_scope analyser
-
-get_scope :: SemanticAnalyser Scope
-get_scope = S (\state -> return (scope state, state))
-
--- Get the current state of the environment.
-get_env :: SemanticAnalyser Environment
-get_env = S (\state -> return (environment state, state))
-
--- Set the environment.
-set_env :: Environment -> SemanticAnalyser ()
-set_env env = S (\state -> return ((), state { environment = env }))
-
--- Save the environment, perform an analysis, then restore the environment.
-new_scope :: SemanticAnalyser a -> SemanticAnalyser a
-new_scope analyser =
-  get_env >>= (\env ->
-    analyser >>= (\a ->
-      set_env env >> return a))
-
--- Set the current environment.
-add_name :: AST.Name -> NameInfo -> SemanticAnalyser ()
-add_name name (t, s, loc) = do
-  result <- find name
-  case result of
-    Nothing -> return ()
-    Just (_, _, loc') ->
-      print_warning loc (
-          "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
-          show loc' ++ ".")
-  get_env >>= (\env -> set_env ((name, (t, s, loc)) : env))
-
--- Look up a name in the environment.
-find :: AST.Name -> SemanticAnalyser (Maybe NameInfo)
-find name = get_env >>= (\env -> return $ lookup name env)
-
-run_analyser :: SemanticAnalyser a -> IO (a, State)
-run_analyser (S xm) = xm empty_state
 
 -- Helpers for the replicable and nestable types.
 check_replicator :: AST.Replicator -> SemanticAnalyser Replicator
 check_replicator (AST.Range (L n loc') a b) = do
-  add_name n (INT, Local, loc')
+  add_name n (INT, loc')
   a' <- check_rvalue a
   b' <- check_rvalue b
-  return (Range (Local, n) a' b')
+  return (Range n a' b')
 
 check_replicable :: (a -> SemanticAnalyser a2) -> AST.Replicable a
                  -> SemanticAnalyser (Replicable a2)
@@ -147,12 +43,12 @@ check_nestable check_a check_b (AST.Block b p) = do
 -- Check that a name is defined.
 check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser Name
 check_name check_type loc x = do
-  x' <- find x
+  x' <- find_name x
   case x' of
     Nothing -> do
       print_error loc ("Undefined name " ++ show x)
-      return (Global, "")
-    Just (t, s, loc') -> do
+      return ""
+    Just (t, loc') -> do
       case t of
         CONST t' _ ->
           if check_type t' then
@@ -168,7 +64,7 @@ check_name check_type loc x = do
             print_error loc
                 ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
             print_note (show x ++ " is defined at " ++ show loc')
-      return (s, x)
+      return x
 
 check_process :: L AST.Process -> SemanticAnalyser Process
 check_process (L p loc) =
@@ -241,36 +137,31 @@ check_definition ((L d loc) : ds) p = do
   case d of
     AST.DefineSingle t name -> do
       -- Define the variable.
-      s <- get_scope
-      add_name name (raw_type t, s, loc)
+      add_name name (raw_type t, loc)
     AST.DefineVector t name l_expr -> do
       -- Compute the (constant) size of the vector.
       (t', value) <- check_and_compute_constexpr l_expr
       case value of
         Integer size -> do
           -- Define the array.
-          s <- get_scope
-          add_name name (INT_ARRAY (CompileTime size), s, loc)
+          add_name name (INT_ARRAY (CompileTime size), loc)
         _ -> type_mismatch (AST.location l_expr) INT t'
     AST.DefineConstant name l_expr -> do
       -- Compute the constant value.
       (t, value) <- check_and_compute_constexpr l_expr
-      s <- get_scope
-      add_name name (CONST t value, s, loc)
+      add_name name (CONST t value, loc)
     AST.DefineProcedure name formals proc -> do
       t <- new_scope (do
         formals' <- mapM check_formal formals
         proc' <- check_process proc
         return (PROC formals' proc'))
-      s <- get_scope
-      add_name name (t, s, loc)
+      add_name name (t, loc)
   check_definition ds p
 
 check_formal :: L AST.Formal -> SemanticAnalyser Type
 check_formal (L (AST.Single r n) loc) = do
   let t = raw_type r
-  s <- get_scope
-  add_name n (t, s, loc)
+  add_name n (t, loc)
   return t
 
 check_formal (L (AST.Vector r n) loc) = do
@@ -278,8 +169,7 @@ check_formal (L (AST.Vector r n) loc) = do
              BYTE -> BYTE_ARRAY Runtime
              CHAN -> CHAN_ARRAY Runtime
              INT -> INT_ARRAY Runtime)
-  s <- get_scope
-  add_name n (t, s, loc)
+  add_name n (t, loc)
   return t
 
 check_delay :: L AST.Expression -> SemanticAnalyser Process
@@ -490,18 +380,21 @@ check_and_compute_constexpr (L expr loc) =
       i <- check_and_compute_value b
       -- Check that the table and index types match.
       case v of
-        Array vs ->
-          if array_type == AST.INT then
-            return (INT, Integer $ vs !! (fromInteger i))
-          else do
-            print_error loc "Byte-access to word-arrays is unimplemented."
-            return (INT, Integer 0)
-        ByteArray vs ->
-          if array_type == AST.BYTE then
-            return (INT, Integer . toInteger . ord $ vs !! (fromInteger i))
-          else do
-            print_error loc "Word-access to byte-arrays is unimplemented."
-            return (INT, Integer 0)
+        Address a -> do
+          v' <- get_static loc a
+          case v' of
+            WordArray ws ->
+              if array_type == AST.INT then
+                return (INT, Integer $ ws !! (fromInteger i))
+              else do
+                print_error loc "Byte-access to word-arrays is unimplemented."
+                return (INT, Integer 0)
+            ByteArray bs ->
+              if array_type == AST.BYTE then
+                return (INT, Integer . toInteger . ord $ bs !! (fromInteger i))
+              else do
+                print_error loc "Word-access to byte-arrays is unimplemented."
+                return (INT, Integer 0)
         _ -> type_mismatch
                  loc (if array_type == AST.INT then
                         INT_ARRAY Runtime
@@ -512,16 +405,28 @@ check_and_compute_constexpr (L expr loc) =
         AST.Bool b -> return (INT, Integer $ if b then true else false)
         AST.Char c -> return (INT, Integer . toInteger . ord $ c)
         AST.Integer i -> return (INT, Integer $ value i)
-        AST.String s ->
+        AST.String s -> do
+          -- Store the table in the static blob.
+          address <- add_static (ByteArray s)
+          -- Return a pointer to the string.
           return (BYTE_ARRAY . CompileTime . toInteger $ (length s),
-                  ByteArray s)
+                  Address address)
         AST.Table AST.INT es -> do
+          -- Compute the value of the table.
           vs <- mapM check_and_compute_value es
-          return (INT_ARRAY . CompileTime . toInteger $ length vs, Array vs)
+          -- Store the table in the static blob.
+          address <- add_static (WordArray vs)
+          -- Return a pointer to the table.
+          return (INT_ARRAY . CompileTime . toInteger $ length vs,
+                  Address address)
         AST.Table AST.BYTE es -> do
+          -- Compute the value of the table.
           vs <- mapM check_and_compute_value es
+          -- Store the table in a static blob.
+          let r = map (chr . fromInteger . (`mod` 256)) vs
+          address <- add_static (ByteArray r)
           return (BYTE_ARRAY . CompileTime . toInteger $ length vs,
-                  ByteArray . map (chr . fromInteger . (`mod` 256)) $ vs)
+                  Address address)
     AST.Mod a b -> do
       x1 <- check_and_compute_value a
       x2 <- check_and_compute_value b
@@ -553,39 +458,40 @@ check_and_compute_constexpr (L expr loc) =
       j <- check_and_compute_value b
       if i < 0 then do  -- Check that the start is at least at 0.
         print_error loc ("Negative start index in slice: " ++ show i ++ ".")
-        return (INT_ARRAY Runtime, Array [])
+        return (INT_ARRAY Runtime, Address mem_start)
       else if j < 0 then do  -- Check that the slice non-negative.
         print_error loc ("Negative range in slice: " ++ show j ++ ".")
-        return (INT_ARRAY Runtime, Array [])
+        return (INT_ARRAY Runtime, Address mem_start)
       else
         -- Check that the table and slicer have the same type.
         case v of
-          Array vs ->
-            -- Check that the slice doesn't extend past the end of the array.
-            if i + j > toInteger (length vs) then do
-              print_error loc ("Slice extends past end of array: [" ++ show i ++
-                               " FOR " ++ show j ++ "]")
-              return (INT_ARRAY Runtime, Array [])
-            else if array_type == AST.INT then
-              return (INT_ARRAY (CompileTime j),
-                      Array (take (fromInteger j) .
-                             drop (fromInteger i) $ vs))
-            else do
-              print_error loc "Byte-access to word-arrays is unimplemented."
-              return (BYTE_ARRAY Runtime, ByteArray [])
-          ByteArray vs ->
-            -- Check that the slice doesn't extend past the end of the array.
-            if i + j > toInteger (length vs) then do
-              print_error loc ("Slice extends past end of array: [" ++ show i ++
-                               " FOR " ++ show j ++ "]")
-              return (INT_ARRAY Runtime, Array [])
-            else if array_type == AST.BYTE then
-              return (BYTE_ARRAY (CompileTime j),
-                      ByteArray (take (fromInteger j) .
-                                 drop (fromInteger i) $ vs))
-            else do
-              print_error loc "Word-access to byte-arrays is unimplemented."
-              return (INT, Integer 0)
+          Address a -> do
+            v' <- get_static loc a
+            case v' of
+              WordArray ws -> do
+                let ws' = drop (fromInteger i) ws
+                let len = toInteger (length ws')
+                
+                if i > len then do
+                  print_error loc "Slice begins past end of array."
+                  return (INT_ARRAY (CompileTime 0), Address a)
+                else if j > len then do
+                  print_error loc "Slice extends past end of array."
+                  return (INT_ARRAY (CompileTime len), Address a)
+                else
+                  return (INT_ARRAY (CompileTime j), Address (a + 4 * i))
+              ByteArray bs -> do
+                let bs' = drop (fromInteger i) bs
+                let len = toInteger (length bs')
+                
+                if i > len then do
+                  print_error loc "Slice begins past end of array."
+                  return (BYTE_ARRAY (CompileTime 0), Address a)
+                else if j > len then do
+                  print_error loc "Slice extends past end of array."
+                  return (BYTE_ARRAY (CompileTime len), Address a)
+                else
+                  return (BYTE_ARRAY (CompileTime j), Address (a + i))
           _ -> if array_type == AST.INT then
                  type_mismatch loc (INT_ARRAY Runtime) t
                else
@@ -595,12 +501,12 @@ check_and_compute_constexpr (L expr loc) =
       x2 <- check_and_compute_value b
       return (INT, Integer $ val_sub x1 x2)
     AST.Variable n -> do
-      result <- find n
+      result <- find_name n
       case result of
         Nothing -> do
           print_error loc ("Undefined name '" ++ n ++ "'.")
           return (INT, Integer 0)
-        Just (t, s, loc') ->
+        Just (t, loc') ->
           case t of
             CONST def_type def_value -> return (def_type, def_value)
             _ -> do

@@ -119,7 +119,7 @@ read_symbol = first_of $ map match_symbol symbol_map
 
 -- String/char literals.
 match_char = first_of [
-    all_of [match_filter ((/=) '*')],
+    all_of [match_filter (\c -> c /= '*' && c /= '"')],
     all_of [match_filter ((==) '*'), match_filter (const True)]]
 
 read_char =
