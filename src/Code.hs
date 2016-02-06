@@ -1,58 +1,7 @@
 module Code where
 
-import AnnotatedAST
-
-type Label = String
-type Location = Integer
-
-data Operation =
-      DoNothing
-    | Unimplemented String   -- Code will go here.
-    | Constant Integer       -- push(x);
-    | NonLocal Integer       -- A = pop(); push(A + 4 * x);
-    | Local Integer          -- push(Wptr + 4 * x);
-    | Load                   -- push(Mem[pop()]);
-    | LoadByte               -- push((byte) Mem[pop()]);
-    | Store                  -- Mem[A] = B;
-    | StoreByte              -- (byte) Mem[A] = B;
-    | Subscript              -- B = pop(); A = pop(); push(4 * B + A);
-    | Reverse                -- B = pop(); A = pop(); push(B); push(A);
-    | Adjust Integer         -- Wptr += x;
-    | Add                    -- B = pop(); A = pop(); push(A + B);
-    | Sub                    -- B = pop(); A = pop(); push(A - B);
-    | Mul                    -- B = pop(); A = pop(); push(A * B);
-    | Div                    -- B = pop(); A = pop(); push(A / B);
-    | Mod                    -- B = pop(); A = pop(); push(A % B);
-    | Neg                    -- A = pop(); push(-A);
-    | CompareEQ              -- B = pop(); A = pop(); push(A == B);
-    | CompareLT              -- B = pop(); A = pop(); push(A < B);
-    | CompareGT              -- B = pop(); A = pop(); push(A > B);
-    | CompareLE              -- B = pop(); A = pop(); push(A <= B);
-    | CompareGE              -- B = pop(); A = pop(); push(A >= B);
-    | CompareNE              -- B = pop(); A = pop(); push(A != B);
-    | BitwiseNot             -- A = pop(); push(¬A);
-    | BitwiseAnd             -- B = pop(); A = pop(); push(A & B);
-    | BitwiseOr              -- B = pop(); A = pop(); push(A | B);
-    | BitwiseXor             -- B = pop(); A = pop(); push(A ^ B);
-    | ShiftLeft              -- B = pop(); A = pop(); push(A << B);
-    | ShiftRight             -- B = pop(); A = pop(); push(A >> B);  // 0-filled.
-    | Jump Label             -- Iptr = x;
-    | ConditionalJump Label  -- A = pop(); if (A) jump x;
-    | Call Label             -- Call subroutine x.
-    | Return                 -- Return from subroutine.
-    | StartProcess Label     -- A = pop(); Start process x with workspace A.
-    | EndProcess Label       -- A = pop(); End process with refcount workspace A.
-    | StopProcess            -- Stop and dequeue the current process.
-    | RunProcess             -- A = pop(); Resume process with descriptor A.
-    | Input Integer          -- B = pop(); A = pop(); Input x bytes from channel A to location B.
-    | Output Integer         -- B = pop(); A = pop(); Output x bytes from location B to channel A.
-      -- Compound instructions.
-    | AddConstant Integer
-    | LoadLocal Integer
-    | LoadNonLocal Integer
-    | StoreLocal Integer
-    | StoreNonLocal Integer
-  deriving (Eq, Show)
+import Data.List
+import Operation
 
 data Code = Raw Operation    -- An operation.
           | Label Label      -- A label.
@@ -60,6 +9,10 @@ data Code = Raw Operation    -- An operation.
   deriving (Eq, Show)
 
 data State = State { next_label_id :: Integer }
+
+initial_state = State {
+  next_label_id = 0
+}
 
 data Generator a = G (State -> (a, State))
 
@@ -77,18 +30,18 @@ instance Monad Generator where
     case f x of
       G xm' -> xm' state')
 
+-- Run a generator and extract the final result.
+run_generator :: Generator a -> a
+run_generator (G f) = fst (f initial_state)
+
 -- Retrieve a unique label containing the given string as a prefix.
 label :: String -> Generator Label
 label x = G (\state ->
   let id = next_label_id state
-  in (x ++ show id, state { next_label_id = id + 1 }))
+  in (x ++ "_" ++ show id, state { next_label_id = id + 1 }))
 
 -- Display the generated code as an assembler string.
 showCode :: Code -> String
-showCode (Raw x)   = "  " ++ show x ++ "\n"
-showCode (Label x) = x ++ ":\n"
+showCode (Raw x)   = (unlines . map ("  " ++) . lines) (showOp x) ++ "\n"
+showCode (Label x) = x ++ ":\n\n"
 showCode (Code cs) = concat $ map showCode cs
-
-gen_expr :: Expression -> Generator Code
-gen_expr Any = return $ Raw (Constant 0)
-gen_expr (Value (Integer v)) = return $ Raw (Constant v)

@@ -1,0 +1,481 @@
+module Semantics where
+
+import Control.Monad
+import Data.Bits
+import Data.Char
+import AST (L (L))
+import qualified AST
+import AnnotatedAST
+import Reader hiding (location)
+import Result
+
+-- Information associated with a defined name.
+type NameInfo = (Type, Location)
+
+-- All names defined thus far.
+type Environment = [(AST.Name, NameInfo)]
+
+data State = State { environment :: Environment, has_error :: Bool }
+  deriving Show
+
+data SemanticAnalyser a = S (State -> IO (a, State))
+
+instance Functor SemanticAnalyser where
+  fmap f xm = xm >>= return . f
+
+instance Applicative SemanticAnalyser where
+  pure = return
+  sf <*> sx = sf >>= (\f -> fmap f sx)
+
+instance Monad SemanticAnalyser where
+  return x = S (\state -> return (x, state))
+  (S xm) >>= f = S (\state ->
+    do
+      (x, state') <- xm state
+      case f x of
+        S xm' -> xm' state')
+
+empty_state = State { environment = [], has_error = False }
+
+-- Print messages.
+print_warning :: Location -> String -> SemanticAnalyser ()
+print_warning loc message =
+  S (\state -> do
+    putStrLn ("Warning at " ++ show loc ++ ": " ++ message)
+    return ((), state))
+
+print_error :: Location -> String -> SemanticAnalyser ()
+print_error loc message =
+  S (\state -> do
+    putStrLn ("Error at " ++ show loc ++ ": " ++ message)
+    return ((), state { has_error = True }))
+
+print_fatal :: Location -> String -> SemanticAnalyser a
+print_fatal loc message =
+  S (\state -> error ("FATAL Error at " ++ show loc ++ ": " ++ message))
+
+type_mismatch :: Location -> Type -> Type -> SemanticAnalyser a
+type_mismatch loc expected actual =
+  print_fatal loc
+              ("Expected " ++ show expected ++ ", got " ++ show actual ++ ".")
+
+-- Get the current state of the environment.
+get_env :: SemanticAnalyser Environment
+get_env = S (\state -> return (environment state, state))
+
+-- Set the environment.
+set_env :: Environment -> SemanticAnalyser ()
+set_env env = S (\state -> return ((), state { environment = env }))
+
+-- Save the environment, perform an analysis, then restore the environment.
+new_scope :: SemanticAnalyser a -> SemanticAnalyser a
+new_scope analyser =
+  get_env >>= (\env ->
+    analyser >>= (\a ->
+      set_env env >> return a))
+
+-- Set the current environment.
+add_name :: AST.Name -> NameInfo -> SemanticAnalyser ()
+add_name name (t, loc) = do
+  result <- find name
+  case result of
+    Nothing -> return ()
+    Just (_, loc') ->
+      print_warning loc (
+          "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
+          show loc' ++ ".")
+  get_env >>= (\env -> set_env ((name, (t, loc)) : env))
+
+-- Look up a name in the environment.
+find :: AST.Name -> SemanticAnalyser (Maybe NameInfo)
+find name = get_env >>= (\env -> return $ lookup name env)
+
+run_analyser :: SemanticAnalyser a -> IO (a, State)
+run_analyser (S xm) = xm empty_state
+
+check_process :: L AST.Process -> SemanticAnalyser ()
+check_process (L p loc) =
+  case p of
+    AST.Alt a -> check_alternative (L a loc)
+    AST.Assign l r -> return ()
+    AST.Call n [es] -> return ()
+    AST.Definition ds p -> do
+      check_definition ds
+      check_process p
+    AST.Delay expr -> return ()
+    AST.If cond -> return ()
+    AST.Input l r -> return ()
+    AST.Output l r -> return ()
+    AST.Par rep -> return ()
+    AST.PriorityAlt a -> return ()
+    AST.PriorityPar p -> return ()
+    AST.Seq rep -> return ()
+    AST.Skip -> return ()
+    AST.Stop -> return ()
+    AST.Timer expr -> return ()
+    AST.While expr proc -> return ()
+
+-- Check that the first type casts to the second type.
+check_cast :: Location -> Type -> Type -> SemanticAnalyser ()
+check_cast loc ANY_TYPE t = return ()  -- ANY_TYPE may cast to anything.
+check_cast loc t ANY_TYPE = return ()  -- Anything may cast to ANY_TYPE.
+check_cast loc BYTE VAR = return ()
+check_cast loc VAR BYTE = print_warning loc "Implicitly restricting VAR to BYTE."
+check_cast loc (CONST t1 v) t2 = check_cast loc t1 t2
+check_cast loc t1 t2 =
+  if t1 == t2 then
+    return ()
+  else
+    type_mismatch loc t2 t1
+
+-- Check that a list of expressions are all numeric types, and return the common
+-- type.
+check_numeric :: [L AST.Expression] -> SemanticAnalyser Type
+check_numeric es =
+  foldM (\t1 (L e loc') -> do
+    t2 <- check_expression (L e loc')
+    if t2 == VAR then
+      return VAR
+    else if t2 == BYTE then
+      return BYTE
+    else do
+      print_error loc' "Expected numeric type."
+      return VAR)
+    ANY_TYPE es
+
+check_var :: Location -> [L AST.Expression] -> SemanticAnalyser Type
+check_var loc es = do
+  t <- check_numeric es
+  check_cast loc t VAR
+  return t
+
+-- Array indexing.
+check_array :: L AST.Expression -> AST.ArrayType -> SemanticAnalyser ()
+check_array (L r loc) t = do
+  r_type <- check_expression (L r loc)
+  case r_type of
+    BYTE_ARRAY s ->
+      if t /= AST.BYTE then
+        print_error loc "Non-byte access to byte array is unsupported."
+      else
+        return ()
+    CHAN_ARRAY s ->
+      -- At the parsing stage, a CHAN array should appear to be a VAR index.
+      if t == AST.BYTE then
+        print_error loc "Invalid access to channel array."
+      else
+        return ()
+    VAR_ARRAY s ->
+      if t == AST.BYTE then
+        print_error loc "Byte access to non-byte array is unsupported."
+      else
+        return ()
+    _ ->
+      print_error loc ("Expected array type, got " ++ show r_type)
+
+-- Check an expression, verifying that its type matches the expected type.
+check_expression :: (L AST.Expression) -> SemanticAnalyser Type
+check_expression (L (AST.Add es) loc) = check_numeric es
+check_expression (L (AST.After a b) loc) = check_var loc [a, b]
+check_expression (L (AST.And as) loc) = check_numeric as
+check_expression (L AST.Any loc) = return ANY_TYPE
+check_expression (L (AST.BitwiseAnd es) loc) = check_numeric es
+check_expression (L (AST.BitwiseOr es) loc) = check_numeric es
+check_expression (L (AST.BitwiseXor es) loc) = check_numeric es
+
+-- All comparisons must be performed on VAR or BYTE values.
+check_expression (L (AST.CompareEQ a b) loc) = check_var loc [a, b]
+check_expression (L (AST.CompareGE a b) loc) = check_var loc [a, b]
+check_expression (L (AST.CompareGT a b) loc) = check_var loc [a, b]
+check_expression (L (AST.CompareLE a b) loc) = check_var loc [a, b]
+check_expression (L (AST.CompareLT a b) loc) = check_var loc [a, b]
+check_expression (L (AST.CompareNE a b) loc) = check_var loc [a, b]
+
+check_expression (L (AST.Div a b) loc) = check_var loc [a, b]
+
+check_expression (L (AST.Index r (t, i)) loc) = do
+  check_array r t
+  check_var loc [i]
+
+check_expression (L (AST.Literal l) loc) = do
+  case l of
+    AST.Bool b -> return VAR
+    AST.Char c -> return BYTE
+    AST.Integer i -> return VAR
+    AST.String s -> return (BYTE_ARRAY $ CompileTime (toInteger $ length s))
+    AST.Table t es -> do
+      (t, v) <- check_and_compute_constexpr (L (AST.Literal l) loc)
+      return t
+
+check_expression (L (AST.Mod a b) loc) = check_var loc [a, b]
+check_expression (L (AST.Mul es) loc) = check_var loc es
+check_expression (L (AST.Neg e) loc) = check_var loc [e]
+check_expression (L (AST.Not e) loc) = check_var loc [e]
+check_expression (L (AST.Or es) loc) = check_var loc es
+check_expression (L (AST.ShiftLeft a b) loc) = check_var loc [a, b]
+check_expression (L (AST.ShiftRight a b) loc) = check_var loc [a, b]
+
+-- Array slicing.
+check_expression (L (AST.Slice r (t, a, b)) loc) = do
+  check_array r t
+  check_var loc [a, b]
+  case t of
+    AST.BYTE -> return (BYTE_ARRAY Runtime)
+
+-- Check a replicable block.
+check_replicable :: (a -> SemanticAnalyser ()) -> AST.Replicable a
+                 -> SemanticAnalyser ()
+check_replicable check_a (AST.Basic as) = do
+  mapM check_a as
+  return ()
+
+check_replicable check_a (AST.Replicated r a) = do
+  check_replicator r
+  check_a a
+
+-- Check a replicator.
+check_replicator :: AST.Replicator -> SemanticAnalyser ()
+check_replicator (AST.Range (L var loc) start end) = do
+  add_name var (VAR, loc)
+  -- Check the expressions.
+  check_var loc [start, end]
+  return ()
+
+-- Check a nestable block.
+check_nestable :: (a -> SemanticAnalyser ()) -> (b -> SemanticAnalyser ())
+               -> AST.Nestable a b -> SemanticAnalyser ()
+check_nestable check_a check_b (AST.Nested a) = check_a a
+check_nestable check_a check_b (AST.Block b p) = do
+  check_b b
+  check_process p
+
+-- Check that an alternative is legal.
+check_alternative :: L AST.Alternative -> SemanticAnalyser ()
+check_alternative (L (AST.Alternative r) loc) =
+  check_replicable (check_nestable check_alternative check_guard) r
+
+-- Check a guard.
+check_guard :: L AST.Guard -> SemanticAnalyser ()
+check_guard (L (AST.BasicGuard a) loc) = check_atomic_guard a
+check_guard (L (AST.PrefixedGuard e a) loc) = do
+  check_expression e
+  check_atomic_guard a
+
+-- Check an atomic guard.
+check_atomic_guard :: L AST.AtomicGuard -> SemanticAnalyser ()
+check_atomic_guard (L (AST.DelayGuard e) loc) = do
+  check_var loc [e]
+  return ()
+check_atomic_guard (L (AST.InputGuard channel vars) loc) = do
+  t <- check_expression channel
+  if t /= CHAN then
+    type_mismatch loc CHAN t
+  else do
+    mapM check_lvalue vars
+    return ()
+
+check_lvalue :: L AST.Expression -> SemanticAnalyser ()
+check_lvalue e = return ()
+
+-- Check that a definition is legal, and update the environment.
+check_definition :: [L AST.Definition] -> SemanticAnalyser ()
+check_definition [] = return ()
+check_definition ((L d loc):ds) =
+  (case d of
+     AST.DefineSingle t name -> do
+       add_name name (raw_type t, loc)
+     AST.DefineVector t name l_expr -> do
+       (t', value) <- check_and_compute_constexpr l_expr
+       case value of
+         Value size ->
+           add_name name (VAR_ARRAY size, loc)
+         _ -> type_mismatch (AST.location l_expr) VAR t'
+     AST.DefineConstant name l_expr -> do
+       (t, value) <- check_and_compute_constexpr l_expr
+       add_name name (CONST t value, loc)
+     _ -> return ()) >> check_definition ds
+
+-- Check that a constant expression is actually constant, and return the
+-- calculated compile-time value.
+check_and_compute_constexpr :: L AST.Expression -> SemanticAnalyser (Type, Value)
+check_and_compute_constexpr (L expr loc) =
+  case expr of
+    Add es -> assoc val_add 0 es >>= (\x -> return (VAR, Value x))
+    After a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_lt (val_sub x1 x2) two_pow_31)
+    And es -> assoc val_and true es >>= (\x -> return (VAR, Value x))
+    Any -> do
+      print_error loc "Invalid use of ANY."
+      return (VAR, Value 0)
+    BitwiseAnd es ->
+      assoc val_bitwise_and true es >>= (\x -> return (VAR, Value x))
+    BitwiseOr es ->
+      assoc val_bitwise_or false es >>= (\x -> return (VAR, Value x))
+    BitwiseXor es ->
+      assoc val_bitwise_xor false es >>= (\x -> return (VAR, Value x))
+    CompareEQ a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_eq x1 x2)
+    CompareGE a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_ge x1 x2)
+    CompareGT a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_gt x1 x2)
+    CompareLE a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_le x1 x2)
+    CompareLT a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_lt x1 x2)
+    CompareNE a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_compare_ne x1 x2)
+    Div a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_div x1 x2)
+    Index a (array_type, b) -> do
+      -- Compute the table and the index.
+      (t, v) <- check_and_compute_constexpr a
+      i <- check_and_compute_value b
+      -- Check that the table and index types match.
+      case v of
+        Array vs ->
+          if array_type == AST.INT then
+            return (VAR, Value $ vs !! (fromInteger i))
+          else do
+            print_error loc "Byte-access to word-arrays is unimplemented."
+            return (VAR, Value 0)
+        ByteArray vs ->
+          if array_type == BYTE then
+            return (VAR, Value . toInteger . ord $ vs !! (fromInteger i))
+          else do
+            print_error loc "Word-access to byte-arrays is unimplemented."
+            return (VAR, Value 0)
+        _ -> type_mismatch
+                 loc (if array_type == AST.INT then
+                        VAR_ARRAY 0
+                      else
+                        BYTE_ARRAY 0) t
+    AST.Literal l ->
+      case l of
+        AST.Bool b -> return (VAR, Value $ if b then true else false)
+        AST.Char c -> return (VAR, Value . toInteger . ord $ c)
+        AST.Integer i -> return (VAR, Value $ value i)
+        AST.String s -> return (BYTE_ARRAY . toInteger $ (length s), ByteArray s)
+        AST.Table AST.INT es -> do
+          vs <- mapM check_and_compute_value es
+          return (VAR_ARRAY . toInteger $ length vs, Array vs)
+        AST.Table AST.BYTE es -> do
+          vs <- mapM check_and_compute_value es
+          return (BYTE_ARRAY . toInteger $ length vs,
+                  ByteArray . map (chr . fromInteger . (`mod` 256)) $ vs)
+    Mod a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_mod x1 x2)
+    Mul es ->
+      assoc val_mul 1 es >>= (\x -> return (VAR, Value x))
+    Neg a -> do
+      x <- check_and_compute_value a
+      return (VAR, Value $ val_neg x)
+    Not a -> do
+      x <- check_and_compute_value a
+      return (VAR, Value $ val_not x)
+    Or es ->
+      assoc val_or false es >>= (\x -> return (VAR, Value x))
+    ShiftLeft a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_shift_left x1 x2)
+    ShiftRight a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_shift_right x1 x2)
+    Slice vec (array_type, a, b) -> do
+      -- Generate the table and slice indices.
+      (t, v) <- check_and_compute_constexpr vec
+      i <- check_and_compute_value a
+      j <- check_and_compute_value b
+      if i < 0 then do  -- Check that the start is at least at 0.
+        print_error loc ("Negative start index in slice: " ++ show i ++ ".")
+        return (VAR_ARRAY 0, Array [])
+      else if j < 0 then do  -- Check that the slice non-negative.
+        print_error loc ("Negative range in slice: " ++ show j ++ ".")
+        return (VAR_ARRAY 0, Array [])
+      else
+        -- Check that the table and slicer have the same type.
+        case v of
+          Array vs ->
+            -- Check that the slice doesn't extend past the end of the array.
+            if i + j > toInteger (length vs) then do
+              print_error loc ("Slice extends past end of array: [" ++ show i ++
+                               " FOR " ++ show j ++ "]")
+              return (VAR_ARRAY 0, Array [])
+            else if array_type == AST.INT then
+              return (VAR_ARRAY j,
+                      Array (take (fromInteger j) .
+                             drop (fromInteger i) $ vs))
+            else do
+              print_error loc "Byte-access to word-arrays is unimplemented."
+              return (BYTE_ARRAY 0, ByteArray [])
+          ByteArray vs ->
+            -- Check that the slice doesn't extend past the end of the array.
+            if i + j > toInteger (length vs) then do
+              print_error loc ("Slice extends past end of array: [" ++ show i ++
+                               " FOR " ++ show j ++ "]")
+              return (VAR_ARRAY 0, Array [])
+            else if array_type == BYTE then
+              return (BYTE_ARRAY j,
+                      ByteArray (take (fromInteger j) .
+                                 drop (fromInteger i) $ vs))
+            else do
+              print_error loc "Word-access to byte-arrays is unimplemented."
+              return (VAR, Value 0)
+          _ -> if array_type == AST.INT then
+                 type_mismatch loc (VAR_ARRAY 0) t
+               else
+                 type_mismatch loc (BYTE_ARRAY 0) t
+    Sub a b -> do
+      x1 <- check_and_compute_value a
+      x2 <- check_and_compute_value b
+      return (VAR, Value $ val_sub x1 x2)
+    Variable n -> do
+      result <- find n
+      case result of
+        Nothing -> do
+          print_error loc ("Undefined name '" ++ n ++ "'.")
+          return (VAR, Value 0)
+        Just (t, loc') ->
+          case t of
+            CONST def_type def_value -> return (def_type, def_value)
+            _ -> do
+              print_error loc
+                          ("Use of non-constant name '" ++ n ++
+                           "' (defined at " ++ show loc' ++ ") in constant " ++
+                           "expression.")
+              return (VAR, Value 0)
+  where assoc f e [] = return e
+        assoc f e (l_e:es) = do
+          (t, v) <- check_and_compute_constexpr l_e
+          case v of
+            Value x -> assoc f e es >>= (\y -> return $ f x y)
+            _ -> type_mismatch (AST.location l_e) VAR t
+
+-- Compute the value of an integer const-expression, or produce an error if the
+-- expression is not constant.
+check_and_compute_value a = do
+  (t, v) <- check_and_compute_constexpr a
+  x <- case v of
+         Value x -> return x
+         _ -> type_mismatch (AST.location a) VAR t
+  return x

@@ -8,7 +8,7 @@ import AnnotatedAST
 import Reader
 
 -- Information associated with a defined name.
-type NameInfo = (Type, Location)
+type NameInfo = (Type, Allocation, Location)
 
 -- All names defined thus far.
 type Environment = [(AST.Name, NameInfo)]
@@ -22,7 +22,8 @@ data State = State {
   environment :: Environment,      -- Variables currently in scope.
   has_error :: Bool,
   next_static_address :: Integer,  -- Next address to be assigned to static data.
-  static :: [(Integer, Static)]    -- Static data currently defined.
+  static :: [(Integer, Static)],   -- Static data currently defined.
+  workspace :: Integer             -- Location of the workspace pointer.
 }
 
 instance Show State where
@@ -30,8 +31,8 @@ instance Show State where
     where list f x = concat . intersperse "\n" . reverse . map f $ x
           show_env = list show_var (environment s)
           show_data = list show_blob (static s)
-          show_var (n, (t, loc)) =
-            show_compact loc ++ ":\t " ++ show n ++ " :: " ++ show t
+          show_var (n, (t, a, loc)) =
+            show_compact loc ++ ":\t " ++ show a ++ "\t" ++ show n ++ " :: " ++ show t
           show_blob (location, value) =
             show (Address location) ++ ":\t " ++ show value
 
@@ -55,7 +56,8 @@ empty_state = State {
   environment = [],
   has_error = False,
   next_static_address = mem_start,
-  static = []
+  static = [],
+  workspace = 0
 }
 
 -- Print messages.
@@ -93,6 +95,14 @@ get_env = S (\state -> return (environment state, state))
 -- Set the environment.
 set_env :: Environment -> SemanticAnalyser ()
 set_env env = S (\state -> return ((), state { environment = env }))
+
+-- Get the current state of the environment.
+get_workspace :: SemanticAnalyser Integer
+get_workspace = S (\state -> return (workspace state, state))
+
+-- Set the environment.
+set_workspace :: Integer -> SemanticAnalyser ()
+set_workspace wptr = S (\state -> return ((), state { workspace = wptr }))
 
 -- Register a new static blob.
 add_static :: Static -> SemanticAnalyser Integer
@@ -143,29 +153,81 @@ get_static loc address = do
         return ()
       return (ByteArray (drop (fromInteger index) bs))
 
+-- Returns the amount of space (in words) required in the workspace for a
+-- particular data type.
+space_needed :: Type -> Integer
+space_needed ANY_TYPE = 0                      -- Use some temporary space.
+space_needed BYTE = 1                          -- Use a word for storing bytes.
+space_needed (BYTE_ARRAY x) =
+  case x of
+    CompileTime s -> (s + 3) `div` 4           -- Round up to the next word.
+    Runtime -> 1                               -- Pointer to some other memory.
+space_needed CHAN = 1                          -- Channels are one word in size.
+space_needed (CHAN_ARRAY x) =
+  case x of
+    CompileTime s -> s
+    Runtime -> 1                               -- Pointer to some other memory.
+space_needed (CONST _ _) = 0                   -- Compile-time substituted.
+space_needed (PROC _ _) = 0                    -- Stored elsewhere.
+space_needed INT = 1                           -- Integers are one word each.
+space_needed (INT_ARRAY x) =
+  case x of
+    CompileTime s -> s
+    Runtime -> 1                               -- Pointer to some other memory.
+
 -- Save the environment, perform an analysis, then restore the environment.
 new_scope :: SemanticAnalyser a -> SemanticAnalyser a
 new_scope analyser = do
   env <- get_env
+  wptr <- get_workspace
   a <- analyser
+
+  -- Fetch the contents of this scope.
+  env' <- get_env
+  let scope = take (length env' - length env) env'
+  let space = foldl (+) 0 $ map (\(n, (t, a, l)) -> space_needed t) scope
+  let wptr' = wptr - space - 1
+
+  -- Display the scope contents.
+  let list f x = concat . intersperse "\n" . reverse . map f $ x
+  let show_var (n, (t, a, loc)) =
+          show_compact loc ++ ":\t " ++ show (reference a wptr') ++ "\t" ++
+          show n ++ " :: " ++ show t
+  print_note ("Scope:\n" ++ list show_var scope ++ "\n")
+  print_note ("Space needed: " ++ show space ++ " word(s).")
+
+  -- Restore the previous environment. 
   set_env env
+  set_workspace wptr
+  
   return a
 
 -- Set the current environment.
-add_name :: AST.Name -> NameInfo -> SemanticAnalyser ()
+add_name :: AST.Name -> (Type, Location) -> SemanticAnalyser ()
 add_name name (t, loc) = do
   result <- find_name name
   case result of
     Nothing -> return ()
-    Just (_, loc') ->
+    Just (_, a, loc') ->
       print_warning loc (
           "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
           show loc' ++ ".")
-  get_env >>= (\env -> set_env ((name, (t, loc)) : env))
+  wptr <- get_workspace
+  let allocation = wptr - space_needed t
+  set_workspace allocation
+  env <- get_env
+  set_env ((name, (t, Local allocation, loc)) : env)
 
 -- Look up a name in the environment.
 find_name :: AST.Name -> SemanticAnalyser (Maybe NameInfo)
-find_name name = get_env >>= (\env -> return $ lookup name env)
+find_name name = do
+  env <- get_env
+  case lookup name env of
+    Nothing ->
+      return Nothing
+    Just (n, a, loc) -> do
+      wptr <- get_workspace
+      return (Just (n, reference a wptr, loc))
 
 run_analyser :: SemanticAnalyser a -> IO (a, State)
 run_analyser (S xm) = xm empty_state

@@ -15,8 +15,9 @@ import Result
 check_replicator :: AST.Replicator -> SemanticAnalyser Replicator
 check_replicator (AST.Range (L n loc') a b) = do
   add_name n (INT, loc')
-  a' <- check_rvalue a
-  b' <- check_rvalue b
+  -- TODO: Check types.
+  (t1, a') <- check_rvalue a
+  (t2, b') <- check_rvalue b
   return (Range n a' b')
 
 check_replicable :: (a -> SemanticAnalyser a2) -> AST.Replicable a
@@ -40,15 +41,25 @@ check_nestable check_a check_b (AST.Block b p) = do
   p' <- check_process p
   return (Block b' p')
 
+-- Check that a type is a numeric type.
+check_numeric :: Location -> Type -> SemanticAnalyser ()
+check_numeric loc t =
+  case t of
+    BYTE -> return ()
+    CHAN -> return ()
+    CONST t' _ -> check_numeric loc t'
+    INT -> return ()
+    _ -> print_error loc ("Expected a numeric type, got " ++ show t ++ ".")
+
 -- Check that a name is defined.
-check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser Name
+check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser (Allocation, Name)
 check_name check_type loc x = do
   x' <- find_name x
   case x' of
     Nothing -> do
       print_error loc ("Undefined name " ++ show x)
-      return ""
-    Just (t, loc') -> do
+      return (Global 0, "")
+    Just (t, a, loc') -> do
       case t of
         CONST t' _ ->
           if check_type t' then
@@ -64,7 +75,7 @@ check_name check_type loc x = do
             print_error loc
                 ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
             print_note (show x ++ " is defined at " ++ show loc')
-      return x
+      return (a, x)
 
 check_process :: L AST.Process -> SemanticAnalyser Process
 check_process (L p loc) =
@@ -97,38 +108,73 @@ check_guard (L (AST.BasicGuard a) loc) = do
   return (BasicGuard a')
 
 check_guard (L (AST.PrefixedGuard e a) loc) = do
-  e' <- check_rvalue e
+  -- TODO: Check type.
+  (t, e') <- check_rvalue e
+  check_numeric loc t
   a' <- check_atomic_guard a
   return (PrefixedGuard e' a')
 
 check_atomic_guard :: L AST.AtomicGuard -> SemanticAnalyser AtomicGuard
 check_atomic_guard (L (AST.DelayGuard e) loc) = do
-  e' <- check_rvalue e
+  (t, e') <- check_rvalue e
+  check_numeric loc t
   return (DelayGuard e')
 
 check_atomic_guard (L (AST.InputGuard a bs) loc) = do
   a' <- check_channel a
-  bs' <- mapM check_lvalue bs
-  return (InputGuard a' bs')
+  tbs' <- mapM check_lvalue bs
+  mapM (check_numeric loc) (map fst tbs')
+  return (InputGuard a' (map snd tbs'))
 
 check_atomic_guard (L AST.SkipGuard loc) = return SkipGuard
 
 check_assign :: L AST.Expression -> L AST.Expression -> SemanticAnalyser Process
 check_assign l r = do
-  -- TODO: Type-check the variables.
-  l' <- check_lvalue l
-  r' <- check_rvalue r
+  (t1, l') <- check_lvalue l
+  check_numeric (AST.location l) t1
+  (t2, r') <- check_rvalue r
+  check_numeric (AST.location r) t2
   return (Assign l' r')
 
 check_call :: L AST.Name -> [L AST.Expression] -> SemanticAnalyser Process
 check_call (L n loc) es = do
   -- TODO: Type-check the arguments.
-  n' <- check_name (\t ->
-    case t of
-      PROC _ _ -> True
-      _ -> False) loc n
-  es' <- mapM check_rvalue es
-  return (Call n' es')
+  n' <- find_name n
+  case n' of
+    Nothing -> do
+      print_error loc ("Name " ++ show n ++ " is undefined.")
+      return (Call "" [])
+    Just (t, a, loc') ->
+      case t of
+        PROC ts _ -> do
+          tes' <- mapM check_rvalue es
+          let es' = map snd tes'
+          return (Call n es')
+-- where f n [] [] = return []
+--       f n [] (e : es) = do
+--         print_error loc (show n ++ " is applied to too many arguments.")
+--         return []
+--       f n (t : ts) [] =
+--         print_error loc (show n ++ " is applied to too few arguments.")
+--         return []
+--       f n (t : ts) (e : es) = do
+--         case t of
+--           BYTE -> do
+--             (t', e') <- check_rvalue e
+--             check_numeric (AST.location e) t
+--             return e'
+--           BYTE_ARRAY _ -> check_array e
+--           CHAN -> check_channel e
+--           CHAN_ARRAY _ -> check_channel_array e
+--           INT -> do
+--             (t', e') <- check_rvalue e
+--             check_numeric (AST.location e) t
+--             return e'
+--           INT_ARRAY _ -> check_array e
+        _ -> do
+          print_error loc ("Name " ++ show n ++ " does not define a procedure.")
+          print_note (show n ++ " is defined at " ++ show loc)
+          return (Call "" [])
 
 check_definition :: [L AST.Definition] -> L AST.Process
                  -> SemanticAnalyser Process
@@ -174,25 +220,34 @@ check_formal (L (AST.Vector r n) loc) = do
 
 check_delay :: L AST.Expression -> SemanticAnalyser Process
 check_delay expr = do
-  expr' <- check_rvalue expr
+  -- TODO: Check type.
+  (t, expr') <- check_rvalue expr
   return (Delay expr')
+
+check_condition :: L AST.Expression -> SemanticAnalyser Expression
+check_condition expr = do
+  -- TODO: Check type.
+  (t, expr') <- check_rvalue expr
+  return expr'
 
 check_if :: L AST.Condition -> SemanticAnalyser Condition
 check_if (L (AST.Condition cond) loc) = do
-  cond' <- check_replicable (check_nestable check_if check_rvalue) cond
+  cond' <- check_replicable (check_nestable check_if check_condition) cond
   return (Condition cond')
 
 check_input :: L AST.Expression -> L AST.Expression -> SemanticAnalyser Process
 check_input l r = do
+  -- TODO: Check types.
   l' <- check_channel l
-  r' <- check_lvalue r
+  (t, r') <- check_lvalue r
   return (Input l' r')
 
 check_output :: L AST.Expression -> L AST.Expression
              -> SemanticAnalyser Process
 check_output l r = do
   l' <- check_channel l
-  r' <- check_rvalue r
+  -- TODO: Check type.
+  (t, r') <- check_rvalue r
   return (Output l' r')
 
 check_par :: AST.Replicable (L AST.Process)
@@ -210,113 +265,146 @@ check_seq :: AST.Replicable (L AST.Process)
 check_seq seq = check_replicable check_process seq
 
 check_timer :: L AST.Expression -> SemanticAnalyser Expression
-check_timer expr = check_rvalue expr
+check_timer expr = do
+  -- TODO: Check type.
+  (t, expr') <- check_rvalue expr
+  return expr'
 
 check_while :: L AST.Expression -> L AST.Process -> SemanticAnalyser Process
 check_while expr proc = do
-  expr' <- check_rvalue expr
+  -- TODO: Check type.
+  (t, expr') <- check_rvalue expr
   proc' <- check_process proc
   return (While expr' proc')
 
 -- Check an expression.
-check_rvalue :: L AST.Expression -> SemanticAnalyser Expression
+check_rvalue :: L AST.Expression -> SemanticAnalyser (Type, Expression)
 check_rvalue (L expr loc) = do
   case expr of
     AST.Add es -> do
-      es' <- mapM check_rvalue es
-      return (Add es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, Add (map snd tes'))
     AST.After a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (After a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, After a' b')
     AST.And es -> do
-      es' <- mapM check_rvalue es
-      return (And es')
-    AST.Any -> return Any
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, And (map snd tes'))
+    AST.Any -> return (ANY_TYPE, Any)
     AST.BitwiseAnd es -> do
-      es' <- mapM check_rvalue es
-      return (BitwiseAnd es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, BitwiseAnd (map snd tes'))
     AST.BitwiseOr es -> do
-      es' <- mapM check_rvalue es
-      return (BitwiseOr es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, BitwiseOr (map snd tes'))
     AST.BitwiseXor es -> do
-      es' <- mapM check_rvalue es
-      return (BitwiseXor es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, BitwiseXor (map snd tes'))
     AST.CompareEQ a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareEQ a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareEQ a' b')
     AST.CompareGE a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareGE a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareGE a' b')
     AST.CompareGT a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareGT a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareGT a' b')
     AST.CompareLE a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareLE a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareLE a' b')
     AST.CompareLT a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareLT a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareLT a' b')
     AST.CompareNE a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (CompareNE a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, CompareNE a' b')
     AST.Div a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (Div a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, Div a' b')
     AST.Index r (t, i) -> do
       -- TODO: Check that the array type matches the index type (or at least
       -- that cross-type support is present).
       r' <- check_array r
-      i' <- check_rvalue i
-      return (Index r' (t, i'))
+      (t', i') <- check_rvalue i
+      return (INT, Index r' (t, i'))
     AST.Literal l -> do
       (t, v) <- check_and_compute_constexpr (L (AST.Literal l) loc)
-      return (Value v)
+      return (t, Value v)
     AST.Mod a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (Mod a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, Mod a' b')
     AST.Mul es -> do
-      es' <- mapM check_rvalue es
-      return (Mul es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, Mul (map snd tes'))
     AST.Neg a -> do
-      a' <- check_rvalue a
-      return (Neg a')
+      -- TODO: Check type.
+      (t, a') <- check_rvalue a
+      return (INT, Neg a')
     AST.Not a -> do
-      a' <- check_rvalue a
-      return (Not a')
+      -- TODO: Check type.
+      (t, a') <- check_rvalue a
+      return (INT, Not a')
     AST.Or es -> do
-      es' <- mapM check_rvalue es
-      return (Or es')
+      -- TODO: Check types.
+      tes' <- mapM check_rvalue es
+      return (INT, Or (map snd tes'))
     AST.ShiftLeft a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (ShiftLeft a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, ShiftLeft a' b')
     AST.ShiftRight a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (ShiftRight a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, ShiftRight a' b')
     AST.Slice r (t, a, b) -> do
       -- TODO: Check that the array type matches the index type (or at least
       -- that cross-type support is present).
       r' <- check_array r
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (Slice r' (t, a', b'))
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, Slice r' (t, a', b'))
     AST.Sub a b -> do
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (Sub a' b')
+      -- TODO: Check types.
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, Sub a' b')
     AST.Variable x -> do
-      x' <- check_name (const True) loc x
-      return (Name x')
+      -- TODO: Check type.
+      x' <- find_name x
+      case x' of
+        Nothing -> do
+          print_error loc ("Undefined name " ++ show x)
+          return (INT, Name (Global 0) "")
+        Just (t, a, loc') -> do
+          case t of
+            CONST t' v -> return (t, Value v)
+            _ -> return (INT, Name a x)
 
 -- Check that a constant expression is actually constant, and return the
 -- calculated compile-time value.
@@ -506,7 +594,7 @@ check_and_compute_constexpr (L expr loc) =
         Nothing -> do
           print_error loc ("Undefined name '" ++ n ++ "'.")
           return (INT, Integer 0)
-        Just (t, loc') ->
+        Just (t, a, loc') ->
           case t of
             CONST def_type def_value -> return (def_type, def_value)
             _ -> do
@@ -538,8 +626,8 @@ check_channel (L chan loc) = do
   -- A channel is either named, or a member of an array.
   case chan of
     AST.Variable x -> do
-      x' <- check_name (== CHAN) loc x
-      return (Name x')
+      (a, x') <- check_name (== CHAN) loc x
+      return (Name a x')
     AST.Index r (t, i) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT indexing.
@@ -547,7 +635,8 @@ check_channel (L chan loc) = do
         return ()
       else
         print_error loc "Invalid access to channel array."
-      i' <- check_rvalue i
+      -- TODO: Check type.
+      (t', i') <- check_rvalue i
       return (Index r' (t, i'))
     _ -> print_fatal loc "Channel expected."
 
@@ -556,11 +645,11 @@ check_channel_array (L chan_array loc) = do
   -- A channel array is either a named array or a slice.
   case chan_array of
     AST.Variable x -> do
-      x' <- check_name (\t ->
+      (a, x') <- check_name (\t ->
         case t of
           CHAN_ARRAY _ -> True
           _ -> False) loc x
-      return (Name x')
+      return (Name a x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.
@@ -568,37 +657,49 @@ check_channel_array (L chan_array loc) = do
         return ()
       else
         print_error loc "Invalid access to channel array."
-      a' <- check_rvalue a
-      b' <- check_rvalue b
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
       return (Slice r' (t, a', b'))
     _ -> print_fatal loc "Channel array expected."
 
-check_lvalue :: L AST.Expression -> SemanticAnalyser Expression
+check_lvalue :: L AST.Expression -> SemanticAnalyser (Type, Expression)
 check_lvalue (L expr loc) = do
   -- An lvalue is either a variable, an array index, or an array slice.
   -- It can alternatively be ANY, but this is a special case.
   case expr of
-    AST.Any -> return Any
+    AST.Any -> return (ANY_TYPE, Any)
     AST.Variable x -> do
-      x' <- check_name (\t ->
-        case t of
-          BYTE -> True
-          BYTE_ARRAY _ -> True
-          INT -> True
-          INT_ARRAY _ -> True
-          _ -> False) loc x
-      return (Name x')
+      x' <- find_name x
+      case x' of
+        Nothing -> do
+          print_error loc ("Undefined name " ++ show x)
+          return (INT, Name (Global 0) "")
+        Just (t, a, l) -> do
+          let valid_type = case t of
+                             BYTE -> True
+                             BYTE_ARRAY _ -> True
+                             INT -> True
+                             INT_ARRAY _ -> True
+                             _ -> False
+          if not valid_type then do
+            print_error loc
+                ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
+            print_note (show x ++ " is defined at " ++ show l)
+            return (INT, Name (Global 0) "")
+          else do
+            return (t, Name a x)
     AST.Index r (t, i) -> do
       -- TODO: Check that access type matches, or at least that cross-type
       -- access support is present.
       r' <- check_array r
-      i' <- check_rvalue i
-      return (Index r' (t, i'))
+      (t', i') <- check_rvalue i
+      return (INT, Index r' (t, i'))
     AST.Slice r (t, a, b) -> do
+      -- TODO: Check types.
       r' <- check_array r
-      a' <- check_rvalue a
-      b' <- check_rvalue b
-      return (Slice r' (t, a', b'))
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
+      return (INT, Slice r' (t, a', b'))
     _ -> print_fatal loc "L-value expected."
 
 check_array :: L AST.Expression -> SemanticAnalyser Expression
@@ -606,12 +707,12 @@ check_array (L r loc) = do
   -- An array is either a named array or a slice.
   case r of
     AST.Variable x -> do
-      x' <- check_name (\t ->
+      (a, x') <- check_name (\t ->
         case t of
           BYTE_ARRAY _ -> True
           INT_ARRAY _ -> True
           _ -> False) loc x
-      return (Name x')
+      return (Name a x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.
@@ -619,7 +720,7 @@ check_array (L r loc) = do
         return ()
       else
         print_error loc "Invalid access to channel array."
-      a' <- check_rvalue a
-      b' <- check_rvalue b
+      (t1, a') <- check_rvalue a
+      (t2, b') <- check_rvalue b
       return (Slice r' (t, a', b'))
     _ -> print_fatal loc "Array expected."

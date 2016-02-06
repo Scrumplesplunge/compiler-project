@@ -4,7 +4,10 @@ PROC foo(VALUE x,
          CHAN y, w) =
   PAR
     SEQ
-      x := 2 * (5 + 3)
+      VAR misc[10] :
+      DEF label = "I have a string!" :
+      misc[0] := 5 + 3
+      x := 2 * misc[0]
       y ? x
     w ! 1
 :

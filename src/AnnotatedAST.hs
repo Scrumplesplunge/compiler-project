@@ -7,6 +7,23 @@ import Data.List
 import Text.Printf
 import qualified Data.ByteString as S
 
+-- Allocation information for a variable.
+data Allocation = Global Integer
+                | Local Integer
+                | Unknown
+  deriving Eq
+
+-- Reference an allocated location from a given workspace location.
+reference :: Allocation -> Integer -> Allocation
+reference (Global x) _ = Global x
+reference (Local x) y = Local (x - y)
+reference Unknown _ = Unknown
+
+instance Show Allocation where
+  show (Global address) = "[Global " ++ show (Address address) ++ "]"
+  show (Local wloc) = "[Local " ++ show wloc ++ "]"
+  show Unknown = "[Unknown]"
+
 -- Size information for an array.
 data Size = CompileTime Integer
           | Runtime
@@ -109,7 +126,7 @@ data Expression = Add [Expression]
                 | Slice Expression (AST.ArrayType, Expression, Expression)
                 | Sub Expression Expression
                 | Value Value
-                | Name Name
+                | Name Allocation Name
   deriving (Eq, Show)
 
 data Alternative = Alternative (Replicable (Nestable Alternative Guard))
@@ -141,8 +158,8 @@ instance Show Value where
 two_pow_32 = 0x100000000 :: Integer
 two_pow_31 = 0x10000000  :: Integer
 mem_start  = value 0x80000070
-true       = value 0xFFFFFFFF
-false      = value 0x00000000
+true       = value 1
+false      = value 0
 
 -- Compile-time computation on values.
 -- TODO: Adjust these to agree with the transputer calculations.

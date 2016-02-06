@@ -73,6 +73,9 @@ instance Show TokenType where
 type Token = Tokens.Token TokenType
 
 -- Interpret escape sequences in string constants.
+interpret :: String -> String
+interpret = interpret_escapes . init . tail
+
 interpret_escapes :: String -> String
 interpret_escapes [] = []
 interpret_escapes ('*':e:cs) = x : interpret_escapes cs
@@ -85,7 +88,6 @@ interpret_escapes ('*':e:cs) = x : interpret_escapes cs
               '"' -> '"'
               '*' -> '*'
               _ -> '?'
-
 interpret_escapes (c:cs) = c : interpret_escapes cs
 
 -- Converts a raw token to its equivalent in the preprocessed format.
@@ -95,14 +97,14 @@ convert :: [Lexer.RawToken] -> [Token]
 convert = map $ fmap f
   where f x =
           case x of
-            Lexer.CHAR c    -> CHAR . head $ interpret_escapes c
+            Lexer.CHAR c    -> CHAR . head $ interpret c
             Lexer.COMMENT c -> error "Comment in normalized token stream."
             Lexer.IDENT i   -> IDENT i
             Lexer.INTEGER i -> INTEGER i
             Lexer.KEYWORD k -> KEYWORD k
             Lexer.NEWLINE   -> error "Newline in normalized token stream."
             Lexer.SPACES n  -> error "Whitespace in normalized token stream."
-            Lexer.STRING s  -> STRING $ interpret_escapes s
+            Lexer.STRING s  -> STRING $ interpret s
             Lexer.SYMBOL s  -> SYMBOL s
 
 -- Remove leading whitespace from continuation lines.

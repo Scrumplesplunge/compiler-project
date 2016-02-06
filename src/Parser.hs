@@ -52,17 +52,7 @@ string :: Parser Token (L String)
 string = match_type "string literal" matcher reducer
   where matcher (STRING x) = True
         matcher _ = False
-        reducer (STRING x) = interpret (tail x)
-        -- This interpretation ignores the capital-letter variants.
-        interpret ('*' : 'c' : cs) = '\r' : interpret cs
-        interpret ('*' : 'n' : cs) = '\n' : interpret cs
-        interpret ('*' : 's' : cs) = ' ' : interpret cs
-        interpret ('*' : 't' : cs) = '\t' : interpret cs
-        interpret ('*' : '\'' : cs) = '\'' : interpret cs
-        interpret ('*' : '"' : cs) = '"' : interpret cs
-        interpret ('*' : '*' : cs) = '*' : interpret cs
-        interpret "\"" = ""
-        interpret (c:cs) = c : interpret cs
+        reducer (STRING x) = x
 
 -- Arbitrary symbol.
 symbol :: Lexer.Symbol -> Parser Token (L ())
