@@ -6,7 +6,7 @@ import Prelude hiding (EQ, GT)
 
 data Operation =
       NOP
-    | UNIMPLEMENTED String
+    | COMMENT String
     | ADC Integer    -- A += x;
     | ADD            -- B = pop(); A = pop(); push(A + B);
     | AJW Integer    -- Wptr += x;
@@ -50,7 +50,7 @@ data Operation =
 -- Sequence of assembler instructions defining the given operation.
 def :: Operation -> [String]
 def NOP               = ["# NOP"]
-def (UNIMPLEMENTED x) = ["# Unimplemented: " ++ x]
+def (COMMENT x) = ["# " ++ x]
 def (ADC x)    = ["adc " ++ show x]
 def ADD        = ["add"]
 def (AJW x)    = ["ajw " ++ show x]

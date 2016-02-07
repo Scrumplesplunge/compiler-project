@@ -7,8 +7,10 @@ import Operation
 data Code = Raw Operation    -- An operation.
           | Label Label      -- A label.
           | Code [Code]      -- A sequence of operations.
-          | Comment String   -- A comment.
   deriving (Eq, Show)
+
+comment :: String -> Code
+comment x = Raw (COMMENT x)
 
 assembler_indent = "  "
 
@@ -18,4 +20,3 @@ showCode (Raw x)   =
   (concat . intersperse "\n" . map (assembler_indent ++)) (def x) ++ "\n"
 showCode (Label x) = x ++ ":\n\n"
 showCode (Code cs) = concat $ map showCode cs
-showCode (Comment x) = assembler_indent ++ "# " ++ x ++ "\n"

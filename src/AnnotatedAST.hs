@@ -7,6 +7,10 @@ import Data.List
 import Text.Printf
 import qualified Data.ByteString as S
 
+-- Pretty-printing.
+class Pretty a where
+  prettyPrint :: a -> String
+
 -- Allocation information for a variable.
 data Allocation = Global Integer
                 | Local Integer
@@ -128,6 +132,48 @@ data Expression = Add [Expression]
                 | Value Value
                 | Name Allocation Name
   deriving (Eq, Show)
+
+pp_binop :: String -> Expression -> Expression -> String
+pp_binop x a b =
+  "(" ++ prettyPrint a ++ " " ++ x ++ " " ++ prettyPrint b ++ ")"
+
+pp_assoc :: String -> [Expression] -> String
+pp_assoc x as =
+  "(" ++ concat (intersperse (" " ++ x ++ " ") (map prettyPrint as)) ++ ")"
+
+instance Pretty Expression where
+  prettyPrint (Add es) = pp_assoc "+" es
+  prettyPrint (After a b) = pp_binop "AFTER" a b
+  prettyPrint (And es) = pp_assoc "AND" es
+  prettyPrint Any = "ANY"
+  prettyPrint (BitwiseAnd es) = pp_assoc "/\\" es
+  prettyPrint (BitwiseOr es) = pp_assoc "\\/" es
+  prettyPrint (BitwiseXor es) = pp_assoc "><" es
+  prettyPrint (CompareEQ a b) = pp_binop "=" a b
+  prettyPrint (CompareGE a b) = pp_binop ">=" a b
+  prettyPrint (CompareGT a b) = pp_binop ">" a b
+  prettyPrint (CompareLE a b) = pp_binop "<=" a b
+  prettyPrint (CompareLT a b) = pp_binop "<" a b
+  prettyPrint (CompareNE a b) = pp_binop "<>" a b
+  prettyPrint (Div a b) = pp_binop "/" a b
+  prettyPrint (Index a (t, b)) =
+    prettyPrint a ++ "[" ++
+    (if t == AST.BYTE then "BYTE " else "") ++
+    prettyPrint b ++ "]"
+  prettyPrint (Mod a b) = pp_binop "\\" a b
+  prettyPrint (Mul es) = pp_assoc "*" es
+  prettyPrint (Neg e) = "(-" ++ prettyPrint e ++ ")"
+  prettyPrint (Not e) = "(NOT " ++ prettyPrint e ++ ")"
+  prettyPrint (Or es) = pp_assoc "OR" es
+  prettyPrint (ShiftLeft a b) = pp_binop "<<" a b
+  prettyPrint (ShiftRight a b) = pp_binop ">>" a b
+  prettyPrint (Slice e (t, a, b)) =
+    prettyPrint e ++ "[" ++
+    (if t == AST.BYTE then "BYTE " else "") ++
+    prettyPrint a ++ " FOR " ++ prettyPrint b ++ "]"
+  prettyPrint (Sub a b) = pp_binop "-" a b
+  prettyPrint (Value x) = show x
+  prettyPrint (Name l x) = x
 
 data Alternative = Alternative (Replicable (Nestable Alternative Guard))
   deriving (Eq, Show)

@@ -35,7 +35,7 @@ binop a b cs = do
     return (d1 + 1, Code (a' : b' : map Raw cs))
   else
     -- The space required exceeds the register stack. Use a temporary variable.
-    return (3, Code ([Comment "Binary operation exceeds register stack.",
+    return (3, Code ([comment "Binary operation exceeds register stack.",
                       a', Raw (AJW (-1)), Raw (STL 1), b'] ++
                      map Raw (LDL 1 : REV : cs) ++ [Raw (AJW 1)]))
 
@@ -78,48 +78,52 @@ assop es c = do
           Code (map (\x -> Code [Raw (STL 1), snd x, Raw (LDL 1), op]) large) in
     let small_code_tail =
           Code (map (\x -> Code [snd x, op]) small) in
-    return (3, Code [Comment "Associative operation exceeds register stack.",
+    return (3, Code [comment "Associative operation exceeds register stack.",
                      snd a, Raw (AJW (-1)), large_code_tail, small_code_tail,
                      Raw (AJW 1)])
 
 -- Generate code for an expression.
 gen_expr :: Expression -> Generator (Integer, Code)
-gen_expr (Add es) = assop es [ADD]
-gen_expr (After a b) = binop b a [DIFF, GT]
-gen_expr (And es) = do
-  es' <- mapM gen_expr es
-  end <- label "AND_END"
-  return (maximum (map fst es'),
-          Code (intersperse (Raw (CJ end)) (map snd es') ++ [Label end]))
-gen_expr Any = return (1, Raw (LDC 0))
-gen_expr (BitwiseAnd es) = assop es [AND]
-gen_expr (BitwiseOr es) = assop es [OR]
-gen_expr (BitwiseXor es) = assop es [XOR]
-gen_expr (CompareEQ a b) = binop a b [EQ]
-gen_expr (CompareLE a b) = binop a b [GT, NOT]
-gen_expr (CompareLT a b) = binop b a [GT]
-gen_expr (CompareGE a b) = binop b a [GT, NOT]
-gen_expr (CompareGT a b) = binop a b [GT]
-gen_expr (CompareNE a b) = binop a b [EQ, NOT]
-gen_expr (Div a b) = binop a b [DIV]
-gen_expr (Index a (t, b)) = return (0, Raw (UNIMPLEMENTED "Array indexing"))
-gen_expr (Mod a b) = binop a b [REM]
-gen_expr (Mul es) = assop es [MUL]
-gen_expr (Neg e) = unop e [NOT, ADC 1]
-gen_expr (Not e) = unop e [NOT]
-gen_expr (Or es) = do
-  es' <- mapM gen_expr es
-  end <- label "OR_END"
-  return (maximum (map fst es'),
-          Code (intersperse (Code $ map Raw [NOT, CJ end]) (map snd es') ++
-          [Label end, Raw NOT]))
-gen_expr (ShiftLeft a b) = binop a b [SHL]
-gen_expr (ShiftRight a b) = binop a b [SHR]
-gen_expr (Slice a (t, b, c)) = return (0, Raw (UNIMPLEMENTED "Array slicing"))
-gen_expr (Sub a b) = binop a b [SUB]
-gen_expr (Value (Integer v)) = return (1, Raw (LDC v))
-gen_expr (Name (Global a) _) = return (1, Code [Raw (LDC a), Raw (LDNL 0)])
-gen_expr (Name (Local a) _) = return (1, Raw (LDL a))
+gen_expr e =
+  case e of
+    Add es -> assop es [desc, ADD]
+    After a b -> binop b a [desc, DIFF, GT]
+    And es -> do
+      es' <- mapM gen_expr es
+      end <- label "AND_END"
+      return (maximum (map fst es'),
+              Code (intersperse (Raw (CJ end)) (map snd es') ++
+              [Label end, Raw desc]))
+    Any -> return (1, Code [Raw desc, Raw (LDC 0)])
+    (BitwiseAnd es) -> assop es [desc, AND]
+    (BitwiseOr es) -> assop es [desc, OR]
+    (BitwiseXor es) -> assop es [desc, XOR]
+    (CompareEQ a b) -> binop a b [desc, EQ]
+    (CompareLE a b) -> binop a b [desc, GT, NOT]
+    (CompareLT a b) -> binop b a [desc, GT]
+    (CompareGE a b) -> binop b a [desc, GT, NOT]
+    (CompareGT a b) -> binop a b [desc, GT]
+    (CompareNE a b) -> binop a b [desc, EQ, NOT]
+    (Div a b) -> binop a b [desc, DIV]
+    (Index a (t, b)) -> return (0, Code [Raw desc, comment "Unimplemented: array indexing"])
+    (Mod a b) -> binop a b [desc, REM]
+    (Mul es) -> assop es [desc, MUL]
+    (Neg e) -> unop e [desc, NOT, ADC 1]
+    (Not e) -> unop e [desc, NOT]
+    (Or es) -> do
+      es' <- mapM gen_expr es
+      end <- label "OR_END"
+      return (maximum (map fst es'),
+              Code (intersperse (Code $ map Raw [NOT, CJ end]) (map snd es') ++
+                    [Label end, Raw NOT, Raw desc]))
+    (ShiftLeft a b) -> binop a b [desc, SHL]
+    (ShiftRight a b) -> binop a b [desc, SHR]
+    (Slice a (t, b, c)) -> return (0, comment "Unimplemented: array slicing")
+    (Sub a b) -> binop a b [desc, SUB]
+    (Value (Integer v)) -> return (1, Raw (LDC v))
+    (Name (Global a) _) -> return (1, Code [Raw (LDC a), Raw (LDNL 0)])
+    (Name (Local a) _) -> return (1, Raw (LDL a))
+  where desc = COMMENT (prettyPrint e)
 
 -- Run a code generator and output the generated code.
 assemble :: Expression -> IO ()
