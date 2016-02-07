@@ -135,6 +135,7 @@ data ExprType = OPERAND
               | OR [L Expression]
               | SHIFT_LEFT (L Expression)
               | SHIFT_RIGHT (L Expression)
+              | SUB (L Expression)
   deriving Eq
 
 finish_expression :: (L Expression, ExprType) -> L Expression
@@ -159,6 +160,7 @@ finish_expression (a, expr_type) =
     OR bs          -> L (Or (a : bs))         (location a)
     SHIFT_LEFT b   -> L (ShiftLeft a b)       (location a)
     SHIFT_RIGHT b  -> L (ShiftRight a b)      (location a)
+    SUB b          -> L (Sub a b)             (location a)
 
 expression :: Parser Token (L Expression)
 expression = symbol Lexer.SUB +++ operand                                       >>> (\(a, b) -> L (Neg b) (location a))
@@ -183,6 +185,7 @@ expression = symbol Lexer.SUB +++ operand                                       
                ||| plus (keyword Lexer.OR +++ operand >>> snd)                  >>> OR
                ||| symbol Lexer.SHIFT_LEFT +++ operand                          >>> SHIFT_LEFT . snd
                ||| symbol Lexer.SHIFT_RIGHT +++ operand                         >>> SHIFT_RIGHT . snd
+               ||| symbol Lexer.SUB +++ operand                                 >>> SUB . snd
              )                                                                  >>> finish_expression
 
 selector :: Parser Token (ArrayType, L Expression)
