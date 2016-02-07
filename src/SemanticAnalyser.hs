@@ -189,12 +189,12 @@ new_scope analyser = do
   let wptr' = wptr - space - 1
 
   -- Display the scope contents.
-  let list f x = concat . intersperse "\n" . reverse . map f $ x
-  let show_var (n, (t, a, loc)) =
-          show_compact loc ++ ":\t " ++ show (reference a wptr') ++ "\t" ++
-          show n ++ " :: " ++ show t
-  print_note ("Scope:\n" ++ list show_var scope ++ "\n")
-  print_note ("Space needed: " ++ show space ++ " word(s).")
+-- let list f x = concat . intersperse "\n" . reverse . map f $ x
+-- let show_var (n, (t, a, loc)) =
+--         show_compact loc ++ ":\t " ++ show (reference a wptr') ++ "\t" ++
+--         show n ++ " :: " ++ show t
+-- print_note ("Scope:\n" ++ list show_var scope ++ "\n")
+-- print_note ("Space needed: " ++ show space ++ " word(s).")
 
   -- Restore the previous environment. 
   set_env env
@@ -213,8 +213,9 @@ add_name name (t, loc) = do
           "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
           show loc' ++ ".")
   wptr <- get_workspace
-  let allocation = wptr - space_needed t
-  set_workspace allocation
+  let wptr' = wptr - space_needed t
+  set_workspace wptr'
+  let allocation = wptr' + 1  -- Don't occupy Wptr[0].
   env <- get_env
   set_env ((name, (t, Local allocation, loc)) : env)
 

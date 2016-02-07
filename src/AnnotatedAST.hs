@@ -64,7 +64,8 @@ instance Show Type where
 raw_type :: AST.RawType -> Type
 raw_type AST.CHAN = CHAN
 raw_type AST.VALUE = INT
-raw_type t = error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
+raw_type t = error ("This raw type (" ++ show t ++
+                    ") should not appear in the AST.")
 
 type Name = String
 
@@ -87,8 +88,7 @@ data Nestable a b = Nested a
                   | Block b Process
   deriving (Eq, Show)
 
-data Process = Allocate Integer Process
-             | Alt Alternative
+data Process = Alt Alternative
              | Assign Expression Expression
              | Call Name [Expression]
              | Delay Expression
@@ -104,6 +104,31 @@ data Process = Allocate Integer Process
              | Timer Expression
              | While Expression Process
   deriving (Eq, Show)
+
+instance Pretty Process where
+  prettyPrint (Alt a) = "ALT"
+  prettyPrint (Assign a b) =
+    prettyPrint a ++ " := " ++ prettyPrint b
+  prettyPrint (Call x es) =
+    x ++ "(" ++ (concat . intersperse ", " . map prettyPrint $ es) ++ ")"
+  prettyPrint (Delay e) =
+    "TIME ? AFTER " ++ prettyPrint e
+  prettyPrint (If c) = "IF"
+  prettyPrint (Input a b) =
+    prettyPrint a ++ " ? " ++ prettyPrint b
+  prettyPrint (Output a b) =
+    prettyPrint a ++ " ! " ++ prettyPrint b
+  prettyPrint (Par rp) = "PAR"
+  prettyPrint (PriorityAlt a) = "PRI ALT"
+  prettyPrint (PriorityPar rp) = "PRI PAR"
+  prettyPrint (Seq (Basic _)) = "SEQ ..."
+  prettyPrint (Seq (Replicated (Range x a b) p)) =
+    "SEQ " ++ x ++ " = [" ++ prettyPrint a ++ " FOR " ++ prettyPrint b ++
+    "] ..."
+  prettyPrint Skip = "SKIP"
+  prettyPrint Stop = "STOP"
+  prettyPrint (Timer e) = "TIME ? " ++ prettyPrint e
+  prettyPrint (While e p) = "WHILE " ++ prettyPrint e
 
 data Expression = Add [Expression]
                 | After Expression Expression

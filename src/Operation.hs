@@ -27,6 +27,7 @@ data Operation =
     | LDLP Integer   -- push(Wptr + 4 * x);
     | LDNL Integer   -- A = pop(); push(Mem[A + 4 * x]);
     | LDNLP Integer  -- A = pop(); push(A + 4 * x);
+    | LEND           -- Loop end.
     | MUL            -- B = pop(); A = pop(); push(A * B);
     | NOT            -- A = pop(); push(¬A);
     | OR             -- B = pop(); A = pop(); push(A | B);
@@ -71,6 +72,7 @@ def (LDL x)    = ["ldl " ++ show x]
 def (LDLP x)   = ["ldlp " ++ show x]
 def (LDNL x)   = ["ldnl " ++ show x]
 def (LDNLP x)  = ["ldnlp " ++ show x]
+def LEND       = ["lend"]
 def MUL        = ["mul"]
 def NOT        = ["eqc 0"]
 def OR         = ["or"]

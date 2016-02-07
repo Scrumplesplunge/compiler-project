@@ -18,5 +18,5 @@ assembler_indent = "  "
 showCode :: Code -> String
 showCode (Raw x)   =
   (concat . intersperse "\n" . map (assembler_indent ++)) (def x) ++ "\n"
-showCode (Label x) = x ++ ":\n\n"
+showCode (Label x) = x ++ ":\n"
 showCode (Code cs) = concat $ map showCode cs
