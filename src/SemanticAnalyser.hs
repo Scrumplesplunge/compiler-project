@@ -23,7 +23,7 @@ data State = State {
   has_error :: Bool,
   next_static_address :: Integer,  -- Next address to be assigned to static data.
   static :: [(Integer, Static)],   -- Static data currently defined.
-  workspace :: Integer             -- Location of the workspace pointer.
+  static_chain :: [Integer]        -- Positional information in the static chain.
 }
 
 instance Show State where
@@ -57,7 +57,7 @@ empty_state = State {
   has_error = False,
   next_static_address = mem_start,
   static = [],
-  workspace = 0
+  static_chain = [0]
 }
 
 -- Print messages.
@@ -96,13 +96,35 @@ get_env = S (\state -> return (environment state, state))
 set_env :: Environment -> SemanticAnalyser ()
 set_env env = S (\state -> return ((), state { environment = env }))
 
--- Get the current state of the environment.
-get_workspace :: SemanticAnalyser Integer
-get_workspace = S (\state -> return (workspace state, state))
+-- Get the current level in the static chain.
+get_level :: SemanticAnalyser Integer
+get_level = S (\state -> return (toInteger . length $ static_chain state, state))
 
--- Set the environment.
-set_workspace :: Integer -> SemanticAnalyser ()
-set_workspace wptr = S (\state -> return ((), state { workspace = wptr }))
+-- Allocate space in the static chain. Return the allocation.
+alloc :: Integer -> SemanticAnalyser Allocation
+alloc x = do
+  -- Fetch the static chain.
+  chain <- S (\state -> return (static_chain state, state))
+
+  -- Compute the allocation.
+  let static_level = (toInteger . length) chain - 1
+  let old_value = head chain
+  let new_value = old_value - x
+  let chain' = new_value : tail chain
+
+  -- Allocate the space.
+  S (\state -> return ((), state { static_chain = chain' }))
+
+  -- Return the allocation.
+  return (Local static_level new_value)
+
+-- Enter a new static level.
+new_level :: SemanticAnalyser a -> SemanticAnalyser a
+new_level analyser = do
+  S (\state -> return ((), state { static_chain = 0 : static_chain state }))
+  a <- new_scope analyser
+  S (\state -> return ((), state { static_chain = tail $ static_chain state }))
+  return a
 
 -- Register a new static blob.
 add_static :: Static -> SemanticAnalyser Integer
@@ -179,27 +201,10 @@ space_needed (INT_ARRAY x) =
 new_scope :: SemanticAnalyser a -> SemanticAnalyser a
 new_scope analyser = do
   env <- get_env
-  wptr <- get_workspace
+  chain <- S (\state -> return (static_chain state, state))
   a <- analyser
-
-  -- Fetch the contents of this scope.
-  env' <- get_env
-  let scope = take (length env' - length env) env'
-  let space = foldl (+) 0 $ map (\(n, (t, a, l)) -> space_needed t) scope
-  let wptr' = wptr - space - 1
-
-  -- Display the scope contents.
--- let list f x = concat . intersperse "\n" . reverse . map f $ x
--- let show_var (n, (t, a, loc)) =
---         show_compact loc ++ ":\t " ++ show (reference a wptr') ++ "\t" ++
---         show n ++ " :: " ++ show t
--- print_note ("Scope:\n" ++ list show_var scope ++ "\n")
--- print_note ("Space needed: " ++ show space ++ " word(s).")
-
-  -- Restore the previous environment. 
+  S (\state -> return ((), state { static_chain = chain }))
   set_env env
-  set_workspace wptr
-  
   return a
 
 -- Set the current environment.
@@ -212,12 +217,9 @@ add_name name (t, loc) = do
       print_warning loc (
           "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
           show loc' ++ ".")
-  wptr <- get_workspace
-  let wptr' = wptr - space_needed t
-  set_workspace wptr'
-  let allocation = wptr' + 1  -- Don't occupy Wptr[0].
+  allocation <- alloc (space_needed t)
   env <- get_env
-  set_env ((name, (t, Local allocation, loc)) : env)
+  set_env ((name, (t, allocation, loc)) : env)
 
 -- Look up a name in the environment.
 find_name :: AST.Name -> SemanticAnalyser (Maybe NameInfo)
@@ -226,9 +228,8 @@ find_name name = do
   case lookup name env of
     Nothing ->
       return Nothing
-    Just (n, a, loc) -> do
-      wptr <- get_workspace
-      return (Just (n, reference a wptr, loc))
+    Just x -> do
+      return (Just x)
 
 run_analyser :: SemanticAnalyser a -> IO (a, State)
 run_analyser (S xm) = xm empty_state

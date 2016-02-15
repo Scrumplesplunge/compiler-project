@@ -13,19 +13,13 @@ class Pretty a where
 
 -- Allocation information for a variable.
 data Allocation = Global Integer
-                | Local Integer
+                | Local Integer Integer
                 | Unknown
   deriving Eq
 
--- Reference an allocated location from a given workspace location.
-reference :: Allocation -> Integer -> Allocation
-reference (Global x) _ = Global x
-reference (Local x) y = Local (x - y)
-reference Unknown _ = Unknown
-
 instance Show Allocation where
   show (Global address) = "[Global " ++ show (Address address) ++ "]"
-  show (Local wloc) = "[Local " ++ show wloc ++ "]"
+  show (Local sl off) = "[Local " ++ show off ++ ", SL = " ++ show sl ++ "]"
   show Unknown = "[Unknown]"
 
 -- Size information for an array.

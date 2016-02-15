@@ -9,6 +9,16 @@ data Code = Raw Operation    -- An operation.
           | Code [Code]      -- A sequence of operations.
   deriving (Eq, Show)
 
+-- mappend flattens the code.
+instance Monoid Code where
+  mempty = Code []
+  mappend x (Code []) = x
+  mappend (Code []) y = y
+  mappend (Code xs) (Code ys) = Code (xs ++ ys)
+  mappend x (Code ys) = Code (x : ys)
+  mappend (Code xs) y = Code (xs ++ [y])
+  mappend x y = Code [x, y]
+
 comment :: String -> Code
 comment x = Raw (COMMENT x)
 

@@ -1,0 +1,10 @@
+-- This program requires the compiler to work out relative addressing for
+-- local variables when temporary space has been used for intermediate
+-- calculations.
+
+VAR x, y :
+SEQ
+  x := 1
+  y := 10
+  SEQ i = [1 FOR y]
+    x := x * i
