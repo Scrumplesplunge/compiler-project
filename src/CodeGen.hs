@@ -259,6 +259,16 @@ gen_proc p =
               return $ Code [desc, Raw [AJW (-size)],
                              Code $ map (initialize t) [1..size], cp,
                              desc, Raw [AJW size]]
+    DefineConstant x v proc -> (p, code)
+      where (p, gp) = gen_proc proc
+            code ctx = do
+              let alloc =
+                    case v of
+                      Integer i -> AnnotatedAST.Constant i
+                      Address a -> Global a
+              let ctx' = ctx { environment = (x, alloc) : environment ctx }
+              cp <- gp ctx'
+              return cp
     Seq a -> gen_seq a
     Skip -> (promise, \ctx -> return $ comment "SKIP")
     Stop -> (promise, \ctx -> return $ Raw [STOPP])

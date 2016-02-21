@@ -14,13 +14,13 @@ class Pretty a where
 -- Allocation information for a variable.
 data Allocation = Global Integer         -- Global address.
                 | Local Integer Integer  -- Static link, local offset.
-                | Unknown
+                | Constant Integer       -- Constant integer value.
   deriving Eq
 
 instance Show Allocation where
   show (Global address) = "[Global " ++ show (Address address) ++ "]"
   show (Local sl off) = "[Local " ++ show off ++ ", SL = " ++ show sl ++ "]"
-  show Unknown = "[Unknown]"
+  show (Constant x) = "[Constant " ++ show x ++ "]"
 
 -- Type associated with a given name.
 data Type = ANY_TYPE  -- Pseudo-type that casts to any other. Used internally.

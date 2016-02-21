@@ -2,6 +2,7 @@
 -- local variables when temporary space has been used for intermediate
 -- calculations.
 
+DEF message = "Test string." :
 VAR x[11], y :
 
 SEQ

@@ -55,7 +55,7 @@ instance Monad SemanticAnalyser where
 empty_state = State {
   environment = [],
   has_error = False,
-  next_static_address = mem_start,
+  next_static_address = 0,
   static = [],
   static_chain = [0]
 }
