@@ -4,7 +4,7 @@ import Data.List
 import Generator
 import Operation
 
-data Code = Raw Operation    -- An operation.
+data Code = Raw [Operation]  -- An operation.
           | Label Label      -- A label.
           | Code [Code]      -- A sequence of operations.
   deriving (Eq, Show)
@@ -20,13 +20,19 @@ instance Monoid Code where
   mappend x y = Code [x, y]
 
 comment :: String -> Code
-comment x = Raw (COMMENT x)
+comment x = Raw [COMMENT x]
 
 assembler_indent = "  "
 
 -- Display the generated code as an assembler string.
-showCode :: Code -> String
-showCode (Raw x)   =
-  (concat . intersperse "\n" . map (assembler_indent ++)) (def x) ++ "\n"
-showCode (Label x) = x ++ ":\n"
-showCode (Code cs) = concat $ map showCode cs
+showCode :: Code -> Generator String
+showCode code =
+  case code of
+    (Raw xs) -> do
+      xs' <- mapM def xs
+      return $ indent (concat xs') ++ "\n"
+      where indent = concat . intersperse "\n" . map (assembler_indent ++)
+    (Label x) -> return $ x ++ ":\n"
+    (Code cs) -> do
+      cs' <- mapM showCode cs
+      return $ concat cs'

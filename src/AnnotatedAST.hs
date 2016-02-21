@@ -12,8 +12,8 @@ class Pretty a where
   prettyPrint :: a -> String
 
 -- Allocation information for a variable.
-data Allocation = Global Integer
-                | Local Integer Integer
+data Allocation = Global Integer         -- Global address.
+                | Local Integer Integer  -- Static link, local offset.
                 | Unknown
   deriving Eq
 
@@ -22,25 +22,20 @@ instance Show Allocation where
   show (Local sl off) = "[Local " ++ show off ++ ", SL = " ++ show sl ++ "]"
   show Unknown = "[Unknown]"
 
--- Size information for an array.
-data Size = CompileTime Integer
-          | Runtime
-  deriving Eq
-
-instance Show Size where
-  show (CompileTime s) = show s
-  show Runtime = ""
-
 -- Type associated with a given name.
 data Type = ANY_TYPE  -- Pseudo-type that casts to any other. Used internally.
           | BYTE
-          | BYTE_ARRAY Size
+          | BYTE_ARRAY Integer
           | CHAN
-          | CHAN_ARRAY Size
+          | CHAN_ARRAY Integer
           | CONST Type Value
           | PROC [Type] Process
           | INT
-          | INT_ARRAY Size
+          | INT_ARRAY Integer
+          | INT_REF
+          | INT_ARRAY_REF
+          | CHAN_ARRAY_REF
+          | BYTE_ARRAY_REF
   deriving Eq
 
 instance Show Type where
@@ -53,13 +48,41 @@ instance Show Type where
       "PROC(" ++ (concat . intersperse ", " . map show $ ts) ++ ")"
   show INT = "INT"
   show (INT_ARRAY n) = "INT[" ++ show n ++ "]"
+  show INT_REF = "INT REF"
+  show INT_ARRAY_REF = "INT[] REF"
+  show CHAN_ARRAY_REF = "CHAN[] REF"
+  show BYTE_ARRAY_REF = "BYTE[] REF"
+
+-- Returns the amount of space (in words) required in the workspace for a
+-- particular data type.
+space_needed :: Type -> Integer
+space_needed ANY_TYPE = 0                      -- Use some temporary space.
+space_needed BYTE = 1                          -- Use a word for storing bytes.
+space_needed (BYTE_ARRAY x) = (x + 3) `div` 4  -- Round up to the next word.
+space_needed CHAN = 1                          -- Channels are one word in size.
+space_needed (CHAN_ARRAY x) = x                -- Array of channels.
+space_needed (CONST _ _) = 0                   -- Compile-time substituted.
+space_needed (PROC _ _) = 0                    -- Stored elsewhere.
+space_needed INT = 1                           -- Integers are one word each.
+space_needed (INT_ARRAY x) = x                 -- Array of integers.
+space_needed INT_REF = 1                       -- address
+space_needed INT_ARRAY_REF = 2                 -- (address, size).
+space_needed CHAN_ARRAY_REF = 2                -- (address, size).
+space_needed BYTE_ARRAY_REF = 2                -- (address, size).
 
 -- Convert raw type to type.
 raw_type :: AST.RawType -> Type
 raw_type AST.CHAN = CHAN
 raw_type AST.VALUE = INT
-raw_type t = error ("This raw type (" ++ show t ++
-                    ") should not appear in the AST.")
+raw_type t =
+  error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
+
+-- Convert raw type to array of type.
+raw_array_type :: AST.RawType -> Integer -> Type
+raw_array_type AST.CHAN size = CHAN_ARRAY size
+raw_array_type AST.VALUE size = INT_ARRAY size
+raw_array_type t _ =
+  error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
 
 type Name = String
 
@@ -85,6 +108,9 @@ data Nestable a b = Nested a
 data Process = Alt Alternative
              | Assign Expression Expression
              | Call Name [Expression]
+             | Define AST.RawType Name Integer Process
+             | DefineConstant Name Value Process
+             | DefineProcedure Name Process
              | Delay Expression
              | If Condition
              | Input Expression Expression
@@ -105,6 +131,11 @@ instance Pretty Process where
     prettyPrint a ++ " := " ++ prettyPrint b
   prettyPrint (Call x es) =
     x ++ "(" ++ (concat . intersperse ", " . map prettyPrint $ es) ++ ")"
+  prettyPrint (Define t x s p) =
+    spec ++ " " ++ x ++ (if s == 1 then "" else "[" ++ show s ++ "]")
+    where spec = case t of
+                   AST.VALUE -> "VAR"
+                   AST.CHAN -> "CHAN"
   prettyPrint (Delay e) =
     "TIME ? AFTER " ++ prettyPrint e
   prettyPrint (If c) = "IF"
@@ -149,7 +180,7 @@ data Expression = Add [Expression]
                 | Slice Expression (AST.ArrayType, Expression, Expression)
                 | Sub Expression Expression
                 | Value Value
-                | Name Allocation Name
+                | Name Name
   deriving (Eq, Show)
 
 pp_binop :: String -> Expression -> Expression -> String
@@ -192,7 +223,7 @@ instance Pretty Expression where
     prettyPrint a ++ " FOR " ++ prettyPrint b ++ "]"
   prettyPrint (Sub a b) = pp_binop "-" a b
   prettyPrint (Value x) = show x
-  prettyPrint (Name l x) = x
+  prettyPrint (Name x) = x
 
 data Alternative = Alternative (Replicable (Nestable Alternative Guard))
   deriving (Eq, Show)

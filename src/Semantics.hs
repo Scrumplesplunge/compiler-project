@@ -52,14 +52,14 @@ check_numeric loc t =
     _ -> print_error loc ("Expected a numeric type, got " ++ show t ++ ".")
 
 -- Check that a name is defined.
-check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser (Allocation, Name)
+check_name :: (Type -> Bool) -> Location -> String -> SemanticAnalyser Name
 check_name check_type loc x = do
   x' <- find_name x
   case x' of
     Nothing -> do
       print_error loc ("Undefined name " ++ show x)
-      return (Global 0, "")
-    Just (t, a, loc') -> do
+      return ""
+    Just (t, loc') -> do
       case t of
         CONST t' _ ->
           if check_type t' then
@@ -75,7 +75,7 @@ check_name check_type loc x = do
             print_error loc
                 ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
             print_note (show x ++ " is defined at " ++ show loc')
-      return (a, x)
+      return x
 
 check_process :: L AST.Process -> SemanticAnalyser Process
 check_process (L p loc) =
@@ -144,7 +144,7 @@ check_call (L n loc) es = do
     Nothing -> do
       print_error loc ("Name " ++ show n ++ " is undefined.")
       return (Call "" [])
-    Just (t, a, loc') ->
+    Just (t, loc') ->
       case t of
         PROC ts _ -> do
           tes' <- mapM check_rvalue es
@@ -184,25 +184,34 @@ check_definition ((L d loc) : ds) p = do
     AST.DefineSingle t name -> do
       -- Define the variable.
       add_name name (raw_type t, loc)
+      ds' <- check_definition ds p
+      return $ Define t name 1 ds'
     AST.DefineVector t name l_expr -> do
       -- Compute the (constant) size of the vector.
       (t', value) <- check_and_compute_constexpr l_expr
       case value of
         Integer size -> do
           -- Define the array.
-          add_name name (INT_ARRAY (CompileTime size), loc)
-        _ -> type_mismatch (AST.location l_expr) INT t'
+          add_name name (raw_array_type t size, loc)
+          ds' <- check_definition ds p
+          return $ Define t name size ds'
+        _ -> do
+          type_mismatch (AST.location l_expr) INT t'
+          check_definition ds p
     AST.DefineConstant name l_expr -> do
       -- Compute the constant value.
       (t, value) <- check_and_compute_constexpr l_expr
       add_name name (CONST t value, loc)
+      ds' <- check_definition ds p
+      return $ DefineConstant name value ds'
     AST.DefineProcedure name formals proc -> do
       t <- new_scope (do
         formals' <- mapM check_formal formals
         proc' <- check_process proc
         return (PROC formals' proc'))
       add_name name (t, loc)
-  check_definition ds p
+      ds' <- check_definition ds p
+      return $ DefineProcedure name ds'
 
 check_formal :: L AST.Formal -> SemanticAnalyser Type
 check_formal (L (AST.Single r n) loc) = do
@@ -212,9 +221,9 @@ check_formal (L (AST.Single r n) loc) = do
 
 check_formal (L (AST.Vector r n) loc) = do
   let t = (case raw_type r of
-             BYTE -> BYTE_ARRAY Runtime
-             CHAN -> CHAN_ARRAY Runtime
-             INT -> INT_ARRAY Runtime)
+             BYTE -> BYTE_ARRAY_REF
+             CHAN -> CHAN_ARRAY_REF
+             INT -> INT_ARRAY_REF)
   add_name n (t, loc)
   return t
 
@@ -400,11 +409,11 @@ check_rvalue (L expr loc) = do
       case x' of
         Nothing -> do
           print_error loc ("Undefined name " ++ show x)
-          return (INT, Name (Global 0) "")
-        Just (t, a, loc') -> do
+          return (INT, Name "")
+        Just (t, loc') -> do
           case t of
             CONST t' v -> return (t, Value v)
-            _ -> return (INT, Name a x)
+            _ -> return (INT, Name x)
 
 -- Check that a constant expression is actually constant, and return the
 -- calculated compile-time value.
@@ -485,9 +494,9 @@ check_and_compute_constexpr (L expr loc) =
                 return (INT, Integer 0)
         _ -> type_mismatch
                  loc (if array_type == AST.INT then
-                        INT_ARRAY Runtime
+                        INT_ARRAY_REF
                       else
-                        BYTE_ARRAY Runtime) t
+                        BYTE_ARRAY_REF) t
     AST.Literal l ->
       case l of
         AST.Bool b -> return (INT, Integer $ if b then true else false)
@@ -497,15 +506,14 @@ check_and_compute_constexpr (L expr loc) =
           -- Store the table in the static blob.
           address <- add_static (ByteArray s)
           -- Return a pointer to the string.
-          return (BYTE_ARRAY . CompileTime . toInteger $ (length s),
-                  Address address)
+          return (BYTE_ARRAY . toInteger $ (length s), Address address)
         AST.Table AST.INT es -> do
           -- Compute the value of the table.
           vs <- mapM check_and_compute_value es
           -- Store the table in the static blob.
           address <- add_static (WordArray vs)
           -- Return a pointer to the table.
-          return (INT_ARRAY . CompileTime . toInteger $ length vs,
+          return (INT_ARRAY . toInteger $ length vs,
                   Address address)
         AST.Table AST.BYTE es -> do
           -- Compute the value of the table.
@@ -513,7 +521,7 @@ check_and_compute_constexpr (L expr loc) =
           -- Store the table in a static blob.
           let r = map (chr . fromInteger . (`mod` 256)) vs
           address <- add_static (ByteArray r)
-          return (BYTE_ARRAY . CompileTime . toInteger $ length vs,
+          return (BYTE_ARRAY . toInteger $ length vs,
                   Address address)
     AST.Mod a b -> do
       x1 <- check_and_compute_value a
@@ -546,10 +554,10 @@ check_and_compute_constexpr (L expr loc) =
       j <- check_and_compute_value b
       if i < 0 then do  -- Check that the start is at least at 0.
         print_error loc ("Negative start index in slice: " ++ show i ++ ".")
-        return (INT_ARRAY Runtime, Address mem_start)
+        return (INT_ARRAY_REF, Address mem_start)
       else if j < 0 then do  -- Check that the slice non-negative.
         print_error loc ("Negative range in slice: " ++ show j ++ ".")
-        return (INT_ARRAY Runtime, Address mem_start)
+        return (INT_ARRAY_REF, Address mem_start)
       else
         -- Check that the table and slicer have the same type.
         case v of
@@ -562,28 +570,28 @@ check_and_compute_constexpr (L expr loc) =
                 
                 if i > len then do
                   print_error loc "Slice begins past end of array."
-                  return (INT_ARRAY (CompileTime 0), Address a)
+                  return (INT_ARRAY 0, Address a)
                 else if j > len then do
                   print_error loc "Slice extends past end of array."
-                  return (INT_ARRAY (CompileTime len), Address a)
+                  return (INT_ARRAY len, Address a)
                 else
-                  return (INT_ARRAY (CompileTime j), Address (a + 4 * i))
+                  return (INT_ARRAY j, Address (a + 4 * i))
               ByteArray bs -> do
                 let bs' = drop (fromInteger i) bs
                 let len = toInteger (length bs')
                 
                 if i > len then do
                   print_error loc "Slice begins past end of array."
-                  return (BYTE_ARRAY (CompileTime 0), Address a)
+                  return (BYTE_ARRAY 0, Address a)
                 else if j > len then do
                   print_error loc "Slice extends past end of array."
-                  return (BYTE_ARRAY (CompileTime len), Address a)
+                  return (BYTE_ARRAY len, Address a)
                 else
-                  return (BYTE_ARRAY (CompileTime j), Address (a + i))
+                  return (BYTE_ARRAY j, Address (a + i))
           _ -> if array_type == AST.INT then
-                 type_mismatch loc (INT_ARRAY Runtime) t
+                 type_mismatch loc (INT_ARRAY_REF) t
                else
-                 type_mismatch loc (BYTE_ARRAY Runtime) t
+                 type_mismatch loc (BYTE_ARRAY_REF) t
     AST.Sub a b -> do
       x1 <- check_and_compute_value a
       x2 <- check_and_compute_value b
@@ -594,7 +602,7 @@ check_and_compute_constexpr (L expr loc) =
         Nothing -> do
           print_error loc ("Undefined name '" ++ n ++ "'.")
           return (INT, Integer 0)
-        Just (t, a, loc') ->
+        Just (t, loc') ->
           case t of
             CONST def_type def_value -> return (def_type, def_value)
             _ -> do
@@ -626,8 +634,8 @@ check_channel (L chan loc) = do
   -- A channel is either named, or a member of an array.
   case chan of
     AST.Variable x -> do
-      (a, x') <- check_name (== CHAN) loc x
-      return (Name a x')
+      x' <- check_name (== CHAN) loc x
+      return (Name x')
     AST.Index r (t, i) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT indexing.
@@ -645,11 +653,11 @@ check_channel_array (L chan_array loc) = do
   -- A channel array is either a named array or a slice.
   case chan_array of
     AST.Variable x -> do
-      (a, x') <- check_name (\t ->
+      x' <- check_name (\t ->
         case t of
           CHAN_ARRAY _ -> True
           _ -> False) loc x
-      return (Name a x')
+      return (Name x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.
@@ -673,8 +681,8 @@ check_lvalue (L expr loc) = do
       case x' of
         Nothing -> do
           print_error loc ("Undefined name " ++ show x)
-          return (INT, Name (Global 0) "")
-        Just (t, a, l) -> do
+          return (INT, Name "")
+        Just (t, l) -> do
           let valid_type = case t of
                              BYTE -> True
                              BYTE_ARRAY _ -> True
@@ -685,9 +693,9 @@ check_lvalue (L expr loc) = do
             print_error loc
                 ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
             print_note (show x ++ " is defined at " ++ show l)
-            return (INT, Name (Global 0) "")
+            return (INT, Name "")
           else do
-            return (t, Name a x)
+            return (t, Name x)
     AST.Index r (t, i) -> do
       -- TODO: Check that access type matches, or at least that cross-type
       -- access support is present.
@@ -707,12 +715,12 @@ check_array (L r loc) = do
   -- An array is either a named array or a slice.
   case r of
     AST.Variable x -> do
-      (a, x') <- check_name (\t ->
+      x' <- check_name (\t ->
         case t of
           BYTE_ARRAY _ -> True
           INT_ARRAY _ -> True
           _ -> False) loc x
-      return (Name a x')
+      return (Name x')
     AST.Slice r (t, a, b) -> do
       r' <- check_channel_array r
       -- Array access ought to resemble INT slicing.

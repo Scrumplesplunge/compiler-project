@@ -8,7 +8,7 @@ import AnnotatedAST
 import Reader
 
 -- Information associated with a defined name.
-type NameInfo = (Type, Allocation, Location)
+type NameInfo = (Type, Location)
 
 -- All names defined thus far.
 type Environment = [(AST.Name, NameInfo)]
@@ -31,8 +31,8 @@ instance Show State where
     where list f x = concat . intersperse "\n" . reverse . map f $ x
           show_env = list show_var (environment s)
           show_data = list show_blob (static s)
-          show_var (n, (t, a, loc)) =
-            show_compact loc ++ ":\t " ++ show a ++ "\t" ++ show n ++ " :: " ++ show t
+          show_var (n, (t, loc)) =
+            show_compact loc ++ ":\t " ++ show n ++ " :: " ++ show t
           show_blob (location, value) =
             show (Address location) ++ ":\t " ++ show value
 
@@ -175,28 +175,6 @@ get_static loc address = do
         return ()
       return (ByteArray (drop (fromInteger index) bs))
 
--- Returns the amount of space (in words) required in the workspace for a
--- particular data type.
-space_needed :: Type -> Integer
-space_needed ANY_TYPE = 0                      -- Use some temporary space.
-space_needed BYTE = 1                          -- Use a word for storing bytes.
-space_needed (BYTE_ARRAY x) =
-  case x of
-    CompileTime s -> (s + 3) `div` 4           -- Round up to the next word.
-    Runtime -> 1                               -- Pointer to some other memory.
-space_needed CHAN = 1                          -- Channels are one word in size.
-space_needed (CHAN_ARRAY x) =
-  case x of
-    CompileTime s -> s
-    Runtime -> 1                               -- Pointer to some other memory.
-space_needed (CONST _ _) = 0                   -- Compile-time substituted.
-space_needed (PROC _ _) = 0                    -- Stored elsewhere.
-space_needed INT = 1                           -- Integers are one word each.
-space_needed (INT_ARRAY x) =
-  case x of
-    CompileTime s -> s
-    Runtime -> 1                               -- Pointer to some other memory.
-
 -- Save the environment, perform an analysis, then restore the environment.
 new_scope :: SemanticAnalyser a -> SemanticAnalyser a
 new_scope analyser = do
@@ -213,13 +191,12 @@ add_name name (t, loc) = do
   result <- find_name name
   case result of
     Nothing -> return ()
-    Just (_, a, loc') ->
+    Just (_, loc') ->
       print_warning loc (
           "Declaration of '" ++ name ++ "' shadows existing declaration at " ++
           show loc' ++ ".")
-  allocation <- alloc (space_needed t)
   env <- get_env
-  set_env ((name, (t, allocation, loc)) : env)
+  set_env ((name, (t, loc)) : env)
 
 -- Look up a name in the environment.
 find_name :: AST.Name -> SemanticAnalyser (Maybe NameInfo)

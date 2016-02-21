@@ -2,9 +2,10 @@
 -- local variables when temporary space has been used for intermediate
 -- calculations.
 
-VAR x, y :
+VAR x[11], y :
+
 SEQ
-  x := 1
+  x[0] := 1
   y := 10
   SEQ i = [1 FOR y]
-    x := x * i
+    x[i] := x[i - 1] * i

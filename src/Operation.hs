@@ -4,6 +4,15 @@ import Data.List
 import Generator
 import Prelude hiding (EQ, GT)
 
+data Argument = Constant Integer
+              | Relative Label
+              | Offset Label Label
+
+instance Show Argument where
+  show (Constant x) = show x
+  show (Relative lab) = lab
+  show (Offset a b) = a ++ " - " ++ b
+
 data Operation =
       NOP
     | COMMENT String
@@ -28,6 +37,7 @@ data Operation =
     | LDNL Integer   -- A = pop(); push(Mem[A + 4 * x]);
     | LDNLP Integer  -- A = pop(); push(A + 4 * x);
     | LEND Label     -- Loop end.
+    | MINT           -- Minimum integer.
     | MUL            -- B = pop(); A = pop(); push(A * B);
     | NOT            -- A = pop(); push(¬A);
     | OR             -- B = pop(); A = pop(); push(A | B);
@@ -49,45 +59,48 @@ data Operation =
   deriving (Eq, Show)
 
 -- Sequence of assembler instructions defining the given operation.
-def :: Operation -> [String]
-def NOP               = ["# NOP"]
-def (COMMENT x) = ["# " ++ x]
-def (ADC x)    = ["adc " ++ show x]
-def ADD        = ["add"]
-def (AJW x)    = ["ajw " ++ show x]
-def AND        = ["and"]
-def (CALL x)   = ["call " ++ x]
-def (CJ x)     = ["cj " ++ x]
-def DIFF       = ["diff"]
-def DIV        = ["div"]
-def ENDP       = ["endp"]
-def EQ         = ["diff", "eqc 0"]
-def (EQC x)    = ["eqc " ++ show x]
-def GT         = ["gt"]
-def (IN x)     = ["ldc " ++ show x, "in"]
-def (J x)      = ["j " ++ x]
-def LB         = ["lb"]
-def (LDC x)    = ["ldc " ++ show x]
-def (LDL x)    = ["ldl " ++ show x]
-def (LDLP x)   = ["ldlp " ++ show x]
-def (LDNL x)   = ["ldnl " ++ show x]
-def (LDNLP x)  = ["ldnlp " ++ show x]
-def (LEND x)   = ["ldc " ++ x, "lend"]
-def MUL        = ["mul"]
-def NOT        = ["eqc 0"]
-def OR         = ["or"]
-def (OUT x)    = ["ldc " ++ show x, "out"]
-def REM        = ["rem"]
-def RET        = ["ret"]
-def REV        = ["rev"]
-def RUNP       = ["runp"]
-def SB         = ["sb"]
-def SHL        = ["shl"]
-def SHR        = ["shr"]
-def STARTP     = ["startp"]
-def (STL x)    = ["stl " ++ show x]
-def (STNL x)   = ["stnl " ++ show x]
-def STOPP      = ["stopp"]
-def SUB        = ["sub"]
-def WSUB       = ["wsub"]
-def XOR        = ["xor"]
+def :: Operation -> Generator [String]
+def NOP         = return ["# NOP"]
+def (COMMENT x) = return ["# " ++ x]
+def (ADC x)     = return ["adc " ++ show x]
+def ADD         = return ["add"]
+def (AJW x)     = return ["ajw " ++ show x]
+def AND         = return ["and"]
+def (CALL x)    = return ["call " ++ x]
+def (CJ x)      = return ["cj " ++ x]
+def DIFF        = return ["diff"]
+def DIV         = return ["div"]
+def ENDP        = return ["endp"]
+def EQ          = return ["diff", "eqc 0"]
+def (EQC x)     = return ["eqc " ++ show x]
+def GT          = return ["gt"]
+def (IN x)      = return ["ldc " ++ show x, "in"]
+def (J x)       = return ["j " ++ x]
+def LB          = return ["lb"]
+def (LDC x)     = return ["ldc " ++ show x]
+def (LDL x)     = return ["ldl " ++ show x]
+def (LDLP x)    = return ["ldlp " ++ show x]
+def (LDNL x)    = return ["ldnl " ++ show x]
+def (LDNLP x)   = return ["ldnlp " ++ show x]
+def (LEND x)    = do
+  lend <- label "LEND"
+  return ["ldc " ++ x ++ " - " ++ lend, "lend", lend ++ ":"]
+def MINT        = return ["mint"]
+def MUL         = return ["mul"]
+def NOT         = return ["eqc 0"]
+def OR          = return ["or"]
+def (OUT x)     = return ["ldc " ++ show x, "out"]
+def REM         = return ["rem"]
+def RET         = return ["ret"]
+def REV         = return ["rev"]
+def RUNP        = return ["runp"]
+def SB          = return ["sb"]
+def SHL         = return ["shl"]
+def SHR         = return ["shr"]
+def STARTP      = return ["startp"]
+def (STL x)     = return ["stl " ++ show x]
+def (STNL x)    = return ["stnl " ++ show x]
+def STOPP       = return ["stopp"]
+def SUB         = return ["sub"]
+def WSUB        = return ["wsub"]
+def XOR         = return ["xor"]

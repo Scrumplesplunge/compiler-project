@@ -17,9 +17,7 @@ main = do
   let x = full_parse process tokens
   (proc, state) <- run_analyser (check_process x)
 
-  let space_allocated = -head (static_chain state)
-  putStrLn ("  # Local space allocated: " ++ show space_allocated)
-  assemble (space_allocated + 1) proc
+  assemble context proc
   -- let x = full_parse process tokens
   -- (res, state) <- run_analyser (check_process x)
   -- putStrLn . ("\nFinal Tree:\n\n" ++) . show $ res
