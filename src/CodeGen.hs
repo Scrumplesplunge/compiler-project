@@ -35,6 +35,10 @@ context = Context {
   environment = []
 }
 
+new_static_level :: Context -> Context
+new_static_level ctx = ctx { static_level = static_level ctx + 1,
+                             stack_depth = 1 }
+
 -- Allocate a variable in the context.
 allocate :: Context -> Name -> Integer -> Context
 allocate ctx x size = ctx { stack_depth = pos,
@@ -116,16 +120,16 @@ binop :: Expression -> Expression -> [Operation] -> CodeGenerator
 -- calculate the expression.
 binop a b cs = combine (Raw cs) conserve_order (gen_expr a) (gen_expr b)
 
--- Associative operation.
-assop :: [Expression] -> [Operation] -> CodeGenerator
-assop es c = foldl1 (combine (Raw c) ignore_order) gs
+-- Symmetric (commutative) operation.
+symop :: [Expression] -> [Operation] -> CodeGenerator
+symop es c = foldl1 (combine (Raw c) ignore_order) gs
   where gs = sortBy (comparing (depth_required . fst)) $ map gen_expr es
 
 -- Generate code for an expression.
 gen_expr :: Expression -> CodeGenerator
 gen_expr e =
   case e of
-    Add es -> assop es [desc, ADD]
+    Add es -> symop es [desc, ADD]
     After a b -> binop b a [desc, DIFF, GT]
     And es -> (p, code)
       where gs = map gen_expr es
@@ -137,9 +141,9 @@ gen_expr e =
               return $ Code (intersperse (Raw [CJ end]) cs ++
                              [Label end, Raw [desc]])
     Any -> (promise { depth_required = 1 }, \ctx -> return $ Raw [desc, LDC 0])
-    (BitwiseAnd es) -> assop es [desc, AND]
-    (BitwiseOr es) -> assop es [desc, OR]
-    (BitwiseXor es) -> assop es [desc, XOR]
+    (BitwiseAnd es) -> symop es [desc, AND]
+    (BitwiseOr es) -> symop es [desc, OR]
+    (BitwiseXor es) -> symop es [desc, XOR]
     (CompareEQ a b) -> binop a b [desc, EQ]
     (CompareLE a b) -> binop a b [desc, GT, NOT]
     (CompareLT a b) -> binop b a [desc, GT]
@@ -153,7 +157,7 @@ gen_expr e =
               ce <- ge ctx
               return $ Code [ce, Raw [LDNL 0]]
     (Mod a b) -> binop a b [desc, REM]
-    (Mul es) -> assop es [desc, MUL]
+    (Mul es) -> symop es [desc, MUL]
     (Neg e) -> unop e [desc, NOT, ADC 1]
     (Not e) -> unop e [desc, NOT]
     (Or es) -> (p, code)
@@ -186,7 +190,7 @@ gen_expr e =
                 Raw [LDL (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([LDL (stack_depth ctx)] ++
+                Raw ([COMMENT (show (environment ctx)), LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNL (-off)])
   where desc = COMMENT (prettyPrint e)
@@ -214,10 +218,110 @@ gen_addr e =
                 Raw [LDLP (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([LDL (stack_depth ctx)] ++
+                Raw ([COMMENT (show (environment ctx)), LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNLP (-off)])
     _ -> error "Generating address for non-assignable type."
+
+-- Generate code for a parallel block.
+gen_par :: Replicable Process -> CodeGenerator
+gen_par rp =
+  case rp of
+    Basic ps -> (promise { depth_required = d }, code)
+      where pgs = sortBy (comparing (depth_required . fst)) $ map gen_proc ps
+            -- Each sub-process should be given (at least) an extra 5 words of
+            -- space which can be used for storing information about the process
+            -- when it is descheduled. This list is a list of workspace offsets
+            -- for each process.
+            ws = scanl (+) 0 $ map ((+5) . depth_required . fst) pgs
+            -- Re-zip the generators with the weights rather than the promises.
+            wgs = zip (init ws) (map snd pgs)
+            -- The last weight is the sum of all the space required, which is
+            -- exactly how much space the parallel block will require, minus the
+            -- endp block.
+            d = 2 + last ws
+            code ctx = do
+              let ctx' = ctx { stack_depth = stack_depth ctx + 2 }
+              lcs <- mapM (gen_subproc ctx') wgs
+              let (ls, subproc_code) = unzip lcs
+              -- The setup phase spawns new processes to handle all except the
+              -- first subprocess. The first subprocess is then executed by the
+              -- existing process.
+              setup_code <- mapM gen_setup (tail $ zip (init ws) ls)
+              end <- label "END_PAR"
+              return $ Code [desc,
+                             -- Set up the synchronisation monitor.
+                             Raw [AJW (-2), LDC (toInteger $ length ps), STL 2,
+                                  LDA end, STL 1],
+                             Code setup_code, Code subproc_code, Label end,
+                             -- Note that the AJW increases the Wptr by 1
+                             -- instead of 2. This is intentional: the new
+                             -- process spawned by the ENDP starts with a Wptr
+                             -- which is 1 larger, so there is 1 fewer spaces to
+                             -- deallocate.
+                             Raw [AJW 1]]
+    Replicated (Range i a b) p -> (promise { depth_required = d }, code)
+      where (pa, ga) = gen_expr a
+            (pp, gp) = gen_proc p
+            -- 2 for the static link and the iteration variable, 5 for
+            -- descheduling, and whatever else is required.
+            s = 7 + depth_required pp
+            n = case b of
+                  Value (Integer x) -> x
+                    -- Replicated PAR requires a compile-time constant size. If
+                    -- this was not ensured by the semantic analysis, something
+                    -- has gone wrong.
+                  _ -> error "This should never happen."
+            d = max (depth_required pa) (4 + n * s)
+            code ctx = do
+              let ctx1 = allocate ctx i 4
+              ca <- ga ctx1
+              let ctx2 = allocate (new_static_level ctx1) i 1
+              cp <- gp ctx2
+              loop <- label "REP_PAR"
+              proc <- label "PROC"
+              end <- label "END_PAR"
+              return $ Code [desc,
+                             -- Set up the synchronisation monitor.
+                             Raw [AJW (-4), LDC (1 + n), STL 4, LDA end, STL 3],
+                             -- Set up the replicator.
+                             ca, Raw [STL 1, LDC n, STL 2],
+                             -- Begin spawning processes.
+                             Label loop,
+                             Raw [
+                               -- Calculate the new workspace address.
+                               LDL 2, ADC (-1), LDC (-s), MUL, LDLP (-7), WSUB,
+                               -- Use one copy to initialize the static link.
+                               DUP, LDLP (stack_depth ctx1), REV, STNL 2,
+                               -- Use another copy to initialize i.
+                               DUP, LDL 1, REV, STNL 1,
+                               -- Spawn the thread.
+                               STARTP proc,
+                               -- Continue the loop.
+                               LDLP 1, LEND loop],
+                             -- End the control process.
+                             Raw [LDLP 3, ENDP],
+                             -- Code for the repeated process.
+                             Label proc, cp,
+                             Raw [LDL 2, LDNLP (3 - stack_depth ctx1), ENDP],
+                             Label end,
+                             -- Deallocate the one remaining allocated unit. See
+                             -- the description for the basic version for more
+                             -- information.
+                             Raw [AJW 1]]
+                             
+                             
+              
+  where desc = comment $ prettyPrint (Par rp)
+        -- Generate the parallel setup.
+        gen_setup (w, l) = return $ Raw [LDLP (-w), STARTP l]
+        -- Generate the code for each sub-process.
+        gen_subproc ctx (woff, gp) = do
+          proc <- label "PROC"
+          let ctx' = ctx { stack_depth = stack_depth ctx + woff }
+          cp <- gp ctx'
+          let code = Code [Label proc, cp, Raw [LDLP (woff + 1), ENDP]]
+          return (proc, code)
 
 -- Generate code for a sequence.
 gen_seq :: Replicable Process -> CodeGenerator
@@ -269,6 +373,7 @@ gen_proc p =
               let ctx' = ctx { environment = (x, alloc) : environment ctx }
               cp <- gp ctx'
               return cp
+    Par p -> gen_par p
     Seq a -> gen_seq a
     Skip -> (promise, \ctx -> return $ comment "SKIP")
     Stop -> (promise, \ctx -> return $ Raw [STOPP])

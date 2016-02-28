@@ -1,0 +1,5 @@
+DEF n = 10 :
+VAR x[n] :
+
+PAR i = [1 FOR n]
+  x[i] := i * i

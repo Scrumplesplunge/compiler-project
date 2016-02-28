@@ -12,22 +12,26 @@ import Reader hiding (location)
 import Result
 
 -- Helpers for the replicable and nestable types.
-check_replicator :: AST.Replicator -> SemanticAnalyser Replicator
-check_replicator (AST.Range (L n loc') a b) = do
+check_replicator :: Bool -> AST.Replicator -> SemanticAnalyser Replicator
+check_replicator compile_time (AST.Range (L n loc') a b) = do
   add_name n (INT, loc')
   -- TODO: Check types.
   (t1, a') <- check_rvalue a
-  (t2, b') <- check_rvalue b
-  return (Range n a' b')
+  if compile_time then do
+    (t2, v) <- check_and_compute_constexpr b
+    return (Range n a' (Value v))
+  else do
+    (t2, b') <- check_rvalue b
+    return (Range n a' b')
 
-check_replicable :: (a -> SemanticAnalyser a2) -> AST.Replicable a
+check_replicable :: Bool -> (a -> SemanticAnalyser a2) -> AST.Replicable a
                  -> SemanticAnalyser (Replicable a2)
-check_replicable check_a (AST.Basic as) = do
+check_replicable compile_time check_a (AST.Basic as) = do
   as' <- mapM check_a as
   return (Basic as')
-check_replicable check_a (AST.Replicated r a) =
+check_replicable compile_time check_a (AST.Replicated r a) =
   new_scope (do
-    r' <- check_replicator r
+    r' <- check_replicator compile_time r
     a' <- check_a a
     return (Replicated r' a'))
 
@@ -99,7 +103,7 @@ check_process (L p loc) =
 
 check_alt :: L AST.Alternative -> SemanticAnalyser Alternative
 check_alt (L (AST.Alternative a) loc) = do
-  a' <- check_replicable (check_nestable check_alt check_guard) a
+  a' <- check_replicable False (check_nestable check_alt check_guard) a
   return (Alternative a')
 
 check_guard :: L AST.Guard -> SemanticAnalyser Guard
@@ -241,7 +245,7 @@ check_condition expr = do
 
 check_if :: L AST.Condition -> SemanticAnalyser Condition
 check_if (L (AST.Condition cond) loc) = do
-  cond' <- check_replicable (check_nestable check_if check_condition) cond
+  cond' <- check_replicable False (check_nestable check_if check_condition) cond
   return (Condition cond')
 
 check_input :: L AST.Expression -> L AST.Expression -> SemanticAnalyser Process
@@ -261,7 +265,7 @@ check_output l r = do
 
 check_par :: AST.Replicable (L AST.Process)
           -> SemanticAnalyser (Replicable Process)
-check_par par = check_replicable check_process par
+check_par par = check_replicable True check_process par
 
 check_pripar :: AST.Replicable (L AST.Process)
              -> SemanticAnalyser (Replicable Process)
@@ -271,7 +275,7 @@ check_pripar par =
 
 check_seq :: AST.Replicable (L AST.Process)
           -> SemanticAnalyser (Replicable Process)
-check_seq seq = check_replicable check_process seq
+check_seq seq = check_replicable False check_process seq
 
 check_timer :: L AST.Expression -> SemanticAnalyser Expression
 check_timer expr = do
