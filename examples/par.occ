@@ -1,5 +1,25 @@
 DEF n = 10 :
 VAR x[n] :
+CHAN send[10] :
 
+-- These procedures are built into the compiler, but still require declaring.
+PROC putc(VALUE c) =
+  SKIP  -- Built-in.
+:
+
+PROC print.dec(VALUE i) =
+  SKIP  -- Built-in.
+:
+
+-- Create n instances of the inner-parallel.
 PAR i = [1 FOR n]
-  x[i] := i * i
+  -- Create two processes: one for calculation, one for presentation.
+  PAR
+    -- In one process, calculate the square and send them via a channel.
+    send[i] ! i * i
+    -- In another process, receive from the channel and output to the screen.
+    SEQ
+      send[i] ? x[i]
+      print.dec(x[i])
+      putc('*N')
+

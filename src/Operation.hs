@@ -35,6 +35,7 @@ data Operation =
     | NOT            -- A = pop(); push(¬A);
     | OR             -- B = pop(); A = pop(); push(A | B);
     | OUT Integer    -- B = pop(); A = pop(); Output x bytes from location B to channel A.
+    | OUTWORD        -- Output word B to channel A.
     | REM            -- B = pop(); A = pop(); push(A % B);
     | RET            -- Return from subroutine.
     | REV            -- B = pop(); A = pop(); push(B); push(A);
@@ -49,6 +50,9 @@ data Operation =
     | SUB            -- B = pop(); A = pop(); push(A - B);
     | WSUB           -- B = pop(); A = pop(); push(4 * B + A);
     | XOR            -- B = pop(); A = pop(); push(A ^ B);
+    -- Meta operations.
+    | PUTC           -- Put a character on the screen.
+    | PRINTDEC       -- Print a decimal integer.
   deriving (Eq, Show)
 
 -- Load a label relative to the end of an instruction sequence.
@@ -90,6 +94,7 @@ def MUL          = return ["mul"]
 def NOT          = return ["eqc 0"]
 def OR           = return ["or"]
 def (OUT x)      = return ["ldc " ++ show x, "out"]
+def OUTWORD      = return ["outword"]
 def REM          = return ["rem"]
 def RET          = return ["ret"]
 def REV          = return ["rev"]
@@ -104,3 +109,6 @@ def STOPP        = return ["stopp"]
 def SUB          = return ["sub"]
 def WSUB         = return ["wsub"]
 def XOR          = return ["xor"]
+
+def PUTC         = return ["putc"]
+def PRINTDEC     = return ["printdec"]

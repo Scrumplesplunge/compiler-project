@@ -355,6 +355,8 @@ gen_proc p =
   case p of
     Assign a b -> combine (Code [desc, Raw [STNL 0]]) conserve_order
                           (gen_expr b) (gen_addr a)
+    Call "putc" [e] -> (unop e [PUTC])
+    Call "print.dec" [e] -> (unop e [PRINTDEC])
     Define t x size proc -> (p, code)
       where (p, gp) = gen_proc proc
             code ctx = do
@@ -373,6 +375,11 @@ gen_proc p =
               let ctx' = ctx { environment = (x, alloc) : environment ctx }
               cp <- gp ctx'
               return cp
+    DefineProcedure x p -> gen_proc p  -- TODO: Implement procedures.
+    Input a b -> combine (Code [desc, Raw [IN 4]]) conserve_order
+                         (gen_addr b) (gen_addr a)
+    Output a b -> combine (Code [desc, Raw [OUTWORD]]) conserve_order
+                          (gen_addr a) (gen_expr b)
     Par p -> gen_par p
     Seq a -> gen_seq a
     Skip -> (promise, \ctx -> return $ comment "SKIP")
@@ -393,7 +400,7 @@ gen_proc p =
               -- would be detrimental to the task scheduling of the transputer.
               return $ Code [desc, Label while_start, ce, Raw [CJ while_end],
                              cp, Raw [J while_start], Label while_end]
-    _ -> error "Unimplemented process."
+    _ -> error ("Unimplemented process: " ++ prettyPrint p)
   where desc = comment (prettyPrint p)
 
 -- Run a code generator and output the generated code.
