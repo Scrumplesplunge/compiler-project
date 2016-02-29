@@ -10,12 +10,19 @@ data Operation =
     | ADC Integer    -- A += x;
     | ADD            -- B = pop(); A = pop(); push(A + B);
     | AJW Integer    -- Wptr += x;
+    | ALT            -- Begin alternative.
+    | ALTEND         -- End alternative.
+    | ALTWT          -- Begin waiting.
     | AND            -- B = pop(); A = pop(); push(A & B);
     | CALL Label     -- Call subroutine x.
     | CJ Label       -- A = pop(); if (A) jump x;
     | DIFF           -- A -= B;
+    | DISC Label     -- Disable channel.
+    | DISS Label     -- Disable skip.
     | DIV            -- B = pop(); A = pop(); push(A / B);
     | DUP            -- push(A);
+    | ENBC           -- Enable channel.
+    | ENBS           -- Enable skip.
     | ENDP           -- A = pop(); End process with refcount workspace A.
     | EQ             -- B = pop(); A = pop(); push(A == B);
     | EQC Integer    -- A = pop(); push(A == x);
@@ -69,10 +76,17 @@ def (COMMENT x)  = return ["# " ++ x]
 def (ADC x)      = return ["adc " ++ show x]
 def ADD          = return ["add"]
 def (AJW x)      = return ["ajw " ++ show x]
+def ALT          = return ["alt"]
+def ALTEND       = return ["altend"]
+def ALTWT        = return ["altwt"]
 def AND          = return ["and"]
 def (CALL x)     = return ["call " ++ x]
 def (CJ x)       = return ["cj " ++ x]
 def DIFF         = return ["diff"]
+def (DISC x)     = relative x ["disc"]
+def (DISS x)     = relative x ["diss"]
+def ENBC         = return ["enbc"]
+def ENBS         = return ["enbs"]
 def DIV          = return ["div"]
 def DUP          = return ["dup"]
 def ENDP         = return ["endp"]
