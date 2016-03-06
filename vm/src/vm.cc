@@ -23,11 +23,11 @@ int main() {
 
   // Run it!
   VM vm(1 << 20);
-  //cout << vm.toString();
+  //cerr << vm.toString();
   while (vm.Iptr < operations.size()) {
-    //cout << "   " << operations[vm.Iptr].toString() << "\n";
+    //cerr << "   " << operations[vm.Iptr].toString() << "\n";
     vm.perform(operations[vm.Iptr]);
-    //cout << vm.toString();
+    //cerr << vm.toString();
   }
 
   return 0;

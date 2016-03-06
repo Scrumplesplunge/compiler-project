@@ -336,9 +336,11 @@ void VM::performIndirect(Indirect op) {
     case XWORD:         INDIRECT(XWORD);          break;
 
     // META operations.
+    case PUTC:          INDIRECT(PUTC);           break;
+    case PUTS:          INDIRECT(PUTS);           break;
     case PRINTDEC:      INDIRECT(PRINTDEC);       break;
     case PRINTHEX:      INDIRECT(PRINTHEX);       break;
-    case PUTC:          INDIRECT(PUTC);           break;
+    case PRINTR:        INDIRECT(PRINTR);         break;
 
     default:
       throw logic_error("Unrecognised indirect instruction: " + ::toString(op) +

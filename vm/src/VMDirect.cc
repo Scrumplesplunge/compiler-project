@@ -104,6 +104,7 @@ DEFINE_DIRECT(STL) {
 
 // Store non-local.
 DEFINE_DIRECT(STNL) {
-  write(A + 4 * Oreg, pop());
+  write(A + 4 * Oreg, B);
+  A = C;
   Oreg = 0;
 }

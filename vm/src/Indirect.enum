@@ -9,7 +9,7 @@ ADD             (  5)  # ---- | A += B, check overflow.
 GCALL           (  6)  # ---- | A, IPtr = IPtr, A
 IN              (  7)  # ---- | B ? C[0..A)
 PROD            (  8)  # ---- | A *= B
-GT              (  9)  # ---- | A = (unsigned A > unsigned B) ? 1 : 0
+GT              (  9)  # ---- | A = (A > B) ? 1 : 0
 WSUB            ( 10)  # ---- | A += 4 * B
 OUT             ( 11)  # ---- | B ! C[0..A).
 SUB             ( 12)  # ---- | A -= B, check overflow.
@@ -70,12 +70,12 @@ MINT            ( 66)  # ---- | A = 0x80000000
 ALT             ( 67)  # ---- | Start an alternation.
 ALTWT           ( 68)  # ---- | Wait for activity on enabled channels.
 ALTEND          ( 69)  # ---- | Jump to address set by DISC, DIST, or DISS.
-AND             ( 70)  # ---- | A = (A && B) ? 1 : 0
+AND             ( 70)  # ---- | A = A & B
 ENBT            ( 71)  # ---- | Enable timer for use in an alt.
 ENBC            ( 72)  # ---- | Enable channel for use in an alt.
 ENBS            ( 73)  # ---- | Enable skip guard for use in an alt.
 MOVE            ( 74)  # ---- | while (A--) *(B++) = *(C++)
-OR              ( 75)  # ---- | A = (A || B) ? 1 : 0
+OR              ( 75)  # ---- | A = A | B
 CSNGL           ( 76)  # ---- | if (AB doesn't fit in A) ERR = 1
 CCNT1           ( 77)  # ---- | if (!(1 <= B && B <= A)) ERR = 1
 TALT            ( 78)  # ---- | Start a timed alternation.
@@ -175,5 +175,7 @@ FPENTRY         (171)  # +FPU | floating point unit entry
 FPLDNLMULSN     (172)  # +FPU | floating point load non-local and multiply single
 
 PUTC            (901)  # META | Print a byte to the console.
-PRINTDEC        (902)  # META | Print a word to the console (decimal).
-PRINTHEX        (903)  # META | Print a word to the console (hexadecimal).
+PUTS            (902)  # META | Print A bytes pointed to by B to the console.
+PRINTDEC        (903)  # META | Print a word to the console (decimal).
+PRINTHEX        (904)  # META | Print a word to the console (hexadecimal).
+PRINTR          (905)  # META | Print A words from the array pointed to by B.

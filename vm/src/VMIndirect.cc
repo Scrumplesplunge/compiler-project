@@ -30,7 +30,8 @@ DEFINE_INDIRECT(ALTWT) {
 
 // Bitwise and.
 DEFINE_INDIRECT(AND) {
-  push(pop() & pop());
+  A = A & B;
+  B = C;
 }
 
 // Byte count.
@@ -342,7 +343,7 @@ DEFINE_INDIRECT(LEND) {
   if (read(B + 4) > 1) {
     write(B, read(B) + 1);  // Increment control variable.
     write(B + 4, read(B + 4) - 1);  // Decrement iteration count.
-    Iptr -= A;
+    Iptr += A;
   }
   yield();
 }
@@ -708,6 +709,14 @@ DEFINE_INDIRECT(PUTC) {
   putc(c, stdout);
 }
 
+// Print x bytes pointed to by A to the console.
+DEFINE_INDIRECT(PUTS) {
+  for (int i = 0; i < A; i++) {
+    char c = static_cast<char>(readByte(B + i));
+    putc(c, stdout);
+  }
+}
+
 // Print a word to the console (decimal).
 DEFINE_INDIRECT(PRINTDEC) {
   printf("%d", pop());
@@ -716,4 +725,11 @@ DEFINE_INDIRECT(PRINTDEC) {
 // Print a word to the console (hexadecimal).
 DEFINE_INDIRECT(PRINTHEX) {
   printf("%x", static_cast<uint32_t>(pop()));
+}
+
+// Print A words from the array pointed to by B.
+DEFINE_INDIRECT(PRINTR) {
+  for (int i = 0; i < A; i++) {
+    printf("[0x%08x] = %d\n", B + 4 * i, read(B + 4 * i));
+  }
 }

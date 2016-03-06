@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++11 -I gen -pg -Os -s -flto -Wl,--gc-sections -fdata-sections -ffunction-sections
+CXXFLAGS = -std=c++11 -I gen -Ofast -s -flto -Wl,--gc-sections
 TOOLS = ../tools
 ENUM = ${TOOLS}/bin/enum
 
