@@ -1,0 +1,124 @@
+This project has a heavy focus on the programming language Occam, and the
+Transputer microprocessor that the language was designed for. This section
+explores the details relevant to the design of an Occam compiler, and of a
+Transputer emulator.
+
+\section{Occam}
+
+Occam is a procedural concurrent programming language that was introduced in the
+1980s. The language has a very recognisable syntax in which indentation is used
+to denote blocks of related code, and communication between concurrent threads
+is performed via message passing through CSP-like channels.
+
+\subsection{Basic Syntax}
+
+By today's standards, Occam has an unusual syntax:
+
+\begin{lstlisting}[language=occam]
+PROC foo(VALUE a, b, CHAN c, d) =
+  PAR i = [0 FOR n]  -- Replicated parallel.
+    SEQ              -- Explicit sequence.
+      VAR x :        -- Declare variable x.
+      bar(x, i)      -- Call procedure bar.
+      IF             -- If statement.
+        x < b        -- if (x < b) {
+          c ! a      --   Output a to channel c.
+        x >= b       -- } else if (x >= b) {
+          d ! ANY    --   Output something (it doesn't matter what) to d.
+:                    -- }
+
+PROC bar(VAR x, VALUE i) =          -- Occam has no operator precedence:
+  x := ((i * i) \ (i + i + i)) - i  -- It is necessary to bracket all except
+:                                   -- sequences of some associative operator.
+
+CHAN c, d :
+VAR x, e, f :
+PAR
+  foo(-1, 1, c, d)   -- Run the process foo.
+  SEQ i = [0 FOR n]  -- Loop n times:
+    ALT              -- Alternative: perform one of the following:
+      c ? x          -- Read a value x from c.
+        e := e + x
+      d ? ANY        -- Read something (it doesn't matter what) from d.
+        f := f + 1
+\end{lstlisting}
+
+The above (meaningless) program demonstrates some of the details of the
+language. Note that unlike many other languages, Occam requires sequences of
+statements to be explicitly denoted by the keyword \texttt{SEQ}. In fact, the
+textual syntax is remarkably similar to the abstract syntax that one might
+expect to find in the compiler.
+
+\section{The Transputer}
+
+The Transputer was an advanced processor which presented several remarkable
+features aimed at facilitating concurrent programming. The processor supported
+synchronous communication over each of its four external serial connections, as
+well as time-sliced concurrent processes, all through microcoded instructions
+that made it possible to do these things with only a handful of assembly.
+
+More like a microprocessor than merely a CPU, the Transputer incorporated all
+the circuitry required for it to function, and it was the intention of INMOS to
+market the Transputer as a one-size-fits-all solution for both areas. The aim
+was for each unit to cost no more than a few dollars, and for it to be used for
+everything from basic device controllers to hosting operating systems.
+
+\subsection{Instruction Set}
+
+The Transputer had an unusually high clock speed for its time. This was mostly
+possible due to it being a RISC architecture. The transputer supports 13
+\textit{direct} instructions, each 8 bits, in its instruction set. Each of these
+has room for a 4-bit operand. If room for an operand larger than 4 bits is
+required then one of the additional instructions \texttt{PFIX} (prefix) or
+\texttt{NFIX} (negative prefix) can be used to prepend additional bits. In
+addition to these instructions, there is also the \texttt{OPR} (operate)
+instruction, which interprets its operand as one of the many \textit{indirect}
+instructions available, and executes it.
+
+\subsection{Registers}
+
+The transputer does not have random access registers like many modern RISC
+architectures. Instead, it has a small collection of single-purpose registers
+which are accessed via specific instructions, and three general-purpose
+registers which are arranged in a stack. However, some instructions can clobber
+the contents of this stack, so it is intended to be used only for passing
+arguments to instructions. Instead, the programmer should store the results of
+all computations into the \textit{workspace} of the process. This is similar to
+a conventional falling stack, but with the added detail that the workspace
+uniquely identifies the process that it belongs to.
+
+\subsection{Inter-process Communication}
+
+As mentioned above, inter-process communication on the Transputer is achieved
+via message passing. What makes this impressive is that to the programmer, there
+is no difference (other than a memory address) between communicating between
+processes on the same Transputer, and communicating between two different
+Transputers. The instructions remain the same, and the difference is handled in
+the microcode. If one process tries to send a message to another before the
+second is ready for it, then the first will wait until the second is ready
+before sending, and it will not proceed until the second has received the
+message. In this way, the channels can be used to synchronise separate threads.
+
+\subsection{Concurrency}
+
+The Transputer provides a small selection of instructions which schedule new
+processes to run alongside the current. Only one process is truly running at any
+given time, but the processor time-slices between the scheduled processes so
+that all may proceed. It does so when particular instructions are performed
+which can cause the process to yield control to another. If a process performs a
+blocking action (eg. waiting upon a channel) then it will be descheduled until
+it can proceed. The Transputer has two different priority levels which processes
+can be executed at: low-priority and high-priority. If there is any
+high-priority process which is currently scheduled, then it is guaranteed to
+make progress before any low-priority process.
+
+The processes are arranged in two linked lists; one for each priority level.
+When a process is scheduled, it appears in one of these linked lists. The front
+and back pointers of each list are stored in registers. Each pointer consists of
+the address of the workspace of some process, with the priority of the process
+encoded in the least significant bit of the workspace address\footnote{Workspace
+addresses must be aligned to word boundaries, so the least significant two bits
+can be safely ignored when recovering the workspace address.}. The workspace of
+a descheduled process contains additional information below the workspace
+pointer, such as the \texttt{Iptr} (instruction pointer) of the descheduled
+process.

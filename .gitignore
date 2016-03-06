@@ -3,6 +3,7 @@
 *.o
 *.swp
 .*
-bin
-build
-gen
+bin/
+build/
+gen/
+external/

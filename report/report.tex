@@ -1,0 +1,88 @@
+\documentclass[12pt, twoside]{report}
+
+\usepackage{color}
+\usepackage{fancyhdr}
+\usepackage[a4paper, width=150mm, top=25mm, bottom=25mm]{geometry}
+\usepackage{graphicx}
+\usepackage[hyphens]{url}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage[utf8]{inputenc}
+
+\pagestyle{fancy}
+
+\newcommand{\projecttitle}{Distributed Programs}
+\newcommand{\projectsubtitle}
+    {Compiling a CSP-like language for a distributed system}
+
+% Code listing style.
+\definecolor{comment}{rgb}{0.0, 0.5, 0.0}
+\definecolor{keyword}{rgb}{0.0, 0.0, 0.5}
+\definecolor{string}{rgb}{0.4, 0.4, 0.4}
+\definecolor{numbers}{rgb}{0.7, 0.7, 0.7}
+\lstset{
+  basicstyle=\fontsize{8pt}{1em}\ttfamily,
+  commentstyle=\color{comment},
+  keywordstyle=\bfseries\color{keyword},
+  numbers=left,
+  numberstyle=\color{numbers},
+  stringstyle=\color{string},
+  xleftmargin=0.75cm
+}
+
+\lstdefinelanguage{occam}{
+  keywords={
+    AFTER, ALT,   AND,    ANY,  AT,    BYTE, CHAN,
+    CONST, DEF,   FALSE,  FOR,  IF,    NOT,  OR,
+    PAR,   PLACE, PLACED, PRI,  PROC,  SEQ,  SKIP,
+    STOP,  TABLE, TIME,   TRUE, VALUE, VAR,  WHILE
+  },
+  morecomment=[l]{--},
+  morestring=[b]',
+  morestring=[b]",
+  sensitive=true
+}
+
+\begin{document}
+  \input{chapters/titlepage}
+
+  \newpage
+  \thispagestyle{empty}
+  \mbox{}
+  \newpage
+
+  \setcounter{page}{1}
+  \input{chapters/abstract}
+
+  \tableofcontents
+
+  \chapter{Introduction} \label{introduction}
+    \input{chapters/introduction}
+
+  \chapter{Background} \label{background}
+    \input{chapters/background}
+
+  \chapter{Requirements} \label{requirements}
+    \input{chapters/requirements}
+
+  \chapter{Design} \label{design}
+    \input{chapters/design}
+
+  \chapter{Implementation} \label{implementation}
+    \input{chapters/implementation}
+
+  \chapter{Testing} \label{testing}
+    \input{chapters/testing}
+
+  \chapter{Conclusions} \label{conclusions}
+    \input{chapters/conclusions}
+
+  \appendix
+
+  \chapter{Additional Content} \label{additional}
+    \input{chapters/additional}
+
+  \clearpage
+  \addcontentsline{toc}{chapter}{Bibliography}
+    \input{chapters/bibliography}
+\end{document}
