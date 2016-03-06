@@ -6,6 +6,7 @@ import Data.List
 import Control.Monad
 import AnnotatedAST
 import Reader
+import System.IO
 
 -- Information associated with a defined name.
 type NameInfo = (Type, Location)
@@ -20,7 +21,8 @@ data Static = WordArray [Integer]  -- Constant array of words.
 
 data State = State {
   environment :: Environment,      -- Variables currently in scope.
-  has_error :: Bool,
+  num_errors :: Integer,
+  num_warnings :: Integer,
   next_static_address :: Integer,  -- Next address to be assigned to static data.
   static :: [(Integer, Static)],   -- Static data currently defined.
   static_chain :: [Integer]        -- Positional information in the static chain.
@@ -54,34 +56,36 @@ instance Monad SemanticAnalyser where
 
 empty_state = State {
   environment = [],
-  has_error = False,
+  num_warnings = 0,
+  num_errors = 0,
   next_static_address = 0,
   static = [],
   static_chain = [0]
 }
 
 -- Print messages.
+putStdErr :: String -> SemanticAnalyser ()
+putStdErr x = S (\state -> do
+  hPutStrLn stderr x
+  return ((), state))
+
 print_note :: String -> SemanticAnalyser ()
 print_note message =
-  S (\state -> do
-    putStrLn ("Note: " ++ message)
-    return ((), state))
+  putStdErr ("Note: " ++ message)
 
 print_warning :: Location -> String -> SemanticAnalyser ()
-print_warning loc message =
-  S (\state -> do
-    putStrLn ("Warning at " ++ show loc ++ ": " ++ message)
-    return ((), state))
+print_warning loc message = do
+  putStdErr ("Warning at " ++ show loc ++ ": " ++ message)
+  S (\state -> return ((), state { num_warnings = num_warnings state + 1 }))
 
 print_error :: Location -> String -> SemanticAnalyser ()
-print_error loc message =
-  S (\state -> do
-    putStrLn ("Error at " ++ show loc ++ ": " ++ message)
-    return ((), state { has_error = True }))
+print_error loc message = do
+  putStdErr ("Error at " ++ show loc ++ ": " ++ message)
+  S (\state -> return ((), state { num_errors = num_errors state + 1 }))
 
 print_fatal :: Location -> String -> SemanticAnalyser a
 print_fatal loc message =
-  S (\state -> error ("FATAL Error at " ++ show loc ++ ": " ++ message))
+  error ("FATAL Error at " ++ show loc ++ ": " ++ message)
 
 type_mismatch :: Location -> Type -> Type -> SemanticAnalyser a
 type_mismatch loc expected actual =

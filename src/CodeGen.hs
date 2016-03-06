@@ -8,6 +8,7 @@ import Data.List
 import Data.Ord (comparing)
 import Generator
 import Operation
+import System.IO
 
 type StackDepth = Integer
 
@@ -400,16 +401,16 @@ gen_proc p =
               -- would be detrimental to the task scheduling of the transputer.
               return $ Code [desc, Label while_start, ce, Raw [CJ while_end],
                              cp, Raw [J while_start], Label while_end]
-    _ -> error ("Unimplemented process: " ++ prettyPrint p)
+    _ -> error ("Don't know how to compile: " ++ prettyPrint p)
   where desc = comment (prettyPrint p)
 
 -- Run a code generator and output the generated code.
-assemble :: Context -> Process -> IO ()
-assemble ctx process = do
+assemble :: Context -> Process -> Handle -> IO ()
+assemble ctx process output = do
   let (promise, gp) = gen_proc process
   let text = run_generator (do
         code <- gp ctx
         showCode $ Code [
           comment ("Max additional depth: " ++ show (depth_required promise)),
           code])
-  putStrLn text
+  hPutStr output text

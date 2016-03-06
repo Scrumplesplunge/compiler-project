@@ -125,8 +125,14 @@ data Process = Alt Alternative
              | While Expression Process
   deriving (Eq, Show)
 
+prettyRep :: String -> Replicable a -> String
+prettyRep block_type (Basic as) = block_type ++ " ..."
+prettyRep block_type (Replicated (Range x a b) p) =
+  block_type ++ " " ++ x ++ " = [" ++ prettyPrint a ++ " FOR " ++
+  prettyPrint b ++ "] ..."
+
 instance Pretty Process where
-  prettyPrint (Alt a) = "ALT"
+  prettyPrint (Alt (Alternative ra)) = prettyRep "ALT" ra
   prettyPrint (Assign a b) =
     prettyPrint a ++ " := " ++ prettyPrint b
   prettyPrint (Call x es) =
@@ -136,20 +142,21 @@ instance Pretty Process where
     where spec = case t of
                    AST.VALUE -> "VAR"
                    AST.CHAN -> "CHAN"
+  prettyPrint (DefineConstant x v p) =
+    "DEF " ++ x ++ " = " ++ prettyPrint (Value v)
+  prettyPrint (DefineProcedure name p) =
+    "PROC " ++ name ++ "(...) = ..."
   prettyPrint (Delay e) =
     "TIME ? AFTER " ++ prettyPrint e
-  prettyPrint (If c) = "IF"
+  prettyPrint (If (Condition rc)) = prettyRep "IF" rc
   prettyPrint (Input a b) =
     prettyPrint a ++ " ? " ++ prettyPrint b
   prettyPrint (Output a b) =
     prettyPrint a ++ " ! " ++ prettyPrint b
-  prettyPrint (Par rp) = "PAR"
-  prettyPrint (PriorityAlt a) = "PRI ALT"
-  prettyPrint (PriorityPar rp) = "PRI PAR"
-  prettyPrint (Seq (Basic _)) = "SEQ ..."
-  prettyPrint (Seq (Replicated (Range x a b) p)) =
-    "SEQ " ++ x ++ " = [" ++ prettyPrint a ++ " FOR " ++ prettyPrint b ++
-    "] ..."
+  prettyPrint (Par rp) = prettyRep "PAR" rp
+  prettyPrint (PriorityAlt (Alternative ra)) = prettyRep "PRI ALT" ra
+  prettyPrint (PriorityPar rp) = prettyRep "PRI PAR" rp
+  prettyPrint (Seq rp) = prettyRep "SEQ" rp
   prettyPrint Skip = "SKIP"
   prettyPrint Stop = "STOP"
   prettyPrint (Timer e) = "TIME ? " ++ prettyPrint e

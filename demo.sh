@@ -7,7 +7,7 @@ INIT:
 START:
 PRE
 
-bin/Parser <$1 >> demo.s
+bin/occ $1 -o - >> demo.s
 
 cat >> demo.s <<POST
 END:

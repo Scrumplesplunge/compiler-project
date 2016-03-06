@@ -2,9 +2,9 @@ SOURCES = $(wildcard src/*.hs)
 
 .PHONY: all clean run
 
-all: bin/Parser
+all: bin/occ
 
-bin/Parser: ${SOURCES} | bin build
+bin/occ: ${SOURCES} | bin build
 	ghc -O -hidir build -odir build -o $@ $^
 
 build:
@@ -16,5 +16,5 @@ bin:
 clean:
 	rm -rf bin build
 
-run: bin/Parser
-	bin/Parser <examples/code-mini.txt
+run: bin/occ
+	bin/occ <examples/code-mini.txt
