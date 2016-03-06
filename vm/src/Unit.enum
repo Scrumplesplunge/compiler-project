@@ -1,0 +1,25 @@
+# These are instructions that are executed via the FPENTRY operation.
+
+FPUSQRTFIRST (  1)  # Square-root initialisation.
+FPUSQRTSTEP  (  2)  # Square-root iteration step.
+FPUSQRTLAST  (  3)  # Square-root finalisation.
+FPURP        (  4)  # Set rounding mode to +infinity.
+FPURM        (  5)  # Set rounding mode to -infinity.
+FPURZ        (  6)  # Set rounding mode to zero.
+FPUR32TOR64  (  7)  # Convert REAL32 to REAL64.
+FPUR64TOR32  (  8)  # Convert REAL64 to REAL32.
+FPUEXPDEC32  (  9)  # Divide by 2^32.
+FPUEXPINC32  ( 10)  # Multiply by 2^32.
+FPUABS       ( 11)  # Absolute value.
+# ???        ( 12)  # Unused code.
+FPUNOROUND   ( 13)  # Convert REAL64 to REAL32 without rounding.
+FPUCHKI32    ( 14)  # Check in the range of type INT32.
+FPUCHKI64    ( 15)  # Check in the range of type INT64.
+# ???        ( 16)  # Unused code.
+FPUDIVBY2    ( 17)  # Divide by 2.
+FPUMULBY2    ( 18)  # Multiply by 2.
+# ...        (...)  # Unused range.
+FPURN        ( 34)  # Set rounding mode to nearest.
+FPUSETERR    ( 35)  # Set floating point error flag.
+# ...        (...)  # Unused range.
+FPUCLRERR    (156)  # Clear floating point error flag.

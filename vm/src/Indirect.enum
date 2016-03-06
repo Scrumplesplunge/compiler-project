@@ -1,0 +1,181 @@
+# Indirect instructions.
+
+REV             (  0)  # ---- | A, B = B, A
+LB              (  1)  # ---- | A = *((byte*) A)
+BSUB            (  2)  # ---- | A += B
+ENDP            (  3)  # ---- | End the currently running process.
+DIFF            (  4)  # ---- | A -= B
+ADD             (  5)  # ---- | A += B, check overflow.
+GCALL           (  6)  # ---- | A, IPtr = IPtr, A
+IN              (  7)  # ---- | B ? C[0..A)
+PROD            (  8)  # ---- | A *= B
+GT              (  9)  # ---- | A = (A > B) ? 1 : 0
+WSUB            ( 10)  # ---- | A += 4 * B
+OUT             ( 11)  # ---- | B ! C[0..A).
+SUB             ( 12)  # ---- | A -= B, check overflow.
+STARTP          ( 13)  # ---- | Start process with workspace A at code offset B.
+OUTBYTE         ( 14)  # ---- | B ! low byte A
+OUTWORD         ( 15)  # ---- | B ! A
+SETERR          ( 16)  # ---- | Set the error flag.
+# ???           ( 17)  # -??- | Unused code.
+RESETCH         ( 18)  # ---- | Reset channel A.
+CSUB0           ( 19)  # ---- | if (!(0 <= B && B < A)) ERR = 1;
+# ???           ( 20)  # -??- | Unused code.
+STOPP           ( 21)  # ---- | Stop the currently running process.
+LADD            ( 22)  # ---- | A = A + B + lsb C, check overflow.
+STLB            ( 23)  # ---- | back(LPQ) = A
+STHF            ( 24)  # ---- | front(HPQ) = A
+NORM            ( 25)  # ---- | C = 0; while (msb AB != 1) { AB << 1; C++ }
+LDIV            ( 26)  # ---- | A = BC / A, error if BC / A is too big for one word.
+LDPI            ( 27)  # ---- | A += IPtr
+STLF            ( 28)  # ---- | front(LPQ) = A
+XDBLE           ( 29)  # ---- | Sign-extend A to AB.
+LDPRI           ( 30)  # ---- | Load the priority of the current process into A.
+REM             ( 31)  # ---- | A = B % A
+RET             ( 32)  # ---- | Return from subroutine call.
+LEND            ( 33)  # ---- | B[1]--; if (B[1] > 0) { B[0]++; IPtr -= A; }
+LDTIMER         ( 34)  # ---- | A = timer(priority A)
+# ???           ( 35)  # -??- | Unused code.
+# ???           ( 36)  # -??- | Unused code.
+# ???           ( 37)  # -??- | Unused code.
+# ???           ( 38)  # -??- | Unused code.
+# ???           ( 39)  # -??- | Unused code.
+# ???           ( 40)  # -??- | Unused code.
+TESTERR         ( 41)  # ---- | A = !ERR; ERR = 0
+TESTPRANAL      ( 42)  # ---- | A = (last reset was ANALYSIS) ? 1 : 0
+TIN             ( 43)  # ---- | Wait until time A has elapsed.
+DIV             ( 44)  # ---- | A = B / A, result is undefined if A = 0.
+# ???           ( 45)  # -??- | Unused code.
+DIST            ( 46)  # ---- | Disable timer. Similar to DISC.
+DISC            ( 47)  # ---- | Disable channel and set jump address if selected.
+DISS            ( 48)  # ---- | Disable skip. Similar to DISC.
+LMUL            ( 49)  # ---- | AB = A * B + C
+NOT             ( 50)  # ---- | A = ~A
+XOR             ( 51)  # ---- | A = A ^ B
+BCNT            ( 52)  # ---- | A = A * 4
+LSHR            ( 53)  # ---- | AB = BC >> A  (zero-filled)
+LSHL            ( 54)  # ---- | AB = BC << A  (zero-filled)
+LSUM            ( 55)  # ---- | A = A + B + lsb C
+LSUB            ( 56)  # ---- | A = A - B - lsb C, check overflow.
+RUNP            ( 57)  # ---- | Schedule a pre-existing process.
+XWORD           ( 58)  # ---- | Sign-extend B, taking bit denoted by mask in A as the msb.
+SB              ( 59)  # ---- | *((byte*) A) = low byte B
+GAJW            ( 60)  # ---- | A, WPtr = WPtr, A
+SAVEL           ( 61)  # ---- | A[0] = front(LPQ), A[1] = back(LPQ)  (LP = low priority)
+SAVEH           ( 62)  # ---- | A[0] = front(HPQ), A[1] = back(HPQ)  (HP = high priority)
+WCNT            ( 63)  # ---- | B = A % 4; A /= 4
+SHR             ( 64)  # ---- | A = B >> A  (zero-filled)
+SHL             ( 65)  # ---- | A = B << A  (zero-filled)
+MINT            ( 66)  # ---- | A = 0x80000000
+ALT             ( 67)  # ---- | Start an alternation.
+ALTWT           ( 68)  # ---- | Wait for activity on enabled channels.
+ALTEND          ( 69)  # ---- | Jump to address set by DISC, DIST, or DISS.
+AND             ( 70)  # ---- | A = A & B
+ENBT            ( 71)  # ---- | Enable timer for use in an alt.
+ENBC            ( 72)  # ---- | Enable channel for use in an alt.
+ENBS            ( 73)  # ---- | Enable skip guard for use in an alt.
+MOVE            ( 74)  # ---- | while (A--) *(B++) = *(C++)
+OR              ( 75)  # ---- | A = A | B
+CSNGL           ( 76)  # ---- | if (AB doesn't fit in A) ERR = 1
+CCNT1           ( 77)  # ---- | if (!(1 <= B && B <= A)) ERR = 1
+TALT            ( 78)  # ---- | Start a timed alternation.
+LDIFF           ( 79)  # ---- | A = A - B - lsb C
+STHB            ( 80)  # ---- | back(HPQ) = A
+TALTWT          ( 81)  # ---- | Like altwt, but to be used with timed alternation.
+SUM             ( 82)  # ---- | A += B
+MUL             ( 83)  # ---- | A *= B, check overflow.
+STTIMER         ( 84)  # ---- | Set timer to A and start it.
+STOPERR         ( 85)  # ---- | if (ERR == 1) STOP
+CWORD           ( 86)  # ---- | Check if B < 2A (ie. that msb B < msb A).
+CLRHALTERR      ( 87)  # ---- | Unset the halt-on-error flag.
+SETHALTERR      ( 88)  # ---- | Set the halt-on-error flag.
+TESTHALTERR     ( 89)  # ---- | A = halt-on-error ? 1 : 0
+DUP             ( 90)  # T800 | Push a second copy of A onto the stack.
+MOVE2DINIT      ( 91)  # T800 | Initialize a 2d blit.
+MOVE2DALL       ( 92)  # T800 | 2-dimensional block copy.
+MOVE2DNONZERO   ( 93)  # T800 | 2-dimensional block copy nonzero bytes.
+MOVE2DZERO      ( 94)  # T800 | 2-dimensional block copy zero bytes.
+# ??            ( 95)  # -??- | Unused code.
+# ??            ( 96)  # -??- | Unused code.
+# ??            ( 97)  # -??- | Unused code.
+# ??            ( 98)  # -??- | Unused code.
+UNPACKSN        ( 99)  # T414 | Unpack single-precision floating point number.
+# ??            (100)  # -??- | Unused code.
+# ??            (101)  # -??- | Unused code.
+# ??            (102)  # -??- | Unused code.
+# ??            (103)  # -??- | Unused code.
+# ??            (104)  # -??- | Unused code.
+# ??            (105)  # -??- | Unused code.
+# ??            (106)  # -??- | Unused code.
+# ??            (107)  # -??- | Unused code.
+POSTNORMSN      (108)  # T414 | Post-normalise correction.
+ROUNDSN         (109)  # T414 | Round single-precision floating point number.
+# ??            (110)  # -??- | Unused code.
+# ??            (111)  # -??- | Unused code.
+# ??            (112)  # -??- | Unused code.
+LDINF           (113)  # T414 | Load single-precision infinity.
+FMUL            (114)  # ---- | A = A * B, where A and B are interpreted as -1 <= X < 1
+CFLERR          (115)  # T414 | Check single-precision floating point infinity or NaN.
+CRCWORD         (116)  # T800 | Calculate word CRC.
+CRCBYTE         (117)  # T800 | Calculate byte CRC.
+BITCNT          (118)  # T800 | Count bits set in word.
+BITREVWORD      (119)  # T800 | Reverse bits in a word.
+BITREVNBITS     (120)  # T800 | Reverse bottom N bits in word.
+# ???           (121)  # -??- | Unused code.
+# ???           (122)  # -??- | Unused code.
+# ???           (123)  # -??- | Unused code.
+# ???           (124)  # -??- | Unused code.
+# ???           (125)  # -??- | Unused code.
+# ???           (126)  # -??- | Unused code.
+# ???           (127)  # -??- | Unused code.
+# ???           (128)  # -??- | Unused code.
+WSUBDB          (129)  # T800 | Form double-word subscript.
+FPLDNLDBI       (130)  # +FPU | floating point load non-local indexed double
+FPCHKERR        (131)  # +FPU | check floating point error
+FPSTNLDB        (132)  # +FPU | floating point store non-local double
+# ???           (133)  # -??- | Unused code.
+FPLDNLSNI       (134)  # +FPU | floating point load non-local indexed single
+FPADD           (135)  # +FPU | floating point add
+FPSTNLSN        (136)  # +FPU | floating point store non-local single
+FPSUB           (137)  # +FPU | floating point subtract
+FPLDNLDB        (138)  # +FPU | floating point load non-local double
+FPMUL           (139)  # +FPU | floating point multiply
+FPDIV           (140)  # +FPU | floating point divide
+# ???           (141)  # -??- | Unused code.
+FPLDNLSN        (142)  # +FPU | floating point load non-local single
+FPREMFIRST      (143)  # +FPU | floating point remainder first step
+FPREMSTEP       (144)  # +FPU | floating point remainder step
+FPNAN           (145)  # +FPU | floating point test for Not a Number
+FPORDERED       (146)  # +FPU | floating point orderability
+FPNOTFINITE     (147)  # +FPU | floating point test for not finite
+FPGT            (148)  # +FPU | floating point greater than
+FPEQ            (149)  # +FPU | floating point equality
+FPI32TOR32      (150)  # +FPU | INT32 to REAL32
+# ???           (151)  # -??- | Unused code.
+FPI32TOR64      (152)  # +FPU | INT32 to REAL64
+# ???           (153)  # -??- | Unused code.
+FPB32TOR64      (154)  # +FPU | BIT32 to REAL64
+# ???           (155)  # -??- | Unused code.
+FPTESTERR       (156)  # +FPU | test floating point Error flag false and clear
+FPRTOI32        (157)  # +FPU | REAL to INT32
+FPSTNLI32       (158)  # +FPU | store non-local INT32
+FPLDZEROSN      (159)  # +FPU | load zero single
+FPLDZERODB      (160)  # +FPU | load zero double
+FPINT           (161)  # +FPU | round to floating point integer
+# ???           (162)  # -??- | Unused code.
+FPDUP           (163)  # +FPU | floating point duplicate top of stack
+FPREV           (164)  # +FPU | floating point reverse top of stack
+# ???           (165)  # -??- | Unused code.
+FPLDNLADDDB     (166)  # +FPU | floating point load non-local and add double
+# ???           (167)  # -??- | Unused code.
+FPLDNLMULDB     (168)  # +FPU | floating point load non-local and multiply double
+# ???           (169)  # -??- | Unused code.
+FPLDNLADDSN     (170)  # +FPU | floating point load non-local and add single
+FPENTRY         (171)  # +FPU | floating point unit entry
+FPLDNLMULSN     (172)  # +FPU | floating point load non-local and multiply single
+
+PUTC            (901)  # META | Print a byte to the console.
+PUTS            (902)  # META | Print A bytes pointed to by B to the console.
+PRINTDEC        (903)  # META | Print a word to the console (decimal).
+PRINTHEX        (904)  # META | Print a word to the console (hexadecimal).
+PRINTR          (905)  # META | Print A words from the array pointed to by B.

@@ -1,7 +1,8 @@
+!.gitignore
+*.hi
+*.o
+*.swp
 .*
 bin
 build
-!.gitignore
-*.swp
-*.hi
-*.o
+gen
