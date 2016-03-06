@@ -14,13 +14,4 @@ implemented, with the following exceptions:
   * Floating point instructions.
   * Block-move instructions.
   * Delay scheduling (timer instructions).
-  * External channels (see below).
-
-### Planned Features
-
-  * External channels (ie. inter-VM and inter-machine channels) would allow
-    programs to take advantage of true parallelism.
-  * Smarter process scheduling. The current process scheduler is *extremely*
-    simple, in that it takes *every single opportunity* to switch between
-    running processes. Having each process run for a minimum number of
-    operations, or for a minimum length of time, would be preferrable.
+  * External channels.
