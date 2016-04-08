@@ -23,8 +23,6 @@ of the Occam 1 language. The features which are currently not implemented are:
 
   * Alternative (ALT) blocks. I am currently trying to work out how to compile
     replicated ALT blocks, before starting to implement this.
-  * Conditional (IF) blocks. This is currently considered less of a priority
-    than ALT blocks.
   * (Named) Procedures. In theory, there is not much which would have to be done
     to implement these. The static link code that would be needed to reference
     variables outside of the procedure would be the same as that which is used
