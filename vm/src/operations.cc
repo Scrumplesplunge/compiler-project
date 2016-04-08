@@ -103,7 +103,7 @@ class Reference {
       return false;
     }
 
-    int operand = env.at(symbol1_) - operation_;
+    int operand = env.at(symbol1_) - operation_ - 1;
 
     if (has_symbol2_) {
       if (env.count(symbol2_) == 0) {
@@ -111,7 +111,7 @@ class Reference {
              << line_number_ << ".\n";
         return false;
       }
-      operand -= env.at(symbol2_) - operation_;
+      operand -= env.at(symbol2_) - operation_ - 1;
     }
 
     if (!operations[operation_].setOperand(operand)) {

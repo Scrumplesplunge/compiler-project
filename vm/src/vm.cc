@@ -18,16 +18,16 @@ int main() {
 
   // Output the generated code.
   for (Operation& op : operations) {
-    //cout << op.toString() << "\n";
+    cout << op.toString() << "\n";
   }
 
   // Run it!
   VM vm(1 << 20);
-  //cerr << vm.toString();
+  cerr << vm.toString();
   while (vm.Iptr < operations.size()) {
-    //cerr << "   " << operations[vm.Iptr].toString() << "\n";
+    cerr << "   " << operations[vm.Iptr].toString() << "\n";
     vm.perform(operations[vm.Iptr]);
-    //cerr << vm.toString();
+    cerr << vm.toString();
   }
 
   return 0;
