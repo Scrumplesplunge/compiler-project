@@ -1,0 +1,10 @@
+-- Declare the print function.
+PROC print.dec(VALUE i) =
+  SKIP  -- Built-in.
+:
+
+SEQ
+  -- Perform the search.
+  IF i = [0 FOR 10]
+    i = 3
+      print.dec(i)

@@ -26,14 +26,16 @@ type Environment = [(Name, Allocation)]
 data Context = Context {
   static_level :: Integer,
   stack_depth :: StackDepth,
-  environment :: Environment
+  environment :: Environment,
+  if_exit_label :: String
 }
 
 -- Base (minimal) context.
 context = Context {
   static_level = 0,
   stack_depth = 0,
-  environment = []
+  environment = [],
+  if_exit_label = ""
 }
 
 new_static_level :: Context -> Context
@@ -224,6 +226,74 @@ gen_addr e =
                      [LDNLP (-off)])
     _ -> error "Generating address for non-assignable type."
 
+-- Generate code for a single branch of a conditional, with the given exit
+-- label.
+gen_branch :: StackDepth -> Expression -> Process -> CodeGenerator
+gen_branch depth guard proc = (promise { depth_required = d }, code)
+  where (pg, gg) = gen_expr guard
+        (pp, gp) = gen_proc proc
+        desc = comment $ "IF " ++ prettyPrint guard
+        d = maximum (map depth_required [pg, pp])
+        code ctx = do
+          cg <- gg ctx
+          cp <- gp ctx
+          end_branch <- label "END_BRANCH"
+          return $ Code [desc,
+                         cg,
+                         Raw [CJ end_branch],
+                         cp,
+                         -- Deallocate the replicators before exiting.
+                         Raw [AJW depth, J (if_exit_label ctx)],
+                         Label end_branch]
+
+-- Generate code for a nestable conditional, with the given exit label.
+gen_nestable_branch :: StackDepth -> Nestable Condition Expression
+                    -> CodeGenerator
+gen_nestable_branch depth (Nested cond) = gen_cond_exit depth cond
+gen_nestable_branch depth (Block guard proc) = gen_branch depth guard proc
+
+-- Generate code for a conditional block, jumping to the given label at the end
+-- of the selected branch.
+gen_cond_exit :: StackDepth -> Condition -> CodeGenerator
+gen_cond_exit depth (Condition rnc) =
+  case rnc of
+    Basic ncs -> (promise { depth_required = d }, code)
+      where pgcs = map (gen_nestable_branch depth) ncs
+            d = maximum (map (depth_required . fst) pgcs)
+            code ctx = do
+              ccs <- mapM (($ ctx) . snd) pgcs
+              return $ Code ccs
+    Replicated (Range i a b) nc -> (promise { depth_required = d }, code)
+      where (pa, ga) = gen_expr a
+            (pb, gb) = gen_expr b
+            -- If a branch is selected from this part, it will have to
+            -- deallocate this replicator.
+            (pc, gc) = gen_nestable_branch (depth + 2) nc
+            d = maximum (map depth_required [pa, pb, pc]) + 2
+            code ctx = do
+              let ctx' = allocate ctx i 2
+              ca <- ga ctx'
+              cb <- gb ctx'
+              cc <- gc ctx'
+              loop <- label "REP_IF"
+              return $ Code [Raw [AJW (-2)], ca, Raw [STL 1], cb, Raw [STL 2],
+                             Label loop, cc, Raw [LDLP 1],
+                             Raw [LEND loop, AJW 2]]
+
+-- Generate code for a conditional block.
+gen_cond :: Condition -> CodeGenerator
+gen_cond cond = (pc, code)
+  where (pc, gc) = gen_cond_exit 0 cond
+        code ctx = do
+          exit_label <- label "END_IF"
+          let ctx' = ctx { if_exit_label = exit_label }
+          cc <- gc ctx'
+          return $ Code [desc,
+                         cc,
+                         Raw [STOPP],
+                         Label exit_label]
+        desc = comment $ prettyPrint cond
+
 -- Generate code for a parallel block.
 gen_par :: Replicable Process -> CodeGenerator
 gen_par rp =
@@ -310,9 +380,6 @@ gen_par rp =
                              -- the description for the basic version for more
                              -- information.
                              Raw [AJW 1]]
-                             
-                             
-              
   where desc = comment $ prettyPrint (Par rp)
         -- Generate the parallel setup.
         gen_setup (w, l) = return $ Raw [LDLP (-w), STARTP l]
@@ -377,6 +444,7 @@ gen_proc p =
               cp <- gp ctx'
               return cp
     DefineProcedure x p -> gen_proc p  -- TODO: Implement procedures.
+    If cond -> gen_cond cond
     Input a b -> combine (Code [desc, Raw [IN 4]]) conserve_order
                          (gen_addr b) (gen_addr a)
     Output a b -> combine (Code [desc, Raw [OUTWORD]]) conserve_order

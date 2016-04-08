@@ -248,6 +248,9 @@ data AtomicGuard = DelayGuard Expression
 data Condition = Condition (Replicable (Nestable Condition Expression))
   deriving (Eq, Show)
 
+instance Pretty Condition where
+  prettyPrint (Condition rc) = prettyRep "IF" rc
+
 -- Compile-time constant value.
 data Value = Integer Integer
            | Address Integer
