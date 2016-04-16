@@ -3,17 +3,25 @@
 \usepackage{color}
 \usepackage{fancyhdr}
 \usepackage[a4paper, width=150mm, top=25mm, bottom=25mm]{geometry}
+\usepackage[nopostdot]{glossaries}
 \usepackage{graphicx}
 \usepackage[hyphens]{url}
 \usepackage{hyperref}
-\usepackage{listings}
 \usepackage[utf8]{inputenc}
+\usepackage{listings}
+\usepackage{titlesec}
 
 \pagestyle{fancy}
 
 \newcommand{\projecttitle}{Distributed Programs}
 \newcommand{\projectsubtitle}
     {Compiling a CSP-like language for a distributed system}
+
+\titleformat{\chapter}
+    {\Large\bfseries}  % Format
+    {}                 % Label
+    {0pt}              % Separation
+    {\huge}            % Before-code
 
 % Code listing style.
 \definecolor{comment}{rgb}{0.0, 0.5, 0.0}
@@ -43,6 +51,8 @@
   sensitive=true
 }
 
+\input{chapters/glossary}
+
 \begin{document}
   \input{chapters/titlepage}
 
@@ -53,6 +63,10 @@
 
   \setcounter{page}{1}
   \input{chapters/abstract}
+
+  \clearpage
+  \addcontentsline{toc}{chapter}{Glossary}
+    \printglossaries
 
   \tableofcontents
 
@@ -76,6 +90,9 @@
 
   \chapter{Conclusions} \label{conclusions}
     \input{chapters/conclusions}
+
+  \chapter*{Acknowledgements} \label{acknowledgements}
+    \input{chapters/acknowledgements}
 
   \appendix
 

@@ -1,0 +1,162 @@
+\makeglossaries
+
+\newglossaryentry{fsa}{
+  name = Finite State Automata,
+  text = finite state automata,
+  description = {
+    Given an alphabet $\Sigma$, a finite state automaton can be defined by a
+    collection of states $S$, a starting state $s_0 \in S$, a set of accepting
+    states $A \subseteq S$, and a transfer function
+    $\delta ~:~ S \times S \to S$.
+  }
+}
+
+\newglossaryentry{regex}{
+  name = Regular Expression,
+  text = regular expression,
+  description = {
+    A textual representation of \gls{reglang}. Common dialects of regular
+    expressions include: character classes such as \texttt{[a-z0-9]}, which
+    would match any lowercase alphabetic character or digit; $e_1$ \texttt{|}
+    $e_2$ for the union of the languages expressed by $e_1$ and $e_2$; $e_1^*$
+    for the language of \textit{zero} or more repetitions of $e_1$; and $e_1^+$
+    for the language of \textit{one} or more repetitions of $e_1$.
+  }
+}
+
+\newglossaryentry{reglang}{
+  name = Regular Language,
+  text = regular language,
+  description = {
+    The collection of regular languages is exactly the collection of languages
+    which can be recognised by \textit{\gls{fsa}}. A regular language might be
+    used to match simple patterns such as email addresses, which consist of a
+    clear sequence of components that can only happen in a particular order.
+    However, more complicated patterns such as matched nested brackets cannot be
+    described or recognised by any regular language, as the corresponding
+    automata would have to be infinite in size in order to deal with the
+    arbitrarily deep nesting. Perhaps the most common way of expressing a
+    regular language is to use \textit{\gls{regex}}.
+  }
+}
+
+\newglossaryentry{cflang}{
+  name = Context-Free Language,
+  text = context-free language,
+  description = {
+    The collection of context-free languages is a strict superset of the
+    collection of \gls{reglang}.
+  }
+}
+
+\newglossaryentry{cfg}{
+  name = Context-Free Grammar,
+  text = context-free grammar,
+  description = {
+    Just as \gls{regex}s are a way of describing \gls{reglang}s, context-free
+    grammars are a way of describing \gls{cflang}s. A context-free grammar is
+    made up of a collection of rules describing reductions. The rule
+    $A \to \texttt{abc}$ states that the grammar symbol $A$ can be reduced to
+    the collection of language symbols \texttt{abc}. Rules may be recursive, and
+    may reference other rules. For example, the rule
+    $A \to \texttt{(}A\texttt{)}A ~\texttt{|}~ \epsilon$ states that $A$ may be
+    reduced to either the expression $\texttt{(}A\texttt{)}A$, or to the empty
+    string which is denoted by $\epsilon$. Context-free grammars are therefore
+    able to match patterns such as nested brackets, making them far more
+    suitable for programming languages than \gls{reglang}s.
+  }
+}
+
+\newglossaryentry{lexing}{
+  name = Lexing,
+  text = lexing,
+  description = {
+    The process of converting a stream of characters into a (smaller) stream of
+    tokens. In the context of compilers, these tokens are usually things such as
+    keywords, identifiers, and numbers.
+  }
+}
+
+\newglossaryentry{direct}{
+  name = Direct Instruction,
+  text = direct instruction,
+  description = {
+    In the Transputer instruction set, Direct Instructions are those which can
+    be executed without use of the \texttt{OPR} instruction. There are 13 such
+    instructions, each with a 4-bit operand which can be extended via the
+    \gls{prefix-instructions}.
+  }
+}
+
+\newglossaryentry{prefix-instructions}{
+  name = Prefix Instructions,
+  text = prefix instructions,
+  description = {
+    In the Transputer instruction set, there are two prefix instructions:
+    \texttt{PFIX} (Prefix) and \texttt{NFIX} (Negative Prefix). These
+    instructions are used to extend the operand beyond 4-bits by allowing
+    additional bits to be shifted into the operand register prior to executing
+    the operation.
+  }
+}
+
+\newglossaryentry{indirect}{
+  name = Indirect Instruction,
+  text = indirect instruction,
+  description = {
+    In the Transputer instruction set, Indirect Instructions are those which are
+    executed via the \texttt{OPR} instruction. Exactly 16 of these require only
+    a single byte (the operation number fits inside the 4-bit operand of the
+    \texttt{OPR} instruction), but an arbitrarily large number of additional
+    instructions can be used via the \gls{prefix-instructions}.
+  }
+}
+
+\newglossaryentry{workspace}{
+  name = Workspace,
+  text = workspace,
+  description = {
+    A process running on the Transputer is associated with a workspace. The
+    workspace is effectively a stack pointer, but this location in memory is
+    also used to store additional information about halted processes. The
+    address of the workspace pointer is required to be word-aligned. When
+    the combined with the process priority level via bitwise-or, the result is
+    referred to as the workspace descriptor.
+  }
+}
+
+\newglossaryentry{ast}{
+  name = Abstract Syntax Tree,
+  text = abstract syntax tree,
+  description = {
+    The Abstract Syntax Tree (often abbreviated to AST) is the abstract
+    representation of the source code. Each functional construct in the language
+    is likely to have a corresponding node in the abstract syntax. The AST is
+    generated by the parser, and serves as the input to semantic analysis or
+    code generation.
+  }
+}
+
+\newglossaryentry{risc}{
+  name = Reduced Instruction Set Computer,
+  text = RISC,
+  description = {
+    A Reduced Instruction Set Computer (RISC) is a computer for which the
+    instruction set consists of very simple instructions. The main advantage of
+    such an instruction set is that each instruction only utilises a small
+    amount of the hardware at a time, allowing for the processor to be heavily
+    pipelined to increase the performance.
+  }
+}
+
+\newglossaryentry{mnemonic}{
+  name = Mnemonic,
+  text = mnemonic,
+  description = {
+    In the context of assemblers, a mnemonic is a name associated with the
+    opcode for an instruction, which is intended to be easier for a human to
+    remember.
+  }
+}
+
+\glossarystyle{altlist}
