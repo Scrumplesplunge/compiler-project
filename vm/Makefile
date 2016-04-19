@@ -8,9 +8,11 @@ ${ENUM}:
 	@echo "Building enum compiler.."
 	make -C ../tools bin/enum
 
-bin/vm: src/vm.cc src/VM.cc src/operations.cc gen/Direct.cc  \
-	      gen/Indirect.cc gen/Unit.cc src/VMDirect.cc src/VMIndirect.cc \
-	    | bin src/VM.h src/operations.h gen/Direct.h gen/Indirect.h gen/Unit.h
+bin/vm: src/vm.cc src/runtime/VM.cc src/operations.cc gen/Direct.cc  \
+	      gen/Indirect.cc gen/Unit.cc src/runtime/VMDirect.cc  \
+				src/runtime/VMIndirect.cc  \
+	    | bin src/runtime/VM.h src/operations.h gen/Direct.h gen/Indirect.h  \
+			  gen/Unit.h
 	${CXX} ${CXXFLAGS} $^ -o $@
 
 gen/%.h: gen/%.cc

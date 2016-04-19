@@ -1,5 +1,5 @@
 #include "operations.h"
-#include "VM.h"
+#include "runtime/VM.h"
 
 #include <ctype.h>
 #include <iostream>
