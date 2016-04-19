@@ -7,26 +7,30 @@
 
 using namespace std;
 
-Operation::Operation() {
+Operation::Operation(int location) {
   // Default instruction is a no-op.
   type_ = DIRECT;
+  location_ = location;
   direct_ = ADC;
   operand_ = 0;
 }
 
-Operation::Operation(Direct op, int32_t argument) {
+Operation::Operation(int location, Direct op, int32_t argument) {
   type_ = DIRECT;
+  location_ = location;
   direct_ = op;
   operand_ = argument;
 }
 
-Operation::Operation(Indirect op) {
+Operation::Operation(int location, Indirect op) {
   type_ = INDIRECT;
+  location_ = location;
   indirect_ = op;
 }
 
-Operation::Operation(Unit op) {
+Operation::Operation(int location, Unit op) {
   type_ = UNIT;
+  location_ = location;
   unit_ = op;
 }
 
@@ -53,6 +57,13 @@ bool Operation::fromString(
   return true;
 }
 
+bool Operation::fromByte(uint8_t byte, Operation* output) {
+  output->type_ = DIRECT;
+  output->direct_ = static_cast<Direct>(byte & 0xF0);
+  output->operand_ = byte & 0xF;
+  return true;
+}
+
 string Operation::toString() const {
   switch (type_) {
     case DIRECT:
@@ -62,6 +73,56 @@ string Operation::toString() const {
       return toLower(::toString(indirect_));
     case UNIT:
       return toLower(::toString(unit_));
+    default:
+      throw logic_error("Invalid operation type.");
+  }
+}
+
+// Given a direct instruction and its operand, compute any necessary prefix
+// instructions and return the full byte representation of the instruction.
+string makeBytes(Direct operation, int32_t operand) {
+  bool negative = (operand < 0);
+  uint32_t value = static_cast<uint32_t>(operand);
+  char final_operand = value & 0xF;
+
+  // Compute the prefix backwards into the tail-end of this array.
+  char prefix[8];
+  int i = 8;
+
+  // If the prefix is negative, invert the bits at the last stage.
+  if (negative) {
+    value = (~value) >> 4;
+    prefix[--i] = NFIX | (value & 0xF);
+  }
+  value >>= 4;
+
+  // Repeatedly prefix the remaining bits.
+  while (value != 0) {
+    prefix[--i] = PFIX | (value & 0xF);
+    value >>= 4;
+  }
+
+  // Construct the full instruction.
+  string output(prefix + i, 8 - i);
+  output.push_back(operation | final_operand);
+  return output;
+}
+
+string Operation::toBytes() const {
+  switch (type_) {
+    case DIRECT:
+      // Direct operations are executed directly, and take an argument.
+      return makeBytes(direct_, operand_);
+    case INDIRECT:
+      // Indirect operations act as the argument to the OPR instruction.
+      return makeBytes(OPR, static_cast<int32_t>(indirect_));
+    case UNIT:
+      // (Floating point) unit instructions are loaded into the register stack
+      // before being invoked by the indirect instruction FPENTRY.
+      return makeBytes(LDC, static_cast<int32_t>(unit_)) +
+             makeBytes(OPR, static_cast<int32_t>(FPENTRY));
+    default:
+      throw logic_error("Invalid operation type.");
   }
 }
 
@@ -84,65 +145,70 @@ const char pattern_string[] =
 // Defined labels.
 typedef map<string, int> Environment;
 
-class Reference {
- public:
-  Reference(int line_number, int operation, string symbol)
-      : line_number_(line_number), operation_(operation), symbol1_(symbol),
-        has_symbol2_(false) {}
+Reference::Reference(int line_number, int operation, string symbol)
+    : line_number_(line_number), operation_(operation), symbol1_(symbol),
+      has_symbol2_(false) {}
 
-  Reference(
-      int line_number, int operation, string symbol1, string symbol2)
-      : line_number_(line_number), operation_(operation), symbol1_(symbol1),
-        has_symbol2_(true), symbol2_(symbol2) {}
+Reference::Reference(
+    int line_number, int operation, string symbol1, string symbol2)
+    : line_number_(line_number), operation_(operation), symbol1_(symbol1),
+      has_symbol2_(true), symbol2_(symbol2) {}
 
-  // Apply the reference.
-  bool apply(vector<Operation>& operations, const Environment& env) {
-    if (env.count(symbol1_) == 0) {
-      cerr << "Error: Use of undefined label " << symbol1_ << " at line "
+// Apply the reference.
+bool Reference::apply(vector<Operation>& operations, const Environment& env,
+                      bool variable_length) const {
+  // Look up the value of first symbol, or fail if it is undefined.
+  if (env.count(symbol1_) == 0) {
+    cerr << "Error: Use of undefined label " << symbol1_ << " at line "
+         << line_number_ << ".\n";
+    return false;
+  }
+
+  // Compute the offset using this first symbol.
+  int offset_1 = env.at(symbol1_) - operations[operation_].location() - 1;
+  
+  int offset_2 = 0;
+  if (has_symbol2_) {
+    // Look up the value of the second symbol, or fail if it is undefined.
+    if (env.count(symbol2_) == 0) {
+      cerr << "Error: Use of undefined label " << symbol2_ << " at line "
            << line_number_ << ".\n";
       return false;
     }
-
-    int operand = env.at(symbol1_) - operation_ - 1;
-
-    if (has_symbol2_) {
-      if (env.count(symbol2_) == 0) {
-        cerr << "Error: Use of undefined label " << symbol2_ << " at line "
-             << line_number_ << ".\n";
-        return false;
-      }
-      operand -= env.at(symbol2_) - operation_ - 1;
-    }
-
-    if (!operations[operation_].setOperand(operand)) {
-      cerr << "Programmer Error: Tried to assign operand value on operation "
-              "with no operand.\n";
-      cerr << "Operation: " << operations[operation_].toString() << "\n"
-           << "Line: " << line_number_ << "\n";
-      return false;
-    }
-
-    return true;
+    // Compute the offset of the second symbol, and thus the difference.
+    offset_2 = env.at(symbol2_) - operations[operation_].location() - 1;
   }
 
- private:
-  int line_number_;
+  // The jump offset. If using variable length encoding, this is the offset from
+  // the end of the first byte of the jump instruction, not necessarily the true
+  // offset.
+  int jump = offset_1 - offset_2;
 
-  int operation_;
-  string symbol1_;
+  // Store the value into the operand of the associated instruction.
+  operations[operation_].setOperand(jump);
+  
+  if (variable_length) {
+    // The adjusted jump value is the corrected jump offset, when the length of
+    // the jump instruction is taken into consideration.
+    int adjusted_jump = jump;
+    int size, new_size = 1;
+    // Repeatedly compute the jump offset until a fixed point is found. This
+    // will happen quickly, since the size grows with the log of the offset, and
+    // the offset changes only by this amount in each iteration, so it will
+    // stabilise quickly.
+    do {
+      size = new_size;
+      operations[operation_].setOperand(adjusted_jump);
+      new_size = operations[operation_].toBytes().length();
+      adjusted_jump = jump - new_size + 1;
+    } while (new_size != size);
+  }
 
-  bool has_symbol2_ = false;
-  string symbol2_;
-};
+  return true;
+}
 
-bool parseOperations(istream& input, vector<Operation>* output) {
-  // Contains all labels referenced in the input. The value of the label is
-  // a location for that label.
-  Environment labels;
-
-  // Contains all lines with the variables they reference.
-  vector<Reference> references;
-
+bool parseOperations(istream& input, vector<Operation>* operations,
+                     Environment* labels, vector<Reference>* references) {
   // Regex matcher for each line:
   regex pattern(pattern_string);
 
@@ -167,20 +233,21 @@ bool parseOperations(istream& input, vector<Operation>* output) {
 
     // Handle the line label, if there is one.
     if (label.length() > 0) {
-      if (labels.count(label) > 0) {
+      if (labels->count(label) > 0) {
         // Duplicate label.
         cerr << "Error: Label " << label << " is redefined at line "
              << line_number << ".\n";
         return false;
       }
 
-      labels[label] = output->size();
+      (*labels)[label] = operations->size();
     }
 
     // Handle the operation, if there is one.
     if (mnemonic.length() > 0) {
       // Put the operation into the list.
-      Operation op;
+      int op_index = operations->size();
+      Operation op(op_index);
 
       if (argument.length() > 0) {
         int operand;
@@ -189,12 +256,12 @@ bool parseOperations(istream& input, vector<Operation>* output) {
         if (symbol1.length() > 0) {
           if (symbol2.length() > 0) {
             // Symbolic expression: FOO - BAR
-            references.push_back(
-                Reference(line_number, output->size(), symbol1, symbol2));
+            references->push_back(
+                Reference(line_number, op_index, symbol1, symbol2));
           } else {
             // Symbolic argument: FOO
-            references.push_back(
-                Reference(line_number, output->size(), symbol1));
+            references->push_back(
+                Reference(line_number, op_index, symbol1));
           }
           // Set the operation with a placeholder argument.
           operand = 0;
@@ -216,14 +283,71 @@ bool parseOperations(istream& input, vector<Operation>* output) {
         }
       }
 
-      output->push_back(op);
+      operations->push_back(op);
     }
   }
 
   // Go through and apply all references and apply them.
-  for (Reference& reference : references) {
-    if (!reference.apply(*output, labels)) return 1;
-  }
+  for (Reference& reference : *references)
+    if (!reference.apply(*operations, *labels)) return 1;
 
+  return true;
+}
+
+bool encodeOperations(vector<Operation> operations, Environment labels,
+                      const vector<Reference>& references, ostream* output) {
+  // Compute the inverse of the label map. This will be used to update the label
+  // values with their new locations.
+  multimap<int, string> addresses;
+  for (auto label : labels)
+    addresses.emplace(label.second, label.first);
+
+  // Compute the initial selection of fragments.
+  vector<string> fragments;
+  bool changed = false;
+
+  const int n = operations.size();
+
+  // Loop until a fixed point is reached. This is guaranteed to terminate
+  // because label values may only increase, and distances between labels may
+  // also only increase, but neither increases unless necessary.
+  do {
+    // Compute the code fragments.
+    fragments.clear();
+    int location = 0;
+    changed = false;
+    for (int i = 0; i < n; i++) {
+      // Update the operation location.
+      operations[i].set_location(location);
+
+      // Update any labels at this location.
+      auto label_range = addresses.equal_range(i);
+      for (auto label = label_range.first; label != label_range.second;
+           label++) {
+        if (labels[label->second] != location) {
+          changed = true;
+          cerr << label->second << " := " << location << "\n";
+          labels[label->second] = location;
+        }
+      }
+
+      // Compute the instruction fragment.
+      string fragment = operations[i].toBytes();
+      location += fragment.length();
+      fragments.push_back(fragment);
+    }
+
+    if (changed) {
+      // Some addresses have changed. Re-assign the references and try again.
+      for (const Reference& reference : references) {
+        // Update the reference. This will only return false if the environment
+        // does not define one of the required labels.
+        if (!reference.apply(operations, labels, true)) return false;
+      }
+    }
+  } while (changed);
+
+  // Produce the final byte stream.
+  for (const string& fragment : fragments) (*output) << fragment;
   return true;
 }

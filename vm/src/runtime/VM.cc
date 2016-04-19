@@ -362,7 +362,6 @@ void VM::deschedule() {
 }
 
 void VM::schedule(int32_t desc) {
-  int32_t new_priority = desc & 0x3;
   int32_t new_Wptr = desc & ~0x3;
 
   // Set the next pointer of the new process.
