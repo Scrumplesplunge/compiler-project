@@ -69,6 +69,12 @@ relative target_label ops = do
   return (["ldc " ++ target_label ++ " - " ++ l] ++
           ops ++ [l ++ ":  # Sneaky label."])
 
+negative_relative :: String -> [String] -> Generator [String]
+negative_relative target_label ops = do
+  l <- label "HERE"
+  return (["ldc " ++ l ++ " - " ++ target_label] ++
+          ops ++ [l ++ ":  # Sneaky label."])
+
 -- Sequence of assembler instructions defining the given operation.
 def :: Operation -> Generator [String]
 def NOP          = return ["# NOP"]
@@ -102,7 +108,7 @@ def (LDL x)      = return ["ldl " ++ show x]
 def (LDLP x)     = return ["ldlp " ++ show x]
 def (LDNL x)     = return ["ldnl " ++ show x]
 def (LDNLP x)    = return ["ldnlp " ++ show x]
-def (LEND x)     = relative x ["lend"]
+def (LEND x)     = negative_relative x ["lend"]
 def MINT         = return ["mint"]
 def MUL          = return ["mul"]
 def NOT          = return ["eqc 0"]

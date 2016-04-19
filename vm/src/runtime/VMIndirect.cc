@@ -343,7 +343,7 @@ DEFINE_INDIRECT(LEND) {
   if (read(B + 4) > 1) {
     write(B, read(B) + 1);  // Increment control variable.
     write(B + 4, read(B + 4) - 1);  // Decrement iteration count.
-    Iptr += A;
+    Iptr -= A;
   }
   yield();
 }

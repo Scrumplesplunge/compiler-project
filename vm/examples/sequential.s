@@ -19,6 +19,6 @@ LOOP:    ldl 5               # Load the address of the next character.
          lb                  # Load the character.
          putc                # Print it (this is a debugging feature).
          ldlp 5
-         ldc LOOP - ENDLOOP  # Load the loopback.
+         ldc ENDLOOP - LOOP  # Load the loopback.
          lend                # End the loop.
 ENDLOOP:
