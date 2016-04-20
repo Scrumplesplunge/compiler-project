@@ -8,8 +8,8 @@ import qualified Lexer
 import qualified Tokens
 
 -- Convenience function for matching token types.
-match_type :: Eq a =>
-              String -> (TokenType -> Bool) -> (TokenType -> a) -> Parser Token (L a)
+match_type :: Eq a => String -> (TokenType -> Bool) -> (TokenType -> a)
+           -> Parser Token (L a)
 match_type name m f =
   Match name (m . Tokens.token_type) >>> (\(Tokens.Token t loc) -> L (f t) loc)
 

@@ -136,7 +136,9 @@ gen_expr e =
     After a b -> binop b a [desc, DIFF, GT]
     And es -> (p, code)
       where gs = map gen_expr es
-            p = promise { depth_required = maximum (map (depth_required . fst) gs) }
+            p = promise {
+              depth_required = maximum (map (depth_required . fst) gs)
+            }
             code ctx = do
               -- Short-circuit evaluation of AND.
               end <- label "AND_END"
@@ -165,7 +167,9 @@ gen_expr e =
     (Not e) -> unop e [desc, NOT]
     (Or es) -> (p, code)
       where gs = map gen_expr es
-            p = promise { depth_required = maximum (map (depth_required . fst) gs) }
+            p = promise {
+              depth_required = maximum (map (depth_required . fst) gs)
+            }
             code ctx = do
               -- Short-circuit evaluation of OR.
               end <- label "OR_END"
@@ -193,7 +197,8 @@ gen_expr e =
                 Raw [LDL (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([COMMENT (show (environment ctx)), LDL (stack_depth ctx)] ++
+                Raw ([COMMENT (show (environment ctx)),
+                      LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNL (-off)])
   where desc = COMMENT (prettyPrint e)
@@ -221,7 +226,8 @@ gen_addr e =
                 Raw [LDLP (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([COMMENT (show (environment ctx)), LDL (stack_depth ctx)] ++
+                Raw ([COMMENT (show (environment ctx)),
+                      LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNLP (-off)])
     _ -> error "Generating address for non-assignable type."

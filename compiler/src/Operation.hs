@@ -27,7 +27,7 @@ data Operation =
     | EQ             -- B = pop(); A = pop(); push(A == B);
     | EQC Integer    -- A = pop(); push(A == x);
     | GT             -- B = pop(); A = pop(); push(A > B);
-    | IN Integer     -- B = pop(); A = pop(); Input x bytes from channel A to location B.
+    | IN Integer     -- Read x bytes from chan A to loc B. Pop both.
     | J Label        -- Iptr = x;
     | LB             -- push((byte) Mem[pop()]);
     | LDA Label      -- Load the (non-relative) address of a label.
@@ -41,7 +41,7 @@ data Operation =
     | MUL            -- B = pop(); A = pop(); push(A * B);
     | NOT            -- A = pop(); push(¬A);
     | OR             -- B = pop(); A = pop(); push(A | B);
-    | OUT Integer    -- B = pop(); A = pop(); Output x bytes from location B to channel A.
+    | OUT Integer    -- Write x bytes from loc B to chan A. Pop both.
     | OUTWORD        -- Output word B to channel A.
     | REM            -- B = pop(); A = pop(); push(A % B);
     | RET            -- Return from subroutine.

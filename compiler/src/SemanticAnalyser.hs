@@ -23,9 +23,9 @@ data State = State {
   environment :: Environment,      -- Variables currently in scope.
   num_errors :: Integer,
   num_warnings :: Integer,
-  next_static_address :: Integer,  -- Next address to be assigned to static data.
+  next_static_address :: Integer,  -- Next address to assign to static data.
   static :: [(Integer, Static)],   -- Static data currently defined.
-  static_chain :: [Integer]        -- Positional information in the static chain.
+  static_chain :: [Integer]        -- Position information in the static chain.
 }
 
 instance Show State where
@@ -102,7 +102,8 @@ set_env env = S (\state -> return ((), state { environment = env }))
 
 -- Get the current level in the static chain.
 get_level :: SemanticAnalyser Integer
-get_level = S (\state -> return (toInteger . length $ static_chain state, state))
+get_level =
+  S (\state -> return (toInteger . length $ static_chain state, state))
 
 -- Allocate space in the static chain. Return the allocation.
 alloc :: Integer -> SemanticAnalyser Allocation
@@ -165,7 +166,7 @@ get_static loc address = do
     Just (a, WordArray ws) -> do
       let index = (address - a) `div` 4
       if (address `mod` 4) /= 0 then do
-        print_warning loc "Misaligned access to word array. Treating as aligned."
+        print_warning loc "Unaligned access to word array. Treating as aligned."
       else if index >= toInteger (length ws) then
         print_error loc "Static array access out of bounds."
       else
