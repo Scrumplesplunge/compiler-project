@@ -87,7 +87,7 @@ DEFINE_DIRECT(NFIX) {
 
 // Operate.
 DEFINE_DIRECT(OPR) {
-  perform(static_cast<Indirect>(Oreg));
+  performIndirect(static_cast<Indirect>(Oreg));
   Oreg = 0;
 }
 

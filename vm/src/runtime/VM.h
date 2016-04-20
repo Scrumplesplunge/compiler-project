@@ -19,7 +19,14 @@ class VM {
   static const int32_t True;          // Truth values.
   static const int32_t Waiting;       // Waiting state of alternative.
 
-  VM(int32_t memory_size);  // Must be at least 4k.
+  // Construct a VM with the given block of memory available as RAM. At least
+  // 4KiB must be provided (i.e. array size of at least 1024) and the execution
+  // will begin at IPtr = 0. Note that memory_size should be in *bytes*.
+  VM(std::unique_ptr<int32_t[]> memory, int memory_size,
+     const std::string& bytecode);
+
+  // Run the virtual machine until all processes stop.
+  void run();
 
   std::string toString();
 
@@ -149,8 +156,12 @@ class VM {
   // END OPERATIONS
 
   // Main memory.
-  int32_t memory_size_;  // In bytes.
   std::unique_ptr<int32_t[]> memory_;
+  int32_t memory_size_;  // In bytes.
+  
+  // (Read-only) code.
+  const std::string& bytecode_;
+  bool running_;
 
   int32_t Wptr;     // Workspace pointer.
   int32_t Iptr;     // Instruction pointer.
@@ -174,6 +185,4 @@ class VM {
 
   bool Error;        // Error bit.
   bool HaltOnError;  // Do we halt on errors?
-
-  friend int main();
 };

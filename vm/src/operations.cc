@@ -157,6 +157,8 @@ Reference::Reference(
 // Apply the reference.
 bool Reference::apply(vector<Operation>& operations, const Environment& env,
                       bool variable_length) const {
+  int here = operations[operation_].location() + 1;
+
   // Look up the value of first symbol, or fail if it is undefined.
   if (env.count(symbol1_) == 0) {
     cerr << "Error: Use of undefined label " << symbol1_ << " at line "
@@ -165,9 +167,11 @@ bool Reference::apply(vector<Operation>& operations, const Environment& env,
   }
 
   // Compute the offset using this first symbol.
-  int offset_1 = env.at(symbol1_) - operations[operation_].location() - 1;
-  
-  int offset_2 = 0;
+  int label1 = env.at(symbol1_);
+  int offset1 = label1 - here;
+ 
+  int label2 = 0;
+  int offset2 = 0;
   if (has_symbol2_) {
     // Look up the value of the second symbol, or fail if it is undefined.
     if (env.count(symbol2_) == 0) {
@@ -176,21 +180,21 @@ bool Reference::apply(vector<Operation>& operations, const Environment& env,
       return false;
     }
     // Compute the offset of the second symbol, and thus the difference.
-    offset_2 = env.at(symbol2_) - operations[operation_].location() - 1;
+    label2 = env.at(symbol2_);
+    offset2 = label2 - here;
   }
 
   // The jump offset. If using variable length encoding, this is the offset from
   // the end of the first byte of the jump instruction, not necessarily the true
   // offset.
-  int jump = offset_1 - offset_2;
+  int jump = offset1 - offset2;
 
   // Store the value into the operand of the associated instruction.
   operations[operation_].setOperand(jump);
   
-  if (variable_length) {
+  if (variable_length && !has_symbol2_) {
     // The adjusted jump value is the corrected jump offset, when the length of
     // the jump instruction is taken into consideration.
-    int adjusted_jump = jump;
     int size, new_size = 1;
     // Repeatedly compute the jump offset until a fixed point is found. This
     // will happen quickly, since the size grows with the log of the offset, and
@@ -198,9 +202,10 @@ bool Reference::apply(vector<Operation>& operations, const Environment& env,
     // stabilise quickly.
     do {
       size = new_size;
-      operations[operation_].setOperand(adjusted_jump);
+      operations[operation_].setOperand(jump);
       new_size = operations[operation_].toBytes().length();
-      adjusted_jump = jump - new_size + 1;
+      here = operations[operation_].location() + new_size;
+      jump = label1 - here;
     } while (new_size != size);
   }
 
@@ -312,6 +317,13 @@ bool encodeOperations(vector<Operation> operations, Environment labels,
   // because label values may only increase, and distances between labels may
   // also only increase, but neither increases unless necessary.
   do {
+    // Re-assign the references with variable-length awareness.
+    for (const Reference& reference : references) {
+      // Update the reference. This will only return false if the environment
+      // does not define one of the required labels.
+      if (!reference.apply(operations, labels, true)) return false;
+    }
+
     // Compute the code fragments.
     fragments.clear();
     int location = 0;
@@ -326,7 +338,6 @@ bool encodeOperations(vector<Operation> operations, Environment labels,
            label++) {
         if (labels[label->second] != location) {
           changed = true;
-          cerr << label->second << " := " << location << "\n";
           labels[label->second] = location;
         }
       }
@@ -335,15 +346,6 @@ bool encodeOperations(vector<Operation> operations, Environment labels,
       string fragment = operations[i].toBytes();
       location += fragment.length();
       fragments.push_back(fragment);
-    }
-
-    if (changed) {
-      // Some addresses have changed. Re-assign the references and try again.
-      for (const Reference& reference : references) {
-        // Update the reference. This will only return false if the environment
-        // does not define one of the required labels.
-        if (!reference.apply(operations, labels, true)) return false;
-      }
     }
   } while (changed);
 

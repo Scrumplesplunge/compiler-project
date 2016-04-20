@@ -50,3 +50,4 @@ END:       ldc 88
            putc                   # Print 'X'.
            ldc 10
            putc                   # Print '\n'.
+           stopp

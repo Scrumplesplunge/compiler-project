@@ -30,11 +30,10 @@ static string addressString(int32_t address) {
   return "0x" + string(out, 8);
 }
 
-VM::VM(int32_t memory_size)
-    : memory_size_(memory_size),
-      memory_(new int32_t[(memory_size + 3) / 4]) {
+VM::VM(unique_ptr<int32_t[]> memory, int memory_size, const string& bytecode)
+    : memory_(move(memory)), memory_size_(memory_size), bytecode_(bytecode) {
   if (memory_size < 0x1000)
-    throw logic_error("Minimum memory size is 4K.");
+    throw logic_error("Minimum memory size is 4KiB.");
 
   // Initialize the registers.
   Wptr = MemStart;
@@ -47,6 +46,23 @@ VM::VM(int32_t memory_size)
   BptrReg[0] = BptrReg[1] = NotProcess;
   FptrReg[0] = FptrReg[1] = NotProcess;
   TptrLoc[0] = TptrLoc[1] = NotProcess;
+}
+
+void VM::run() {
+  running_ = true;
+  int n = bytecode_.length();
+  do {
+    if (Iptr < 0)
+      throw runtime_error("Error: Iptr outside code (negative).");
+    if (n <= Iptr)
+      throw runtime_error("Error: Iptr outside code (positive).");
+    char code = bytecode_[Iptr];
+    Direct op = static_cast<Direct>(code & 0xF0);
+    int32_t argument = code & 0xF;
+
+    Iptr++;
+    performDirect(op, argument);
+  } while (running_);
 }
 
 string VM::toString() {
@@ -382,7 +398,9 @@ void VM::resumeNext() {
   } else if (FptrReg[1] != NotProcess) {
     next_Wdesc = dequeueProcess(1);
   } else {
-    throw runtime_error("All processes have stopped.");
+    // All processes have stopped. Exit gracefully.
+    running_ = false;
+    return;
   }
   Wptr = next_Wdesc & ~0x3;
   Iptr = read(Wptr - 4);

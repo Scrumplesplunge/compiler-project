@@ -3,3 +3,6 @@
   # Print '\n'
   ldc 10
   putc
+
+  # Exit cleanly.
+  stopp
