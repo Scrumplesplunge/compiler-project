@@ -10,8 +10,14 @@
 
 using namespace std;
 
-OPTION(string, bytecode, "", "File containing the application bytecode.");
-OPTION(string, data, "", "File containing the application data.");
+USAGE("Usage: vm --bytecode [filename] --data [filename]\n\n"
+      "Execute a program using the virtual machine.\n");
+
+OPTION(string, bytecode, "",
+       "File containing the application bytecode to be executed.");
+OPTION(string, data, "",
+       "File containing the application data. This will be used to initialize "
+       "the RAM of the virtual machine before the program is started.");
 
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
