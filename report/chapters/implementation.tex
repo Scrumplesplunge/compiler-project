@@ -1,1 +1,25 @@
 ...
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item
+      The na\"ive grammar for expression parsing results in exponentially many
+      parse trees to be explored when the code contains a syntax error. This is
+      solved by factorising the grammar.
+    \item
+      Intricacies of variable-length instructions:
+      \begin{itemize}
+        \item
+          Instruction to be encoded affects how long the encoded instruction is.
+        \item
+          The length of the encoded instruction can affect what instruction
+          should be encoded.
+        \item
+          This circular dependency can be solved by iteration until a fixed
+          point is found.
+      \end{itemize}
+  \end{itemize}
+}
