@@ -173,30 +173,90 @@ instructions are actually located in memory.
 
 However, many of the instructions concerning code locations require the
 \textit{relative} location of the instructions, rather than the
-\textit{absolute} location. Thus, the value of a symbolic label is actually the
-offset between the location where it is defined, and the location where it is
-referenced. Transforming the labels in this way causes no difference when
-computing the difference of two labels, so it does not come with a cost but it
-allows labels to be referenced directly in jump instructions, without the need
-for superfluous labels. This idea was implemented in several transputer
-assemblers, and was brought to my attention by Geraint Jones.
+\textit{absolute} location. For example, the jump instruction \texttt{J}
+requires a relative offset, and computing this relative value manually would be
+inconvenient. Therefore, the assembler will have to somehow address this issue
+in order to allow instructions like \texttt{J} to take only a label as an
+argument, but for other instructions such as \texttt{STARTP} to be able to
+compute offsets between labels.
+
+The solution to this is delightfully straightforward: rather than having a label
+expand to the absolute location of its definition, the label can be expanded to
+the \textit{offset} from the reference
+location\textsuperscript{\cite{supervisor}}. This allows \texttt{J} to use the
+label as the argument, whilst leaving label difference calculations unaffected.
+Absolute locations can be computed with the combination of \texttt{LDC label}
+and \texttt{LDPI}\footnote{\texttt{LDPI} loads the value of the instruction
+pointer and adds it to the value in register A.}.
 
 \subsection{Variable-length Instructions}
 
-...
+As explained in \ref{ops}, the Transputer has only 13 \gls{direct}s. The rest of
+the instruction set is accessed via the \texttt{OPR} instruction, and are
+referred to as \gls{indirect}s. However, the assembler can perform this
+indirection automatically, allowing the programmer to write \texttt{XOR} and
+have the assembler generate the sequence \texttt{PFIX 3, OPR 3} which executes
+the same thing. Additionally, direct instructions may take longer arguments by
+augmenting them using the \texttt{PFIX} and \texttt{NFIX} instructions.
 
-\subsection{Target Executable Format}
+Having this automatic conversion is convenient for the programmer, but also
+introduces a few difficulties in the assembler. Symbolic labels have to be
+expanded before the instructions referencing them can be variable-length
+encoded. Awkwardly, the value of labels might be affected by the length of
+the instructions that reference them. The length of the encoded instruction
+might even affect what value the instruction should be encoding.
+Consider the following example:
 
-...
+\begin{lstlisting}
+FOO:
+  ...
+  <500 instructions later>
+  ...
+  j FOO
+\end{lstlisting}
+
+The length of the instruction \texttt{j FOO} depends upon how far back
+\texttt{FOO} is. However, the label \texttt{FOO} has to be expanded relative to
+the \textit{last} byte of the jump, so it is necessary to encode the
+instruction, in order to compute the offset for \texttt{FOO}, which is needed so
+that the instruction can be encoded in the first place.
+
+To address this, the assembler will need to repeatedly recompute the label
+values and the instruction lengths until a fixed point is reached. Luckily, this
+is guaranteed to happen. The value of the operand only increases or decreases
+linearly with the change in the value of the label, and the length of the
+instruction only increases with the log of the offset. This means that given
+reasonable initial values for the labels, a bounded number of iterations is
+sufficient to find a fixed point. \textcolor{red}{TODO: Maybe calculate this
+bound.}
 
 \section{Virtual Machine}
 
-...
+The virtual machine will execute the bytecode produced by the assembler. It will
+implement most of the Transputer instruction set, with some deviations.
+
+\subsection{Target Executable Format}
+
+There are two parts to the programs that the compiler will produce:
+instructions and data. The instructions will be output as Transputer assembler
+which is then assembled into bytecode, but the data has to be provided in a
+different manner. My intention is for the compiler to additionally output a
+binary blob containing some representation of the initial state of the
+Transputer memory. This can then be passed to the virtual machine and be used to
+initialize the available RAM before the program is started, or alternatively
+linked with the bytecode in an executable wrapper.
 
 \subsection{Basic Functionality - Single Instance}
 
-...
+A single instance of the virtual machine will aim to emulate a single
+Transputer. This means that a program running on a single instance will not be
+taking advantage of any parallelism.
 
 \subsection{Advanced Functionality - Multiple Instances}
 
-...
+Since Occam processes communicate via channels rather than by sharing memory, it
+is relatively trivial to imagine these channels being implemented with atomics
+and mutexes in order to allow true parallelism. Alternatively, network sockets
+and a simple protocol could allow them to be used between separate physical
+machines. I will aim to implement some of this functionality, to allow true
+parallelism to be taken advantage of.
