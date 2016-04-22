@@ -354,6 +354,39 @@ gen_guard_enable guard =
                   ce <- ge ctx
                   return $ Code [ce, Raw [ENBS]]
 
+gen_nestable_alt_enable :: Nestable Alternative Guard -> CodeGenerator
+gen_nestable_alt_enable na =
+  case na of
+    Nested alt -> gen_alt_enable alt
+    Block guard _ -> gen_guard_enable guard
+
+gen_alt_enable :: Alternative -> CodeGenerator
+gen_alt_enable (Alternative ra) =
+  case ra of
+    Basic nas -> (promise { depth_required = d }, code)
+      where pgs = map gen_nestable_alt_enable nas
+            d = maximum $ map (depth_required . fst) pgs
+            code ctx = do
+              cs <- sequence $ map (($ ctx) . snd) pgs
+              return $ Code cs
+    Replicated (Range i a b) p ->
+      error "Replicated alternatives are unimplemented."
+
+gen_alt_disable :: Alternative -> CodeGenerator
+gen_alt_disable alt = (promise, code)
+  where code ctx = return $ comment "Disable sequence unimplemented."
+
+gen_alt :: Alternative -> CodeGenerator
+gen_alt alt = (promise { depth_required = d }, code)
+  where (pe, ge) = gen_alt_enable alt
+        (pd, gd) = gen_alt_disable alt
+        d = max (depth_required pe) (depth_required pd)
+        code ctx = do
+          ce <- ge ctx
+          cd <- gd ctx
+          return $ Code [desc, Raw [ALT], ce, Raw [ALTWT], cd]
+        desc = comment $ prettyPrint alt
+
 -- Generate code for a parallel block.
 gen_par :: Replicable Process -> CodeGenerator
 gen_par rp =
@@ -481,6 +514,7 @@ gen_seq rp =
 gen_proc :: Process -> CodeGenerator
 gen_proc p =
   case p of
+    Alt alt -> gen_alt alt
     Assign a b -> combine (Code [desc, Raw [STNL 0]]) conserve_order
                           (gen_expr b) (gen_addr a)
     Call "putc" [e] -> (unop e [PUTC])

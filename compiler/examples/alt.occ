@@ -1,0 +1,12 @@
+CHAN a, b :
+VAR x :
+
+PAR
+  -- Wait for one of the channels to be written to.
+  ALT
+    1 = 2 & a ? ANY
+      x := 1
+    b ? ANY
+      x := 2
+  -- Write to A.
+  a ! ANY
