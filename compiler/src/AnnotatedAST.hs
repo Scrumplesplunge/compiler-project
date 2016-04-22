@@ -239,10 +239,22 @@ data Guard = BasicGuard AtomicGuard
            | PrefixedGuard Expression AtomicGuard
   deriving (Eq, Show)
 
+instance Pretty Guard where
+  prettyPrint (BasicGuard a) = prettyPrint a
+  prettyPrint (PrefixedGuard cond a) =
+    prettyPrint cond ++ " & " ++ prettyPrint a
+
 data AtomicGuard = DelayGuard Expression
                  | InputGuard Expression [Expression]
                  | SkipGuard
   deriving (Eq, Show)
+
+instance Pretty AtomicGuard where
+  prettyPrint (DelayGuard expr) = "AFTER " ++ prettyPrint expr
+  prettyPrint (InputGuard c (e:[])) = prettyPrint c ++ " ? " ++ prettyPrint e
+  prettyPrint (InputGuard c (e:es)) =
+    prettyPrint c ++ " ? " ++ prettyPrint e ++ "; ..."
+  prettyPrint SkipGuard = "SKIP"
 
 -- IF
 data Condition = Condition (Replicable (Nestable Condition Expression))

@@ -300,6 +300,60 @@ gen_cond cond = (pc, code)
                          Label exit_label]
         desc = comment $ prettyPrint cond
 
+-- Generate code for a single guarded branch of an alternative, with the given
+-- exit label.
+gen_guard_enable :: Guard -> CodeGenerator
+gen_guard_enable guard =
+  case guard of
+    BasicGuard atomic_guard ->
+      -- The guard has no precondition.
+      case atomic_guard of
+        DelayGuard _ -> error "Delay guards in alternatives are unimplemented."
+        InputGuard chan _ -> (promise { depth_required = d }, code)
+          where (pc, gc) = gen_addr chan
+                dc = depth_required pc
+                d = if dc > 3 then 5 + dc else dc
+                code ctx =
+                  if dc <= 3 then do
+                    -- Channel address can be computed without using the stack.
+                    cc <- gc ctx
+                    return $ Code [cc, Raw [LDC 1, ENBC]]
+                  else do
+                    -- Channel address requires stack space. Hop over the ALT
+                    -- state to compute the channel address, and then hop back to
+                    -- execute the enable instruction.
+                    let ctx' = allocate ctx "<ALT>" 5
+                    cc <- gc ctx'
+                    return $ Code [Raw [AJW (-5)], cc, Raw [AJW 5, LDC 1, ENBC]]
+        SkipGuard -> (promise { depth_required = 1 }, code)
+          where code ctx = return $ Raw [LDC 1, ENBS]
+    PrefixedGuard expr atomic_guard ->
+      -- The guard has a precondition which must be computed.
+      case atomic_guard of
+        DelayGuard _ -> error "Delay guards in alternatives are unimplemented."
+        InputGuard chan _ -> (promise { depth_required = d }, code)
+          where (p, g) = combine (Raw []) conserve_order (gen_addr chan)
+                                 (gen_expr expr)
+                arg_depth = depth_required p
+                d = if arg_depth > 3 then 5 + arg_depth else arg_depth
+                code ctx =
+                  if arg_depth <= 3 then do
+                    -- Channel address can be computed without using the stack.
+                    c <- g ctx
+                    return $ Code [c, Raw [ENBC]]
+                  else do
+                    -- Channel address requires stack space. Hop over the ALT
+                    -- state to compute the channel address, and then hop back to
+                    -- execute the enable instruction.
+                    let ctx' = allocate ctx "<ALT>" 5
+                    c <- g ctx'
+                    return $ Code [Raw [AJW (-5)], c, Raw [AJW 5, ENBC]]
+        SkipGuard -> (pe, code)
+          where (pe, ge) = gen_expr expr
+                code ctx = do
+                  ce <- ge ctx
+                  return $ Code [ce, Raw [ENBS]]
+
 -- Generate code for a parallel block.
 gen_par :: Replicable Process -> CodeGenerator
 gen_par rp =
