@@ -42,15 +42,16 @@ read_args :: IO Options
 read_args = do
   args <- getArgs
   read_args' args defaults
-  where read_args' [] options = return options
-        read_args' (o : v : as) options =
-          case o of
-            "-o" -> do
+  where read_args' args options =
+          case args of
+            [] -> return options
+            ("--output" : v : args') -> do
+              -- Set the output file.
               check_unset "output file" (output_file options) v
-              read_args' as (options { output_file = Just v })
-            _ -> do
-              check_unset "input file" (input_file options) v
-              read_args' (v : as) (options { input_file = Just o })
+              read_args' args' (options { output_file = Just v })
+            (input : args') -> do
+              check_unset "input file" (input_file options) input
+              read_args' args' (options { input_file = Just input })
 
 open :: String -> IOMode -> Handle -> IO Handle
 open "-" m h = return h
