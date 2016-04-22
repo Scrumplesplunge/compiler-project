@@ -39,6 +39,7 @@ data Type = ANY_TYPE  -- Pseudo-type that casts to any other. Used internally.
   deriving Eq
 
 instance Show Type where
+  show ANY_TYPE = "ANY"
   show BYTE = "BYTE"
   show (BYTE_ARRAY n) = "BYTE[" ++ show n ++ "]"
   show CHAN = "CHAN"
@@ -234,6 +235,9 @@ instance Pretty Expression where
 
 data Alternative = Alternative (Replicable (Nestable Alternative Guard))
   deriving (Eq, Show)
+
+instance Pretty Alternative where
+  prettyPrint (Alternative ra) = prettyRep "ALT" ra
 
 data Guard = BasicGuard AtomicGuard
            | PrefixedGuard Expression AtomicGuard

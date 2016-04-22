@@ -53,6 +53,7 @@ check_numeric loc t =
     CHAN -> return ()
     CONST t' _ -> check_numeric loc t'
     INT -> return ()
+    ANY_TYPE -> return ()
     _ -> print_error loc ("Expected a numeric type, got " ++ show t ++ ".")
 
 -- Check that a name is defined.
