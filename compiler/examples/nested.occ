@@ -1,8 +1,0 @@
-PROC foo =
-  PROC bar =
-    SKIP
-  :
-  SKIP
-:
-
-SKIP
