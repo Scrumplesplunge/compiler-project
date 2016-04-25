@@ -8,7 +8,7 @@ INIT:
 START:
 PRE
 
-bin/occ $1 -o - >> demo.s
+bin/occ $1 --output - >> demo.s
 
 cat >> demo.s <<POST
 END:
