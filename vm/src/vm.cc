@@ -51,9 +51,6 @@ int main(int argc, char* args[]) {
     reader.readBytes(buffer.get(), length);
 
     while (reader.isGood()) {
-      cerr << "Loading chunk at location " << address << ", length " << length
-           << "..\n";
-
       // Copy the blob into the main memory of the VM.
       for (int32_t i = 0; i < length; i++)
         vm.writeByte(address + i, buffer[i]);

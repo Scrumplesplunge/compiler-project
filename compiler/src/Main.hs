@@ -97,13 +97,11 @@ main = do
                       " warning(s).")
   else do
     -- Write assembler file.
-    hPutStrLn stderr ("Writing code to " ++ show (assembler_file options) ++ "..")
     assembler_handle <- open (assembler_file options) WriteMode stdout
     assemble context proc assembler_handle
     hClose assembler_handle
 
     -- Write data file.
-    hPutStrLn stderr ("Writing data to " ++ show (data_file options) ++ "..")
     data_handle <- open (data_file options) WriteMode stdout
     let blob = make_blob (static state)
     BL.hPut data_handle blob
