@@ -24,10 +24,12 @@ promise = Promise {
 type Environment = [(Name, Allocation)]
 
 data Context = Context {
-  static_level :: Integer,
-  stack_depth :: StackDepth,
-  environment :: Environment,
-  if_exit_label :: String
+  static_level :: Integer,    -- Current static link level.
+  stack_depth :: StackDepth,  -- Stack depth in current link level.
+  environment :: Environment, -- Defined variables.
+  if_exit_label :: String,    -- Exit location for the enclosing IF statement.
+  alt_end_label :: String,    -- Location of ALTEND for the enclosing ALT.
+  alt_exit_label :: String    -- Exit location for the enclosing ALT statement.
 }
 
 -- Base (minimal) context.
@@ -35,7 +37,9 @@ context = Context {
   static_level = 0,
   stack_depth = 0,
   environment = [],
-  if_exit_label = ""
+  if_exit_label = "<if_exit_label undefined>",
+  alt_end_label = "<alt_end_label undefined>",
+  alt_exit_label = "<alt_exit_label undefined>"
 }
 
 new_static_level :: Context -> Context
@@ -230,7 +234,9 @@ gen_addr e =
                       LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNLP (-off)])
-    _ -> error "Generating address for non-assignable type."
+    Any -> (promise { depth_required = 1 }, code)
+      where code ctx = return $ Raw [LDLP 0]
+    _ -> error ("Generating address for non-assignable type: " ++ show e)
 
 -- Generate code for a single branch of a conditional, with the given exit
 -- label.
@@ -300,6 +306,10 @@ gen_cond cond = (pc, code)
                          Label exit_label]
         desc = comment $ prettyPrint cond
 
+-- When the disable sequences are generated, the code for each service is also
+-- generated.
+type DisableGenerator = (Promise, Context -> Generator (Code, Code))
+
 -- Generate code for a single guarded branch of an alternative, with the given
 -- exit label.
 gen_guard_enable :: Guard -> CodeGenerator
@@ -312,7 +322,7 @@ gen_guard_enable guard =
         InputGuard chan _ -> (promise { depth_required = d }, code)
           where (pc, gc) = gen_addr chan
                 dc = depth_required pc
-                d = if dc > 3 then 5 + dc else dc
+                d = if dc > 3 then 5 + dc else max 2 dc
                 code ctx =
                   if dc <= 3 then do
                     -- Channel address can be computed without using the stack.
@@ -354,11 +364,122 @@ gen_guard_enable guard =
                   ce <- ge ctx
                   return $ Code [ce, Raw [ENBS]]
 
+gen_guard_disable :: Guard -> Process -> DisableGenerator
+gen_guard_disable guard proc =
+  case guard of
+    BasicGuard atomic_guard ->
+      -- The guard has no precondition.
+      case atomic_guard of
+        DelayGuard _ -> error "Delay guards in alternatives are unimplemented."
+        InputGuard chan es -> (promise { depth_required = max d d2 }, code)
+          where (pc, gc) = gen_addr chan
+                code ctx = do
+                  service_label <- label "SERVICE"
+                  cd <- disable service_label ctx
+                  cs <- service service_label ctx
+                  return (cd, cs)
+                -- PART 1: Generate code for the disable sequence.
+                dc = depth_required pc
+                d = if dc > 3 then 5 + dc else 3
+                disable service_label ctx = do
+                  if dc <= 3 then do
+                    -- Channel address can be computed without using the stack.
+                    cc <- gc ctx
+                    return $ Code [cc,
+                                   Raw [LDC 1,
+                                        LDO service_label (alt_end_label ctx),
+                                        DISC]]
+                  else do
+                    -- Channel address requires stack space. Hop over the ALT
+                    -- state to compute the channel address, and then hop back to
+                    -- execute the enable instruction.
+                    let ctx' = allocate ctx "<ALT>" 5
+                    cc <- gc ctx'
+                    return $ Code [Raw [AJW (-5)], cc,
+                                   Raw [AJW 5, LDC 1,
+                                        LDO service_label (alt_end_label ctx'),
+                                        DISC]]
+                -- PART 2: Generate code for the service routine.
+                inputs = map (Input chan) es
+                pgs = map gen_proc inputs
+                d2 = maximum (map depth_required (map fst pgs ++ [pp]))
+                service service_label ctx = do
+                  cs <- mapM ($ ctx) (map snd pgs)
+                  cp <- gp ctx
+                  return $ Code [Label service_label, Code cs, cp,
+                                 Raw [J (alt_exit_label ctx)]]
+        SkipGuard -> (promise { depth_required = 2 }, code)
+          where code ctx = do
+                  service_label <- label "SERVICE"
+                  cp <- gp ctx
+                  return (
+                    Raw [LDC 1, LDO service_label (alt_end_label ctx), DISS],
+                    Code [Label service_label, cp,
+                          Raw [J (alt_exit_label ctx)]])
+    PrefixedGuard expr atomic_guard ->
+      -- The guard has a precondition which must be computed.
+      case atomic_guard of
+        DelayGuard _ -> error "Delay guards in alternatives are unimplemented."
+        InputGuard chan es -> (promise { depth_required = max d d2 }, code)
+          where (p, g) = combine (Raw []) conserve_order (gen_addr chan)
+                                 (gen_expr expr)
+                code ctx = do
+                  service_label <- label "SERVICE"
+                  cd <- disable service_label ctx
+                  cs <- service service_label ctx
+                  return (cd, cs)
+                -- PART 1: Generate code for the disable sequence.
+                arg_depth = depth_required p
+                d = if arg_depth > 3 then 5 + arg_depth else max 3 arg_depth
+                disable service_label ctx = do
+                  if arg_depth <= 3 then do
+                    -- Channel address can be computed without using the stack.
+                    c <- g ctx
+                    return $ Code [c,
+                                   Raw [LDO service_label (alt_end_label ctx),
+                                        DISC]]
+                  else do
+                    -- Channel address requires stack space. Hop over the ALT
+                    -- state to compute the channel address, and then hop back to
+                    -- execute the enable instruction.
+                    let ctx' = allocate ctx "<ALT>" 5
+                    c <- g ctx'
+                    return $ Code [Raw [AJW (-5)], c,
+                                   Raw [LDO service_label (alt_end_label ctx'),
+                                        AJW 5, DISC]]
+                -- PART 2: Generate code for the service routine.
+                inputs = map (Input chan) es
+                pgs = map gen_proc inputs
+                d2 = maximum (map depth_required (map fst pgs ++ [pp]))
+                service service_label ctx = do
+                  cs <- mapM ($ ctx) (map snd pgs)
+                  cp <- gp ctx
+                  return $ Code [Label service_label, Code cs, cp,
+                                 Raw [J (alt_exit_label ctx)]]
+        SkipGuard -> (pe, code)
+          where (pe, ge) = gen_expr expr
+                code ctx = do
+                  ce <- ge ctx
+                  cp <- gp ctx
+                  service_label <- label "SERVICE"
+                  return (
+                    Code [ce, Raw [LDO service_label (alt_end_label ctx),
+                                   DISS]],
+                    Code [Label service_label, cp,
+                          Raw [J (alt_exit_label ctx)]])
+  where (pp, gp) = gen_proc proc
+
 gen_nestable_alt_enable :: Nestable Alternative Guard -> CodeGenerator
 gen_nestable_alt_enable na =
   case na of
     Nested alt -> gen_alt_enable alt
     Block guard _ -> gen_guard_enable guard
+
+gen_nestable_alt_disable :: Nestable Alternative Guard -> DisableGenerator
+gen_nestable_alt_disable na =
+  case na of
+    Nested alt -> gen_alt_disable alt
+    Block guard proc -> gen_guard_disable guard proc
 
 gen_alt_enable :: Alternative -> CodeGenerator
 gen_alt_enable (Alternative ra) =
@@ -369,22 +490,35 @@ gen_alt_enable (Alternative ra) =
             code ctx = do
               cs <- sequence $ map (($ ctx) . snd) pgs
               return $ Code cs
-    Replicated (Range i a b) p ->
+    Replicated _ _ ->
       error "Replicated alternatives are unimplemented."
 
-gen_alt_disable :: Alternative -> CodeGenerator
-gen_alt_disable alt = (promise, code)
-  where code ctx = return $ comment "Disable sequence unimplemented."
+gen_alt_disable :: Alternative -> DisableGenerator
+gen_alt_disable (Alternative ra) =
+  case ra of
+    Basic nas -> (promise { depth_required = d }, code)
+      where pgs = map gen_nestable_alt_disable nas
+            d = maximum $ map (depth_required . fst) pgs
+            code ctx = do
+              ccs <- sequence $ map (($ ctx) . snd) pgs
+              return (Code (map fst ccs), Code (map snd ccs))
+    Replicated _ _ ->
+      error "Replicated alternatives are unimplemented."
 
 gen_alt :: Alternative -> CodeGenerator
 gen_alt alt = (promise { depth_required = d }, code)
   where (pe, ge) = gen_alt_enable alt
         (pd, gd) = gen_alt_disable alt
-        d = max (depth_required pe) (depth_required pd)
+        d = maximum $ map depth_required [pe, pd]
         code ctx = do
           ce <- ge ctx
-          cd <- gd ctx
-          return $ Code [desc, Raw [ALT], ce, Raw [ALTWT], cd]
+          alt_end_label <- label "ALT_END"
+          alt_exit_label <- label "ALT_EXIT"
+          let ctx' = ctx { alt_end_label = alt_end_label,
+                           alt_exit_label = alt_exit_label }
+          (cd, cs) <- gd ctx'
+          return $ Code [desc, Raw [ALT], ce, Raw [ALTWT], cd, Raw [ALTEND],
+                         Label alt_end_label, cs, Label alt_exit_label]
         desc = comment $ prettyPrint alt
 
 -- Generate code for a parallel block.

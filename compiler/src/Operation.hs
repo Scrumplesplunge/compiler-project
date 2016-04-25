@@ -7,59 +7,60 @@ import Prelude hiding (EQ, GT)
 data Operation =
       NOP
     | COMMENT String
-    | ADC Integer    -- A += x;
-    | ADD            -- B = pop(); A = pop(); push(A + B);
-    | AJW Integer    -- Wptr += x;
-    | ALT            -- Begin alternative.
-    | ALTEND         -- End alternative.
-    | ALTWT          -- Begin waiting.
-    | AND            -- B = pop(); A = pop(); push(A & B);
-    | CALL Label     -- Call subroutine x.
-    | CJ Label       -- A = pop(); if (A) jump x;
-    | DIFF           -- A -= B;
-    | DISC Label     -- Disable channel.
-    | DISS Label     -- Disable skip.
-    | DIV            -- B = pop(); A = pop(); push(A / B);
-    | DUP            -- push(A);
-    | ENBC           -- Enable channel.
-    | ENBS           -- Enable skip.
-    | ENDP           -- A = pop(); End process with refcount workspace A.
-    | EQ             -- B = pop(); A = pop(); push(A == B);
-    | EQC Integer    -- A = pop(); push(A == x);
-    | GT             -- B = pop(); A = pop(); push(A > B);
-    | IN Integer     -- Read x bytes from chan A to loc B. Pop both.
-    | J Label        -- Iptr = x;
-    | LB             -- push((byte) Mem[pop()]);
-    | LDA Label      -- Load the (non-relative) address of a label.
-    | LDC Integer    -- push(x);
-    | LDL Integer    -- push(Mem[Wptr + 4 * x]);
-    | LDLP Integer   -- push(Wptr + 4 * x);
-    | LDNL Integer   -- A = pop(); push(Mem[A + 4 * x]);
-    | LDNLP Integer  -- A = pop(); push(A + 4 * x);
-    | LEND Label     -- Loop end.
-    | MINT           -- Minimum integer.
-    | MUL            -- B = pop(); A = pop(); push(A * B);
-    | NOT            -- A = pop(); push(¬A);
-    | OR             -- B = pop(); A = pop(); push(A | B);
-    | OUT Integer    -- Write x bytes from loc B to chan A. Pop both.
-    | OUTWORD        -- Output word B to channel A.
-    | REM            -- B = pop(); A = pop(); push(A % B);
-    | RET            -- Return from subroutine.
-    | REV            -- B = pop(); A = pop(); push(B); push(A);
-    | RUNP           -- A = pop(); Resume process with descriptor A.
-    | SB             -- B = pop(); A = pop(); (byte) Mem[A] = B;
-    | SHL            -- B = pop(); A = pop(); push(A << B);
-    | SHR            -- B = pop(); A = pop(); push(A >> B);  // 0-filled.
-    | STARTP Label   -- Start process x with workspace y.
-    | STL Integer    -- Mem[Wptr + 4 * x] = A;
-    | STNL Integer   -- Mem[A + 4 * x] = B;
-    | STOPP          -- Stop and dequeue the current process.
-    | SUB            -- B = pop(); A = pop(); push(A - B);
-    | WSUB           -- B = pop(); A = pop(); push(4 * B + A);
-    | XOR            -- B = pop(); A = pop(); push(A ^ B);
+    | ADC Integer      -- A += x;
+    | ADD              -- B = pop(); A = pop(); push(A + B);
+    | AJW Integer      -- Wptr += x;
+    | ALT              -- Begin alternative.
+    | ALTEND           -- End alternative.
+    | ALTWT            -- Begin waiting.
+    | AND              -- B = pop(); A = pop(); push(A & B);
+    | CALL Label       -- Call subroutine x.
+    | CJ Label         -- A = pop(); if (A) jump x;
+    | DIFF             -- A -= B;
+    | DISC             -- Disable channel.
+    | DISS             -- Disable skip.
+    | DIV              -- B = pop(); A = pop(); push(A / B);
+    | DUP              -- push(A);
+    | ENBC             -- Enable channel.
+    | ENBS             -- Enable skip.
+    | ENDP             -- A = pop(); End process with refcount workspace A.
+    | EQ               -- B = pop(); A = pop(); push(A == B);
+    | EQC Integer      -- A = pop(); push(A == x);
+    | GT               -- B = pop(); A = pop(); push(A > B);
+    | IN Integer       -- Read x bytes from chan A to loc B. Pop both.
+    | J Label          -- Iptr = x;
+    | LB               -- push((byte) Mem[pop()]);
+    | LDO Label Label  -- Load the offset from the second label to the first.
+    | LDA Label        -- Load the (non-relative) address of a label.
+    | LDC Integer      -- push(x);
+    | LDL Integer      -- push(Mem[Wptr + 4 * x]);
+    | LDLP Integer     -- push(Wptr + 4 * x);
+    | LDNL Integer     -- A = pop(); push(Mem[A + 4 * x]);
+    | LDNLP Integer    -- A = pop(); push(A + 4 * x);
+    | LEND Label       -- Loop end.
+    | MINT             -- Minimum integer.
+    | MUL              -- B = pop(); A = pop(); push(A * B);
+    | NOT              -- A = pop(); push(¬A);
+    | OR               -- B = pop(); A = pop(); push(A | B);
+    | OUT Integer      -- Write x bytes from loc B to chan A. Pop both.
+    | OUTWORD          -- Output word B to channel A.
+    | REM              -- B = pop(); A = pop(); push(A % B);
+    | RET              -- Return from subroutine.
+    | REV              -- B = pop(); A = pop(); push(B); push(A);
+    | RUNP             -- A = pop(); Resume process with descriptor A.
+    | SB               -- B = pop(); A = pop(); (byte) Mem[A] = B;
+    | SHL              -- B = pop(); A = pop(); push(A << B);
+    | SHR              -- B = pop(); A = pop(); push(A >> B);  // 0-filled.
+    | STARTP Label     -- Start process x with workspace y.
+    | STL Integer      -- Mem[Wptr + 4 * x] = A;
+    | STNL Integer     -- Mem[A + 4 * x] = B;
+    | STOPP            -- Stop and dequeue the current process.
+    | SUB              -- B = pop(); A = pop(); push(A - B);
+    | WSUB             -- B = pop(); A = pop(); push(4 * B + A);
+    | XOR              -- B = pop(); A = pop(); push(A ^ B);
     -- Meta operations.
-    | PUTC           -- Put a character on the screen.
-    | PRINTDEC       -- Print a decimal integer.
+    | PUTC             -- Put a character on the screen.
+    | PRINTDEC         -- Print a decimal integer.
   deriving (Eq, Show)
 
 -- Load a label relative to the end of an instruction sequence.
@@ -89,8 +90,8 @@ def AND          = return ["and"]
 def (CALL x)     = return ["call " ++ x]
 def (CJ x)       = return ["cj " ++ x]
 def DIFF         = return ["diff"]
-def (DISC x)     = relative x ["disc"]
-def (DISS x)     = relative x ["diss"]
+def DISC         = return ["disc"]
+def DISS         = return ["diss"]
 def ENBC         = return ["enbc"]
 def ENBS         = return ["enbs"]
 def DIV          = return ["div"]
@@ -102,6 +103,7 @@ def GT           = return ["gt"]
 def (IN x)       = return ["ldc " ++ show x, "in"]
 def (J x)        = return ["j " ++ x]
 def LB           = return ["lb"]
+def (LDO a b)    = return ["ldc " ++ a ++ " - " ++ b]
 def (LDA x)      = relative x ["ldpi"]
 def (LDC x)      = return ["ldc " ++ show x]
 def (LDL x)      = return ["ldl " ++ show x]

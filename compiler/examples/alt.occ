@@ -1,12 +1,27 @@
 CHAN a, b :
 VAR x :
 
+PROC print.dec(VALUE i) =
+  SKIP
+:
+
+PROC putc(VALUE i) =
+  SKIP
+:
+
 PAR
   -- Wait for one of the channels to be written to.
   ALT
-    1 = 2 & a ? ANY
-      x := 1
+    1 = 1 & a ? ANY
+      SEQ
+        print.dec(1)
+        putc('*N')
     b ? ANY
-      x := 2
+      SEQ
+        print.dec(2)
+        putc('*N')
   -- Write to A.
-  a ! ANY
+  SEQ
+    a ! ANY
+    print.dec(3)
+    putc('*N')
