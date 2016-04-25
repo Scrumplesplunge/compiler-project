@@ -1,10 +1,12 @@
 import CodeGen
+import qualified Data.ByteString.Lazy as BL
 import Data.Tree
 import IndentParser
 import Parser
 import Parsing
 import SemanticAnalyser hiding (putStdErr)
 import Semantics
+import Static
 import System.Environment
 import System.IO
 import qualified Lexer
@@ -17,17 +19,20 @@ putStdErr = hPutStrLn stderr
 -- Compilation options.
 data Options = Options {
   input_file :: Maybe String,
-  output_file :: Maybe String
+  assembler_file :: String,
+  data_file :: String,
+  memory_start :: Integer
 }
 
 defaults = Options {
   input_file = Nothing,
-  output_file = Nothing
+  assembler_file = "code.s",
+  data_file = "data.bin",
+  memory_start = 0x80000070
 }
 
 is_valid :: Options -> Bool
-is_valid options =
-  input_file options /= Nothing && output_file options /= Nothing
+is_valid options = (input_file options /= Nothing)
 
 check_unset :: Show a => String -> Maybe a -> a -> IO ()
 check_unset name option val = do
@@ -45,13 +50,19 @@ read_args = do
   where read_args' args options =
           case args of
             [] -> return options
-            ("--output" : v : args') -> do
-              -- Set the output file.
-              check_unset "output file" (output_file options) v
-              read_args' args' (options { output_file = Just v })
-            (input : args') -> do
-              check_unset "input file" (input_file options) input
+            ("--assembler_file" : v : args') -> do
+              -- Set the output assembler file.
+              read_args' args' (options { assembler_file = v })
+            ("--data_file" : v : args') -> do
+              -- Set the output data file.
+              read_args' args' (options { data_file = v })
+            ("--memory_start" : v : args') -> do
+              -- Set the address where available memory starts.
+              read_args' args' (options { memory_start = read v })
+            ("--source_file" : input : args') -> do
+              check_unset "source file" (input_file options) input
               read_args' args' (options { input_file = Just input })
+            (x : xs) -> error $ "Error with command-line option: " ++ show x
 
 open :: String -> IOMode -> Handle -> IO Handle
 open "-" m h = return h
@@ -64,10 +75,6 @@ main = do
         case input_file options of
           Nothing -> error "No input file specified."
           Just x -> x
-  let output_filename =
-        case output_file options of
-          Nothing -> error "No output file specified."
-          Just x -> x
 
   input_handle <- open input_filename ReadMode stdin
 
@@ -76,7 +83,8 @@ main = do
   let tokens = parse_indent raw_tokens
 
   let x = full_parse process tokens
-  (proc, state) <- run_analyser (check_process x)
+  let state = empty_state { next_static_address = memory_start options }
+  (proc, state) <- run_analyser (check_process x) state
 
   -- let x = full_parse process tokens
   -- (res, state) <- run_analyser (check_process x)
@@ -88,6 +96,15 @@ main = do
                       " error(s) and " ++ show (num_warnings state) ++
                       " warning(s).")
   else do
-    output_handle <- open output_filename WriteMode stdout
-    assemble context proc output_handle
-    hClose output_handle
+    -- Write assembler file.
+    hPutStrLn stderr ("Writing code to " ++ show (assembler_file options) ++ "..")
+    assembler_handle <- open (assembler_file options) WriteMode stdout
+    assemble context proc assembler_handle
+    hClose assembler_handle
+
+    -- Write data file.
+    hPutStrLn stderr ("Writing data to " ++ show (data_file options) ++ "..")
+    data_handle <- open (data_file options) WriteMode stdout
+    let blob = make_blob (static state)
+    BL.hPut data_handle blob
+    hClose data_handle

@@ -6,6 +6,7 @@ import Data.List
 import Control.Monad
 import AnnotatedAST
 import Reader
+import Static
 import System.IO
 
 -- Information associated with a defined name.
@@ -13,11 +14,6 @@ type NameInfo = (Type, Location)
 
 -- All names defined thus far.
 type Environment = [(AST.Name, NameInfo)]
-
--- Compile-time constant arrays.
-data Static = WordArray [Integer]  -- Constant array of words.
-            | ByteArray String     -- Constant array of bytes.
-  deriving (Eq, Show)
 
 data State = State {
   environment :: Environment,      -- Variables currently in scope.
@@ -213,5 +209,5 @@ find_name name = do
     Just x -> do
       return (Just x)
 
-run_analyser :: SemanticAnalyser a -> IO (a, State)
-run_analyser (S xm) = xm empty_state
+run_analyser :: SemanticAnalyser a -> State -> IO (a, State)
+run_analyser (S xm) state = xm state

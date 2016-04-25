@@ -8,7 +8,7 @@ INIT:
 START:
 PRE
 
-bin/occ $1 --output - >> demo.s
+bin/occ --source_file $1 --assembler_file demo.s --data_file - >> /dev/null
 
 cat >> demo.s <<POST
 END:

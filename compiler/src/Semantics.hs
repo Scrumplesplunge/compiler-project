@@ -8,6 +8,7 @@ import AST (L (L))
 import qualified AST
 import AnnotatedAST
 import SemanticAnalyser
+import Static
 import Reader hiding (location)
 import Result
 
