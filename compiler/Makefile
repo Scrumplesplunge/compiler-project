@@ -5,7 +5,10 @@ SOURCES = $(wildcard src/*.hs)
 all: bin/occ
 
 bin/occ: ${SOURCES} | bin build
-	ghc -O2 -dynamic --make -i. -hidir build -odir build -o $@ $^
+	ghc --make -split-objs -dynamic -i. -O2 -hidir build -odir build -o $@ $^
+	# Reduce the binary size.
+	strip -p --strip-unneeded --remove-section=.comment $@
+	upx $@
 
 build:
 	mkdir build
