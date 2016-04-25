@@ -18,9 +18,9 @@ STARTP_1:  ldc PROC_2 - STARTP_2  # Load offset to PROC_2.
 STARTP_2:  ldlp 0                 # Wait for PROC_1 and PROC_2, then run END.
            endp
 
-PROC_1:    ldc 1                  # Prepare to loop 10 times.
+PROC_1:    ldc 1                  # Prepare to loop 100 times.
            stl 1
-           ldc 10
+           ldc 100
            stl 2
 
 LOOP_1:    ldc 49
@@ -32,9 +32,9 @@ LOOP_1:    ldc 49
 ENDLOOP_1: ldlp 10
            endp
 
-PROC_2:    ldc 1                  # Prepare to loop 10 times.
+PROC_2:    ldc 1                  # Prepare to loop 100 times.
            stl 1
-           ldc 10
+           ldc 100
            stl 2
 
 LOOP_2:    ldc 50

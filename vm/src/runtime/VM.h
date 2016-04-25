@@ -168,6 +168,10 @@ class VM {
   int32_t A, B, C;  // Register stack.
   int32_t Oreg;     // Operand register.
 
+  // Number of operations executed since the last successful yield.
+  int32_t op_count_;
+  int32_t yield_after_ = 64;
+
   int32_t priority;  // Priority of the current running process (0 or 1).
 
   // Each of the registers below correspond to either high priority (0) or low

@@ -40,6 +40,8 @@ VM::VM(unique_ptr<int32_t[]> memory, int memory_size, const string& bytecode)
   Iptr = 0;
   A = B = C = Oreg = ClockReg[0] = ClockReg[1] = 0;
 
+  op_count_ = 0;
+
   priority = 0;
   Error = HaltOnError = false;
   
@@ -61,6 +63,7 @@ void VM::run() {
     int32_t argument = code & 0xF;
 
     Iptr++;
+    op_count_++;
     performDirect(op, argument);
   } while (running_);
 }
@@ -407,8 +410,12 @@ void VM::resumeNext() {
 }
 
 void VM::yield() {
-  schedule();
-  resumeNext();
+  // Yield only if the process has been running for long enough.
+  if (op_count_ >= yield_after_) {
+    op_count_ = 0;
+    schedule();
+    resumeNext();
+  }
 }
 
 void VM::stop() {
