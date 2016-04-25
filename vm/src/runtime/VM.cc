@@ -75,48 +75,6 @@ string VM::toString() {
   return out.str();
 }
 
-void VM::enqueueProcess(int32_t desc) {
-  int32_t pri = desc & 0x3;
-  if (pri != 0 && pri != 1)
-    throw runtime_error("Bad priority level: " + to_string(pri));
-
-  // Point the previous process (if it exists) at this one.
-  if (FptrReg[pri] == NotProcess) {
-    // Queue was empty. Make the new process the front process.
-    FptrReg[pri] = desc;
-  } else {
-    // Queue is non-empty. Update the current last to point at this process.
-    write((BptrReg[pri] & ~0x3) - 8, desc);
-  }
-  BptrReg[pri] = desc;
-}
-
-int32_t VM::dequeueProcess(int32_t pri) {
-  if (pri != 0 && pri != 1)
-    throw runtime_error("Bad priority level: " + to_string(pri));
-
-  int32_t desc = FptrReg[pri];
-
-  // Update the front pointer if necessary.
-  if (desc != NotProcess)
-    FptrReg[pri] = read((desc & ~0x3) - 8);
-
-  return desc;
-}
-
-void VM::push(int32_t x) {
-  C = B;
-  B = A;
-  A = x;
-}
-
-int32_t VM::pop() {
-  int32_t x = A;
-  A = B;
-  B = C;
-  return x;
-}
-
 int32_t& VM::operator[](int32_t address) {
   if (address >= memory_size_ + MostNeg) {
     throw runtime_error(
@@ -161,6 +119,48 @@ void VM::writeByte(int32_t address, int8_t value) {
   int shift = 8 * (address & 0x3);
   int32_t mask = ~(0xFF << shift);
   write(address, (word & mask) | (value << shift));
+}
+
+void VM::enqueueProcess(int32_t desc) {
+  int32_t pri = desc & 0x3;
+  if (pri != 0 && pri != 1)
+    throw runtime_error("Bad priority level: " + to_string(pri));
+
+  // Point the previous process (if it exists) at this one.
+  if (FptrReg[pri] == NotProcess) {
+    // Queue was empty. Make the new process the front process.
+    FptrReg[pri] = desc;
+  } else {
+    // Queue is non-empty. Update the current last to point at this process.
+    write((BptrReg[pri] & ~0x3) - 8, desc);
+  }
+  BptrReg[pri] = desc;
+}
+
+int32_t VM::dequeueProcess(int32_t pri) {
+  if (pri != 0 && pri != 1)
+    throw runtime_error("Bad priority level: " + to_string(pri));
+
+  int32_t desc = FptrReg[pri];
+
+  // Update the front pointer if necessary.
+  if (desc != NotProcess)
+    FptrReg[pri] = read((desc & ~0x3) - 8);
+
+  return desc;
+}
+
+void VM::push(int32_t x) {
+  C = B;
+  B = A;
+  A = x;
+}
+
+int32_t VM::pop() {
+  int32_t x = A;
+  A = B;
+  B = C;
+  return x;
 }
 
 void VM::perform(const Operation& operation) {

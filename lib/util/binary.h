@@ -90,7 +90,7 @@ class BinaryWriter {
   // streams/streams.h
   template <typename T> void write(T value);
 
-  bool isGood() { output_.good(); }
+  bool isGood() { return output_.good(); }
  private:
   // Encodes a floating point number. The following restrictions apply:
   // 1 <= bytes <= 8, significand_bits <= 8 * bytes - 2,

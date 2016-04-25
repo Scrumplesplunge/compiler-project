@@ -30,6 +30,14 @@ class VM {
 
   std::string toString();
 
+  int32_t& operator[](int32_t address);
+
+  int32_t read(int32_t address);
+  int8_t readByte(int32_t address);
+
+  void write(int32_t address, int32_t value);
+  void writeByte(int32_t address, int8_t value);
+
  private:
   void performDirect(Direct op, int32_t argument);
   void performIndirect(Indirect op);
@@ -57,14 +65,6 @@ class VM {
 
   void push(int32_t x);  // Push a value onto the register stack.
   int32_t pop();         // Pop a value off the register stack.
-
-  int32_t& operator[](int32_t address);
-
-  int32_t read(int32_t address);
-  int8_t readByte(int32_t address);
-
-  void write(int32_t address, int32_t value);
-  void writeByte(int32_t address, int8_t value);
 
   void perform(const Operation& operation);
 

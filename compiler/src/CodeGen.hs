@@ -164,7 +164,7 @@ gen_expr e =
       where (p, ge) = gen_addr e
             code ctx = do
               ce <- ge ctx
-              return $ Code [ce, Raw [LDNL 0]]
+              return $ Code [ce, Raw [if t == AST.BYTE then LB else LDNL 0]]
     (Mod a b) -> binop a b [desc, REM]
     (Mul es) -> symop es [desc, MUL]
     (Neg e) -> unop e [desc, NOT, ADC 1]

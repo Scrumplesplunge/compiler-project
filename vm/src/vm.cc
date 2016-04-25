@@ -1,5 +1,6 @@
 #include "operations.h"
 #include "../lib/util/args.h"
+#include "../lib/util/binary.h"
 #include "runtime/VM.h"
 
 #include <fstream>
@@ -26,23 +27,49 @@ int main(int argc, char* args[]) {
     return 1;
   }
 
+  // Construct the program memory.
+  int memory_size = 1 << 20;
+  unique_ptr<int32_t[]> memory(new int32_t[memory_size / 4]);
+
   // Open the bytecode file and load the contents.
   ifstream bytecode_file(options::bytecode, ios::binary);
   string bytecode = string(istreambuf_iterator<char>(bytecode_file),
                            istreambuf_iterator<char>());
 
-  // Construct the program memory.
-  int memory_size = 1 << 20;
-  unique_ptr<int32_t[]> memory(new int32_t[memory_size / 4]);
+  // Initialize the virtual machine.
+  VM vm(move(memory), memory_size, bytecode);
 
   if (options::data != "") {
-    // TODO: Construct the program memory.
-    cerr << "Warning: Data initialization is not implemented.\n";
-    return 1;
+    // Open the data file and load the contents.
+    ifstream data_file(options::data, ios::binary);
+    BinaryReader reader(data_file);
+
+    int32_t address = reader.readInt32();
+    int32_t length = reader.readInt32();
+    int buffer_size = 2 * length;
+    unique_ptr<char[]> buffer(new char[buffer_size]);
+    reader.readBytes(buffer.get(), length);
+
+    while (reader.isGood()) {
+      cerr << "Loading chunk at location " << address << ", length " << length
+           << "..\n";
+
+      // Copy the blob into the main memory of the VM.
+      for (int32_t i = 0; i < length; i++)
+        vm.writeByte(address + i, buffer[i]);
+
+      // Load the next blob.
+      address = reader.readInt32();
+      length = reader.readInt32();
+      if (length > buffer_size) {
+        buffer_size = 2 * length;
+        buffer.reset(new char[buffer_size]);
+      }
+      reader.readBytes(buffer.get(), length);
+    }
   }
 
-  // Run the virtual machine.
-  VM vm(move(memory), memory_size, bytecode);
+  // Run the program.
   vm.run();
 
   return 0;
