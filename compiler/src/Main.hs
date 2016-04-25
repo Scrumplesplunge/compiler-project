@@ -50,7 +50,7 @@ read_args = do
   where read_args' args options =
           case args of
             [] -> return options
-            ("--assembler_file" : v : args') -> do
+            ("--assembly_file" : v : args') -> do
               -- Set the output assembler file.
               read_args' args' (options { assembler_file = v })
             ("--data_file" : v : args') -> do

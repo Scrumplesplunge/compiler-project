@@ -11,18 +11,18 @@
 
 using namespace std;
 
-USAGE("Usage: vm --bytecode [filename] --data [filename]\n\n"
+USAGE("Usage: vm --bytecode_file [filename] --data_file [filename]\n\n"
       "Execute a program using the virtual machine.\n");
 
-OPTION(string, bytecode, "",
+OPTION(string, bytecode_file, "",
        "File containing the application bytecode to be executed.");
-OPTION(string, data, "",
+OPTION(string, data_file, "",
        "File containing the application data. This will be used to initialize "
        "the RAM of the virtual machine before the program is started.");
 
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
-  if (options::bytecode == "") {
+  if (options::bytecode_file == "") {
     cerr << "A bytecode file must be specified.\n";
     return 1;
   }
@@ -32,16 +32,16 @@ int main(int argc, char* args[]) {
   unique_ptr<int32_t[]> memory(new int32_t[memory_size / 4]);
 
   // Open the bytecode file and load the contents.
-  ifstream bytecode_file(options::bytecode, ios::binary);
+  ifstream bytecode_file(options::bytecode_file, ios::binary);
   string bytecode = string(istreambuf_iterator<char>(bytecode_file),
                            istreambuf_iterator<char>());
 
   // Initialize the virtual machine.
   VM vm(move(memory), memory_size, bytecode);
 
-  if (options::data != "") {
+  if (options::data_file != "") {
     // Open the data file and load the contents.
-    ifstream data_file(options::data, ios::binary);
+    ifstream data_file(options::data_file, ios::binary);
     BinaryReader reader(data_file);
 
     int32_t address = reader.readInt32();

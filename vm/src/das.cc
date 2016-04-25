@@ -10,10 +10,10 @@
 
 using namespace std;
 
-USAGE("Usage: das --binary_file [filename]\n\n"
+USAGE("Usage: das --bytecode_file [filename]\n\n"
       "Disassemble Transputer bytecode into human-readable assembler.\n");
 
-OPTION(string, binary_file, "", "File containing Transputer bytecode.\n");
+OPTION(string, bytecode_file, "", "File containing Transputer bytecode.\n");
 
 const char hex_digits[] = "0123456789abcdef";
 
@@ -30,13 +30,13 @@ static string addressString(int32_t address) {
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
 
-  if (options::binary_file == "") {
+  if (options::bytecode_file == "") {
     cerr << "A bytecode file must be specified.\n";
     return 1;
   }
 
   // Open the binary file.
-  ifstream source(options::binary_file, ios::binary);
+  ifstream source(options::bytecode_file, ios::binary);
   string bytecode = string(istreambuf_iterator<char>(source),
                            istreambuf_iterator<char>());
 
