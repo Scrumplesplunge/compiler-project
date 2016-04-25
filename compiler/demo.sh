@@ -1,25 +1,26 @@
 #!/usr/bin/zsh
 
 # Construct the assembler file.
-cat >demo.s <<PRE
+cat >code.s <<PRE
 INIT:
   ajw 1024
 
 START:
 PRE
 
-bin/occ --source_file $1 --assembler_file demo.s --data_file - >> /dev/null
+# The assembler file is appended to rather than overwritten.
+bin/occ --source_file $1 --assembler_file - --data_file data.bin >> code.s
 
-cat >> demo.s <<POST
+cat >> code.s <<POST
 END:
   stopp
 POST
 
 # Assemble the code.
-../vm/bin/as --source demo.s --bytecode demo.bin
+../vm/bin/as --source code.s --bytecode code.bin
 
 # Execute the binary.
-if ../vm/bin/vm --bytecode demo.bin; then
+if ../vm/bin/vm --bytecode code.bin --data data.bin; then
   # Delete the intermediates.
-  rm demo.s demo.bin
+  rm code.s code.bin data.bin
 fi
