@@ -84,25 +84,26 @@ main = do
 
   let x = full_parse process tokens
   let state = empty_state { next_static_address = memory_start options }
-  (proc, state) <- run_analyser (check_process x) state
+  (proc, state') <- run_analyser (check_process x) state
 
   -- let x = full_parse process tokens
   -- (res, state) <- run_analyser (check_process x)
   -- putStrLn . ("\nFinal Tree:\n\n" ++) . show $ res
   -- putStrLn . ("\nFinal State:\n\n" ++) . show $ state
 
-  if num_errors state > 0 then
-    hPutStrLn stderr ("Compilation failed with " ++ show (num_errors state) ++
-                      " error(s) and " ++ show (num_warnings state) ++
+  if num_errors state' > 0 then
+    hPutStrLn stderr ("Compilation failed with " ++ show (num_errors state') ++
+                      " error(s) and " ++ show (num_warnings state') ++
                       " warning(s).")
   else do
     -- Write assembler file.
     assembler_handle <- open (assembler_file options) WriteMode stdout
-    assemble context proc assembler_handle
+    let static_size = next_static_address state' - memory_start options
+    assemble (context { stack_depth = static_size }) proc assembler_handle
     hClose assembler_handle
 
     -- Write data file.
     data_handle <- open (data_file options) WriteMode stdout
-    let blob = make_blob (static state)
+    let blob = make_blob (static state')
     BL.hPut data_handle blob
     hClose data_handle

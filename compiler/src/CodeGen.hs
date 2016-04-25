@@ -223,7 +223,7 @@ gen_addr e =
                 Just (Global a) -> return (load_global_pointer ctx a)
                 Just (Local sl off) ->
                   return (load_local_pointer ctx (static_level ctx - sl) off)
-            load_global_pointer ctx a = Raw [LDC a]
+            load_global_pointer ctx a = Raw [MINT, ADC (a - two_pow_31)]
             load_local_pointer ctx sl_diff off =
               if sl_diff == 0 then
                 -- We are already at the same static level. Use load-local.
@@ -703,10 +703,9 @@ gen_proc p =
 -- Run a code generator and output the generated code.
 assemble :: Context -> Process -> Handle -> IO ()
 assemble ctx process output = do
-  let (promise, gp) = gen_proc process
+  let (pp, gp) = gen_proc process
   let text = run_generator (do
         code <- gp ctx
-        showCode $ Code [
-          comment ("Max additional depth: " ++ show (depth_required promise)),
-          code])
+        let mem_size = stack_depth ctx + depth_required pp
+        showCode $ Code [Raw [AJW mem_size], code, Raw [STOPP]])
   hPutStr output text

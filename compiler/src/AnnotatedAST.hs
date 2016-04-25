@@ -278,7 +278,7 @@ instance Show Value where
 
 -- Constant values.
 two_pow_32 = 0x100000000 :: Integer
-two_pow_31 = 0x10000000  :: Integer
+two_pow_31 = 0x080000000 :: Integer
 mem_start  = value 0x80000070
 true       = value 1
 false      = value 0
