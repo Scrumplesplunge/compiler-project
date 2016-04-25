@@ -5,7 +5,7 @@ SOURCES = $(wildcard src/*.hs)
 all: bin/occ
 
 bin/occ: ${SOURCES} | bin build
-	ghc -i. -O -hidir build -odir build -o $@ $^
+	ghc -O2 -dynamic --make -i. -hidir build -odir build -o $@ $^
 
 build:
 	mkdir build
