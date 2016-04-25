@@ -288,7 +288,7 @@ DEFINE_INDIRECT(IN) {
 
       // TODO: Special behaviour is required to handle alt constructs.
       if (source == Enabling || source == Waiting || source == Ready)
-        throw runtime_error("Channel alternatives not yet implemented.");
+        throw runtime_error("Attempted to input from waiting ALT.");
 
       for (int i = 0; i < A; i++)
         writeByte(C + i, readByte(source + i));
@@ -433,20 +433,25 @@ DEFINE_INDIRECT(OUT) {
       write(Wptr - 12, C);
       deschedule();
     } else {
-      // A process is waiting. The communication can proceed.
       int32_t dest = read((chan_value & ~0x3) - 12);
 
-      // TODO: Special behaviour is required to handle alt constructs.
-      if (dest == Enabling || dest == Waiting || dest == Ready)
-        throw runtime_error("Channel alternatives not yet implemented.");
+      if (dest == Enabling || dest == Waiting || dest == Ready) {
+        // A process is waiting via an ALT. Initiate the communication and
+        // reschedule the process.
+        write(B, Wdesc());
+        write(Wptr - 12, C);
+        schedule(chan_value);
+        deschedule();
+      } else {
+        // A process is waiting directly. The communication can proceed.
+        for (int i = 0; i < A; i++)
+          writeByte(dest + i, readByte(C + i));
+        // Reschedule the other thread.
+        schedule(chan_value);
 
-      for (int i = 0; i < A; i++)
-        writeByte(dest + i, readByte(C + i));
-      // Reschedule the other thread.
-      schedule(chan_value);
-
-      // Reset the channel.
-      write(B, NotProcess);
+        // Reset the channel.
+        write(B, NotProcess);
+      }
     }
   }
 }
