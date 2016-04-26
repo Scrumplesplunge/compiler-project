@@ -35,7 +35,7 @@ The Occam syntax has only a handful of different token types:
   \item \texttt{INTEGER i} - An integer literal, e.g. \texttt{123}.
   \item \texttt{KEYWORD k} - A program keyword, e.g. \texttt{SEQ}.
   \item \texttt{STRING s} - A string literal, e.g. \texttt{"Hello, World!"}.
-  \item \texttt{SYMBOL s} - A symbol, e.g. \texttt{*} or \texttt{:=}.
+  \item \texttt{SYMBOL s} - An operator symbol, e.g. \texttt{*} or \texttt{:=}.
 \end{itemize}
 In addition to these tokens, there are two more which are used to convey
 indentation and formatting:
@@ -77,9 +77,10 @@ Occam, there is a reasonable overlap in functionality.}
 
 One possibility for parsing would be to use an existing utility such as
 \textit{Happy}\footnote{\url{https://www.haskell.org/happy/}} to generate a
-parser from the grammar. However, such utilities often make it harder to produce
-useful or accurate syntax error messages, so I have elected to implement the
-parser from scratch.
+parser from the grammar. However, such utilities often require a great deal of
+effort in order to have them correctly track line numbers and columns for the
+sake of generating understandable syntax (or later, semantic) errors, so I have
+elected to implement the parser from scratch.
 
 The parser consists of two main parts. The first part is a collection of
 functions which describe parsing behaviour for each of a collection of
@@ -126,6 +127,15 @@ The code generation is factorised into a collection of functions, with at least
 one per program construct. Although code generation is mostly a
 functionally-pure process, it is necessary to be able to generate unique labels
 throughout, and so the functions are implemented monadically.
+
+\subsection{Static Data} \label{static-blob}
+
+It is necessary for static data such as string constants or tables to be somehow
+transferred from the source code to the virtual machine, but perhaps
+inappropriate to encode this data in the assembler file that is produced for the
+code. Instead, the compiler will produce a second file which contains this
+binary data in a form which is ready to be passed to the virtual machine. The
+exact structure of this data file is described in \ref{binary-format}.
 
 \subsection{Possibly: Peephole Optimization}
 
@@ -233,24 +243,36 @@ bound.}
 \section{Virtual Machine}
 
 The virtual machine will execute the bytecode produced by the assembler. It will
-implement most of the Transputer instruction set, with some deviations.
+implement most of the Transputer instruction set, with some exceptions. Some of
+the more complicated Transputer instructions are wholly unnecessary for
+implementing the version of Occam which I am using\footnote{Two-dimensional
+block move instructions and floating point support.}. Additionally, it is
+convenient to have direct instructions for printing values to the terminal, for
+the purpose of debugging.
 
-\subsection{Target Executable Format}
+\subsection{Target Executable Format} \label{binary-format}
 
 There are two parts to the programs that the compiler will produce:
 instructions and data. The instructions will be output as Transputer assembler
-which is then assembled into bytecode, but the data has to be provided in a
-different manner. My intention is for the compiler to additionally output a
-binary blob containing some representation of the initial state of the
-Transputer memory. This can then be passed to the virtual machine and be used to
-initialize the available RAM before the program is started, or alternatively
-linked with the bytecode in an executable wrapper.
+which is then assembled into bytecode, but the data is provided separately as
+the binary blob mentioned in \ref{static-blob}. The data file will consist of a
+collection of records, each containing:
+\begin{itemize}
+  \item
+    \texttt{int32le address} - The address of the start of this data in the VM
+    memory.
+  \item
+    \texttt{int32le length} - The length (in bytes) of the data block in this
+    record.
+  \item
+    \texttt{byte data[length]} - The data to be loaded into the VM memory.
+\end{itemize}
 
 \subsection{Basic Functionality - Single Instance}
 
 A single instance of the virtual machine will aim to emulate a single
-Transputer. This means that a program running on a single instance will not be
-taking advantage of any parallelism.
+Transputer. This means that although a program running on an instance may
+consist of many different processes, they are not making use of any parallelism.
 
 \subsection{Advanced Functionality - Multiple Instances}
 
