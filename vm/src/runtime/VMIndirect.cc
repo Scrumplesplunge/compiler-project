@@ -111,13 +111,18 @@ DEFINE_INDIRECT(DIFF) {
 
 // Disable channel.
 DEFINE_INDIRECT(DISC) {
-  // A channel guard is detectably ready if the value stored in the channel does
-  // not match the current workspace descriptor.
-  if (B && read(Wptr) == NoneSelected && read(C) != Wdesc()) {
-    write(Wptr, A);
-    A = True;
+  if (isExternalChannel(B)) {
+    // TODO: Need to implement external channel communication.
+    throw runtime_error("External communication is not implemented.");
   } else {
-    A = False;
+    // A channel guard is detectably ready if the value stored in the channel does
+    // not match the current workspace descriptor.
+    if (B && read(Wptr) == NoneSelected && read(C) != Wdesc()) {
+      write(Wptr, A);
+      A = True;
+    } else {
+      A = False;
+    }
   }
 }
 
@@ -161,7 +166,10 @@ DEFINE_INDIRECT(DUP) {
 
 // Enable channel.
 DEFINE_INDIRECT(ENBC) {
-  if (A) {
+  if (isExternalChannel(B)) {
+    // TODO: Need to implement external channel communication.
+    throw runtime_error("External communication is not implemented.");
+  } else if (A) {
     if (read(B) == NotProcess) {
       // No process waiting on channel B.
       write(B, Wdesc());
