@@ -8,7 +8,7 @@ using namespace std;
 
 bool BinaryReader::readBool() {
   uint8_t value = readUint8();
-  if (value >= 2) good_ = false;
+  if (value >= 2) throw runtime_error("Value in stream is not a boolean.");
   return (value != 0);
 }
 
@@ -63,8 +63,7 @@ uint64_t BinaryReader::readVarUint() {
     if ((temp & 0x80) == 0) return number;
     shift += 7;
   }
-  good_ = false;
-  return 0;
+  throw runtime_error("Incomplete var-int in stream.");
 }
 
 float BinaryReader::readFloat16() { return readFloating(readUint16(), 2, 10); }
@@ -72,19 +71,16 @@ float BinaryReader::readFloat()   { return readFloating(readUint32(), 4, 23); }
 double BinaryReader::readDouble() { return readFloating(readUint64(), 8, 52); }
 
 void BinaryReader::readBytes(char buffer[], int64_t num_bytes) {
-  if (!input_.read(buffer, num_bytes)) good_ = false;
+  if (input_.read(buffer, num_bytes) != num_bytes)
+    throw runtime_error("Stream ended before block-read completed.");
 }
 
 string BinaryReader::readString() {
-  uint64_t length = readVarUint();
-  if (!good_) return "";
+  int64_t length = readVarUint();
   unique_ptr<char[]> buffer(new char[length]);
-  uint64_t actual_length = length;
-  if (!input_.read(buffer.get(), length)) {
-    good_ = false;
-    actual_length = input_.gcount();
-  }
-  return string(buffer.get(), actual_length);
+  if (input_.read(buffer.get(), length) != length)
+    throw runtime_error("Stream ended before string read completed.");
+  return string(buffer.get(), length);
 }
 
 template <> bool     BinaryReader::read<bool>()     { return readBool(); }
@@ -173,7 +169,7 @@ void BinaryWriter::writeVarUint(uint64_t value) {
     char temp = value & 0x7F;
     value >>= 7;
     if (value) temp |= 0x80;
-    output_.write(&temp, 1);
+    output_.put(temp);
   } while (value);
 }
 

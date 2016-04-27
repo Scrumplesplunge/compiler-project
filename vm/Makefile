@@ -24,10 +24,10 @@ bin/das: src/das.cc src/operations.cc gen/Direct.cc gen/Indirect.cc  \
 bin/vm: src/vm.cc src/runtime/VM.cc src/operations.cc gen/Direct.cc  \
 	      gen/Indirect.cc gen/Unit.cc src/runtime/VMDirect.cc  \
 				src/runtime/VMIndirect.cc ../lib/util/args.cc ../lib/util/table.cc  \
-				../lib/util/text.cc ../lib/util/binary.cc  \
+				../lib/util/text.cc ../lib/util/binary.cc ../lib/util/stream.cc  \
 			| bin src/runtime/VM.h src/operations.h gen/Direct.h gen/Indirect.h  \
 			  gen/Unit.h ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h  \
-				../lib/util/binary.h
+				../lib/util/binary.h ../lib/util/stream.h
 	${CXX} ${CXXFLAGS} $^ -o $@
 
 gen/%.h: gen/%.cc

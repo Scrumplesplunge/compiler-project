@@ -1,11 +1,13 @@
 #pragma once
 
+#include "stream.h"
+
 #include <iostream>
 #include <string>
 
 class BinaryReader {
  public:
-  BinaryReader(std::istream& input)
+  BinaryReader(InputStream& input)
       : input_(input) {}
 
   // Encoded as a byte with value 0 (false) or 1 (true).
@@ -40,18 +42,15 @@ class BinaryReader {
   std::string readString();
 
   template <typename T> T read();
-
-  bool isGood() { return good_ && input_.good(); }
  private:
   double readFloating(uint64_t value, int bytes, int significand_bits);
 
-  bool good_ = true;
-  std::istream& input_;
+  InputStream& input_;
 };
 
 class BinaryWriter {
  public:
-  BinaryWriter(std::ostream& output)
+  BinaryWriter(OutputStream& output)
       : output_(output) {}
 
   // Encoded as a byte with value 0 (false) or 1 (true).
@@ -89,8 +88,6 @@ class BinaryWriter {
   // specialised. Instead, specialise ReadFromByteStream, which is declared in
   // streams/streams.h
   template <typename T> void write(T value);
-
-  bool isGood() { return output_.good(); }
  private:
   // Encodes a floating point number. The following restrictions apply:
   // 1 <= bytes <= 8, significand_bits <= 8 * bytes - 2,
@@ -98,7 +95,7 @@ class BinaryWriter {
   // These are not checked.
   uint64_t encodeFloating(double value, int bytes, int significand_bits);
 
-  std::ostream& output_;
+  OutputStream& output_;
 };
 
 // Provided specializations.

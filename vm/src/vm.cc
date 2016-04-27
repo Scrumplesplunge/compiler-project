@@ -42,7 +42,8 @@ int main(int argc, char* args[]) {
   if (options::data_file != "") {
     // Open the data file and load the contents.
     ifstream data_file(options::data_file, ios::binary);
-    BinaryReader reader(data_file);
+    StandardInputStream data_stream(data_file);
+    BinaryReader reader(data_stream);
 
     int32_t address = reader.readInt32();
     int32_t length = reader.readInt32();
@@ -50,7 +51,7 @@ int main(int argc, char* args[]) {
     unique_ptr<char[]> buffer(new char[buffer_size]);
     reader.readBytes(buffer.get(), length);
 
-    while (reader.isGood()) {
+    while (!data_file.eof()) {
       // Copy the blob into the main memory of the VM.
       for (int32_t i = 0; i < length; i++)
         vm.writeByte(address + i, buffer[i]);
