@@ -8,7 +8,7 @@ using namespace std;
 
 bool BinaryReader::readBool() {
   uint8_t value = readUint8();
-  if (value >= 2) throw runtime_error("Value in stream is not a boolean.");
+  if (value >= 2) throw read_error("Value in stream is not a boolean.");
   return (value != 0);
 }
 
@@ -63,7 +63,7 @@ uint64_t BinaryReader::readVarUint() {
     if ((temp & 0x80) == 0) return number;
     shift += 7;
   }
-  throw runtime_error("Incomplete var-int in stream.");
+  throw read_error("Incomplete var-int in stream.");
 }
 
 float BinaryReader::readFloat16() { return readFloating(readUint16(), 2, 10); }
@@ -72,14 +72,14 @@ double BinaryReader::readDouble() { return readFloating(readUint64(), 8, 52); }
 
 void BinaryReader::readBytes(char buffer[], int64_t num_bytes) {
   if (input_.read(buffer, num_bytes) != num_bytes)
-    throw runtime_error("Stream ended before block-read completed.");
+    throw read_error("Stream ended before block-read completed.");
 }
 
 string BinaryReader::readString() {
   int64_t length = readVarUint();
   unique_ptr<char[]> buffer(new char[length]);
   if (input_.read(buffer.get(), length) != length)
-    throw runtime_error("Stream ended before string read completed.");
+    throw read_error("Stream ended before string read completed.");
   return string(buffer.get(), length);
 }
 
@@ -141,7 +141,8 @@ void BinaryWriter::writeInt64(int64_t value) {
 
 void BinaryWriter::writeUint8(uint8_t value) {
   char c = static_cast<char>(value);
-  output_.write(&c, 1);
+  if (output_.write(&c, 1) != 1)
+    throw write_error("Output stream closed unexpectedly.");
 }
 
 void BinaryWriter::writeUint16(uint16_t value) {
@@ -169,7 +170,8 @@ void BinaryWriter::writeVarUint(uint64_t value) {
     char temp = value & 0x7F;
     value >>= 7;
     if (value) temp |= 0x80;
-    output_.put(temp);
+    if (!output_.put(temp))
+      throw write_error("Output stream closed unexpectedly.");
   } while (value);
 }
 
@@ -186,12 +188,13 @@ void BinaryWriter::writeDouble(double value) {
 }
 
 void BinaryWriter::writeBytes(const char buffer[], int64_t num_bytes) {
-  output_.write(buffer, num_bytes);
+  if (output_.write(buffer, num_bytes) != num_bytes)
+    throw write_error("Output stream closed unexpectedly.");
 }
 
 void BinaryWriter::writeString(string value) {
   writeVarUint(value.length());
-  output_.write(value.c_str(), value.length());
+  writeBytes(value.c_str(), value.length());
 }
 
 template <> void BinaryWriter::write<bool>(bool value) { writeBool(value); }

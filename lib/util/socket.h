@@ -3,8 +3,15 @@
 #include "stream.h"
 
 #include <netinet/in.h>
+#include <stdexcept>
 #include <string>
 #include <sys/socket.h>
+
+class socket_error : public std::runtime_error {
+ public:
+  socket_error(std::string message)
+      : std::runtime_error(message) {}
+};
 
 // Low-level wrapper around the socket interface.
 class Socket : public InputStream, public OutputStream {

@@ -14,7 +14,7 @@ static void throw_error(string message) {
   message += " (" + to_string(errno) + ")";
   string description = strerror(errno);
   if (description.length() > 0) message += ": " + description;
-  throw runtime_error(message);
+  throw socket_error(message);
 }
 
 static void throw_getnameinfo_error(int result) {
@@ -32,7 +32,7 @@ static void throw_getnameinfo_error(int result) {
                 strerror(errno);
       break;
   }
-  throw runtime_error(message);
+  throw socket_error(message);
 }
 
 Socket::Socket(Socket&& source)

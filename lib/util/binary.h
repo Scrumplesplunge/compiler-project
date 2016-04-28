@@ -3,7 +3,14 @@
 #include "stream.h"
 
 #include <iostream>
+#include <stdexcept>
 #include <string>
+
+class read_error : public std::runtime_error {
+ public:
+  read_error(std::string message)
+      : std::runtime_error(message) {}
+};
 
 class BinaryReader {
  public:
@@ -46,6 +53,12 @@ class BinaryReader {
   double readFloating(uint64_t value, int bytes, int significand_bits);
 
   InputStream& input_;
+};
+
+class write_error : public std::runtime_error {
+ public:
+  write_error(std::string message)
+      : std::runtime_error(message) {}
 };
 
 class BinaryWriter {
