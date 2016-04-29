@@ -53,15 +53,25 @@ allocate ctx x size = ctx { stack_depth = pos,
   where pos = stack_depth ctx + size
         a = Local (static_level ctx) pos
 
--- Initialize a local variable.
-initialize :: AST.RawType -> Integer -> Code
-initialize t id =
+-- Construct a (non-zero) number of local variables. The variables are assumed
+-- to start at local 1.
+initialize :: AST.RawType -> Integer -> Generator Code
+initialize t size = do
   case t of
+    -- Don't initialize VARs.
+    AST.VALUE -> return $ Raw []
+    -- Initialize CHANs.
     AST.CHAN ->
-      Raw [MINT, STL id]
-    AST.VALUE ->
-      Raw [LDC 0, STL id]
-    _ -> error "Don't know how to initialize this."
+      if size <= 5 then
+        -- Initialize directly.
+        return $ Code (map (\x -> Raw [LDLP x, RESETCH]) [1..size])
+      else do
+        -- Initialize all except the first two using a loop.
+        repeat <- label "INIT"
+        return $ Code [Raw [LDC 3, STL 1, LDC size, STL 2], Label repeat,
+                       Raw [LDL 1, LDLP 0, WSUB, RESETCH, LDLP 1, LEND repeat,
+                            LDLP 1, RESETCH, LDLP 2, RESETCH]]
+    _ -> error $ "Don't know how to initialize " ++ show t
 
 -- (space needed, space already taken -> code)
 type CodeGenerator = (Promise, Context -> Generator Code)
@@ -658,8 +668,9 @@ gen_proc p =
             code ctx = do
               let ctx' = allocate ctx x size
               cp <- gp ctx'
+              init_code <- initialize t size
               return $ Code [desc, Raw [AJW (-size)],
-                             Code $ map (initialize t) [1..size], cp,
+                             init_code, cp,
                              desc, Raw [AJW size]]
     DefineConstant x v proc -> (p, code)
       where (p, gp) = gen_proc proc

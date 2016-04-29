@@ -45,6 +45,7 @@ data Operation =
     | OUT Integer      -- Write x bytes from loc B to chan A. Pop both.
     | OUTWORD          -- Output word B to channel A.
     | REM              -- B = pop(); A = pop(); push(A % B);
+    | RESETCH          -- Reset channel.
     | RET              -- Return from subroutine.
     | REV              -- B = pop(); A = pop(); push(B); push(A);
     | RUNP             -- A = pop(); Resume process with descriptor A.
@@ -118,6 +119,7 @@ def OR           = return ["or"]
 def (OUT x)      = return ["ldc " ++ show x, "out"]
 def OUTWORD      = return ["outword"]
 def REM          = return ["rem"]
+def RESETCH      = return ["resetch"]
 def RET          = return ["ret"]
 def REV          = return ["rev"]
 def RUNP         = return ["runp"]
