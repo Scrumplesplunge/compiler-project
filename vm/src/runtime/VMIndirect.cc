@@ -722,7 +722,7 @@ DEFINE_INDIRECT(PUTC) {
   putc(c, stdout);
 }
 
-// Print x bytes pointed to by A to the console.
+// Print A bytes pointed to by B to the console.
 DEFINE_INDIRECT(PUTS) {
   for (int i = 0; i < A; i++) {
     char c = static_cast<char>(readByte(B + i));
