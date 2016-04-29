@@ -68,9 +68,11 @@ initialize t size = do
       else do
         -- Initialize all except the first two using a loop.
         repeat <- label "INIT"
+        loop_end <- label "LOOP_END"
         return $ Code [Raw [LDC 3, STL 1, LDC size, STL 2], Label repeat,
-                       Raw [LDL 1, LDLP 0, WSUB, RESETCH, LDLP 1, LEND repeat,
-                            LDLP 1, RESETCH, LDLP 2, RESETCH]]
+                       Raw [LDL 1, LDLP 0, WSUB, RESETCH, LDLP 1,
+                            LEND repeat loop_end],
+                       Label loop_end, Raw [LDLP 1, RESETCH, LDLP 2, RESETCH]]
     _ -> error $ "Don't know how to initialize " ++ show t
 
 -- (space needed, space already taken -> code)
@@ -298,9 +300,11 @@ gen_cond_exit depth (Condition rnc) =
               cb <- gb ctx'
               cc <- gc ctx'
               loop <- label "REP_IF"
-              return $ Code [Raw [AJW (-2)], ca, Raw [STL 1], cb, Raw [STL 2],
-                             Label loop, cc, Raw [LDLP 1],
-                             Raw [LEND loop, AJW 2]]
+              loop_end <- label "LOOP_END"
+              return $ Code [Raw [AJW (-2)], ca, Raw [STL 1], cb,
+                             Raw [DUP, STL 2, CJ loop_end], Label loop, cc,
+                             Raw [LDLP 1, LEND loop loop_end], Label loop_end,
+                             Raw [AJW 2]]
 
 -- Generate code for a conditional block.
 gen_cond :: Condition -> CodeGenerator
@@ -587,13 +591,14 @@ gen_par rp =
               let ctx2 = allocate (new_static_level ctx1) i 1
               cp <- gp ctx2
               loop <- label "REP_PAR"
+              loop_end <- label "LOOP_END"
               proc <- label "PROC"
               end <- label "END_PAR"
               return $ Code [desc,
                              -- Set up the synchronisation monitor.
                              Raw [AJW (-4), LDC (1 + n), STL 4, LDA end, STL 3],
                              -- Set up the replicator.
-                             ca, Raw [STL 1, LDC n, STL 2],
+                             ca, Raw [STL 1, LDC n, DUP, STL 2, CJ loop_end],
                              -- Begin spawning processes.
                              Label loop,
                              Raw [
@@ -606,7 +611,8 @@ gen_par rp =
                                -- Spawn the thread.
                                STARTP proc,
                                -- Continue the loop.
-                               LDLP 1, LEND loop],
+                               LDLP 1, LEND loop loop_end],
+                             Label loop_end,
                              -- End the control process.
                              Raw [LDLP 3, ENDP],
                              -- Code for the repeated process.
@@ -649,9 +655,11 @@ gen_seq rp =
               cb <- gb ctx'
               cp <- gp ctx'
               loop <- label "REP_SEQ"
+              loop_end <- label "LOOP_END"
               return $ Code [desc, Raw [AJW (-2)], ca, Raw [STL 1], cb,
-                             Raw [STL 2], Label loop, cp, Raw [LDLP 1],
-                             Raw [LEND loop, AJW 2]]
+                             Raw [DUP, STL 2, CJ loop_end], Label loop, cp,
+                             Raw [LDLP 1, LEND loop loop_end], Label loop_end,
+                             Raw [AJW 2]]
   where desc = comment $ prettyPrint (Seq rp)
 
 -- Generate code for a process.
