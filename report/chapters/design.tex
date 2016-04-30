@@ -280,5 +280,16 @@ Since Occam processes communicate via channels rather than by sharing memory, it
 is relatively trivial to imagine these channels being implemented with atomics
 and mutexes in order to allow true parallelism. Alternatively, network sockets
 and a simple protocol could allow them to be used between separate physical
-machines. I will aim to implement some of this functionality, to allow true
+machines. I aim to implement some of this functionality, to allow true
 parallelism to be taken advantage of.
+
+\textcolor{red}{PLAN:} In order to implement this, I have devised a modification
+to the conventional manner of compiling parallel processes.
+
+Programs running in the multiple-instance setting will run as part of a system
+of threads and processes, potentially across different machines. The system is
+administered by a master process which acts as both the user interface for the
+program, and a load balancer for the worker processes. The worker processes are
+servers which execute the system bytecode in tiny isolated address spaces. This
+isolation allows \texttt{PAR} constructs to re-use the same addresses for
+\textit{all} sub-processes.
