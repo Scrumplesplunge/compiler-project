@@ -111,18 +111,28 @@ DEFINE_INDIRECT(DIFF) {
 
 // Disable channel.
 DEFINE_INDIRECT(DISC) {
-  if (isExternalChannel(B)) {
-    // TODO: Need to implement external channel communication.
-    throw runtime_error("External communication is not implemented.");
+  // Skip processing if the guard condition is false.
+  if (!B) {
+    A = False;
+    return;
+  }
+
+  bool is_ready = false;
+  if (isExternalChannelReader(C)) {
+    ChannelReader& chan = channelReader(C);
+    chan.markDisabled();
+    is_ready = chan.is_ready();
   } else {
-    // A channel guard is detectably ready if the value stored in the channel does
-    // not match the current workspace descriptor.
-    if (B && read(Wptr) == NoneSelected && read(C) != Wdesc()) {
-      write(Wptr, A);
-      A = True;
-    } else {
-      A = False;
-    }
+    is_ready = (read(C) != Wdesc());
+  }
+
+  // A channel guard is detectably ready if the value stored in the channel does
+  // not match the current workspace descriptor.
+  if (read(Wptr) == NoneSelected && is_ready) {
+    write(Wptr, A);
+    A = True;
+  } else {
+    A = False;
   }
 }
 
@@ -166,18 +176,25 @@ DEFINE_INDIRECT(DUP) {
 
 // Enable channel.
 DEFINE_INDIRECT(ENBC) {
-  if (isExternalChannel(B)) {
-    // TODO: Need to implement external channel communication.
-    throw runtime_error("External communication is not implemented.");
-  } else if (A) {
-    if (read(B) == NotProcess) {
-      // No process waiting on channel B.
-      write(B, Wdesc());
-    } else if (read(B) != Wdesc()) {
-      // Another process is waiting on channel B.
-      write(Wptr - 12, Ready);
-      B = C;
-    }
+  // Skip processing if the guard is false.
+  if (!A) return;
+
+  bool is_ready = false;
+  if (isExternalChannelReader(B)) {
+    ChannelReader& chan = channelReader(B);
+    chan.markEnabled(Wdesc());
+    is_ready = chan.is_ready();
+  } else {
+    is_ready = (read(B) != Wdesc());
+  }
+
+  if (read(B) == NotProcess) {
+    // No process waiting on channel B.
+    write(B, Wdesc());
+  } else if (is_ready) {
+    // Another process is waiting on channel B.
+    write(Wptr - 12, Ready);
+    B = C;
   }
 }
 
@@ -279,9 +296,16 @@ DEFINE_INDIRECT(GT) {
 
 // Input message.
 DEFINE_INDIRECT(IN) {
-  if (isExternalChannel(B)) {
-    // TODO: Need to implement external channel communication.
-    throw runtime_error("External communication is not implemented.");
+  if (isExternalChannelReader(B)) {
+    ChannelReader& chan = channelReader(B);
+    if (chan.is_ready()) {
+      // Perform the read. The channel will wake up the other end automatically.
+      chan.read(C, A, this);
+    } else {
+      // Writer is not waiting. Wait for the writer.
+      chan.readWait(Wdesc());
+      deschedule();
+    }
   } else {
     int32_t chan_value = read(B);
     if (chan_value == NotProcess) {
@@ -294,12 +318,9 @@ DEFINE_INDIRECT(IN) {
       // A process is waiting. The communication can proceed.
       int32_t source = read((chan_value & ~0x3) - 12);
 
-      // TODO: Special behaviour is required to handle alt constructs.
-      if (source == Enabling || source == Waiting || source == Ready)
-        throw runtime_error("Attempted to input from waiting ALT.");
-
       for (int i = 0; i < A; i++)
         writeByte(C + i, readByte(source + i));
+
       // Reschedule the other thread.
       schedule(chan_value);
 
@@ -429,9 +450,17 @@ DEFINE_INDIRECT(OR) {
 
 // Output message.
 DEFINE_INDIRECT(OUT) {
-  if (isExternalChannel(B)) {
-    // TODO: Need to implement external channel communication.
-    throw runtime_error("External communication is not implemented.");
+  if (isExternalChannelWriter(B)) {
+    ChannelWriter& chan = channelWriter(B);
+    if (chan.is_ready()) {
+      // Channel operation can occur immediately. Channel will automatically
+      // wake up the other end.
+      chan.write(*this, C, A);
+    } else {
+      // Channel is not ready. Wait for the reader.
+      chan.writeWait(Wdesc());
+      deschedule();
+    }
   } else {
     int32_t chan_value = read(B);
     if (chan_value == NotProcess) {
@@ -502,9 +531,10 @@ DEFINE_INDIRECT(REM) {
 
 // Reset channel.
 DEFINE_INDIRECT(RESETCH) {
-  if (isExternalChannel(A)) {
-    // TODO: Need to implement external channel communication.
-    throw runtime_error("External communication is not implemented.");
+  if (isExternalChannelReader(A)) {
+    channelReader(A).reset();
+  } else if (isExternalChannelWriter(A)) {
+    channelWriter(A).reset();
   } else {
     write(A, NotProcess);
   }

@@ -7,17 +7,18 @@
 
 using namespace std;
 
-const int32_t VM::Enabling     = 0x80000001;
-const int32_t VM::False        = 0x00000000;
-const int32_t VM::MemStart     = 0x80000070;
-const int32_t VM::MostNeg      = 0x80000000;
-const int32_t VM::NoneSelected = 0xFFFFFFFF;
-const int32_t VM::NotProcess   = 0x80000000;
-const int32_t VM::Ready        = 0x80000003;
-const int32_t VM::TimeNotSet   = 0xFFFFFFFF;
-const int32_t VM::TimeSet      = 0xFFFFFFFE;
-const int32_t VM::True         = 0xFFFFFFFF;
-const int32_t VM::Waiting      = 0x80000002;
+const int32_t VM::Enabling        = 0x80000001;
+const int32_t VM::ExternalChannel = 0x80000002;
+const int32_t VM::False           = 0x00000000;
+const int32_t VM::MemStart        = 0x80000070;
+const int32_t VM::MostNeg         = 0x80000000;
+const int32_t VM::NoneSelected    = 0xFFFFFFFF;
+const int32_t VM::NotProcess      = 0x80000000;
+const int32_t VM::Ready           = 0x80000003;
+const int32_t VM::TimeNotSet      = 0xFFFFFFFF;
+const int32_t VM::TimeSet         = 0xFFFFFFFE;
+const int32_t VM::True            = 0xFFFFFFFF;
+const int32_t VM::Waiting         = 0x80000002;
 
 static string addressString(int32_t address) {
   uint32_t raw = static_cast<uint32_t>(address);
@@ -375,6 +376,34 @@ void VM::setError() {
     throw runtime_error("An error occurred and HaltOnError is set.");
 }
 
+bool VM::isExternalChannelReader(int32_t address) {
+  return channel_readers_.count(address) == 1;
+}
+
+bool VM::isExternalChannelWriter(int32_t address) {
+  return channel_writers_.count(address) == 1;
+}
+
+ChannelReader& VM::channelReader(int32_t address) {
+  auto i = channel_readers_.find(address);
+  if (i == channel_readers_.end()) {
+    throw runtime_error(
+        "Address " + addressString(address) +
+        " is not associated with an external channel (reader).");
+  }
+  return *i->second;
+}
+
+ChannelWriter& VM::channelWriter(int32_t address) {
+  auto i = channel_writers_.find(address);
+  if (i == channel_writers_.end()) {
+    throw runtime_error(
+        "Address " + addressString(address) +
+        " is not associated with an external channel (writer).");
+  }
+  return *i->second;
+}
+
 void VM::deschedule() {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   resumeNext();
@@ -428,17 +457,6 @@ int32_t VM::time() {
 
 int32_t VM::Wdesc() {
   return Wptr | priority;
-}
-
-bool VM::isExternalChannel(int32_t address) {
-  switch (address) {
-    // These are the memory-mapped addresses of the external channels.
-    case 0x80000000: case 0x80000004: case 0x80000008: case 0x8000000C:
-    case 0x80000010: case 0x80000014: case 0x80000018: case 0x8000001C:
-      return true;
-    default:
-      return false;
-  }
 }
 
 bool VM::after(int32_t a, int32_t b) {

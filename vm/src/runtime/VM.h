@@ -1,23 +1,27 @@
 #pragma once
 
 #include "../operations.h"
+#include "channel.h"
 
 #include <memory>
 #include <stdint.h>
+#include <unordered_map>
 
 class VM {
  public:
-  static const int32_t Enabling;      // Enabling state of alternative.
-  static const int32_t False;         // Truth values.
-  static const int32_t MemStart;      // Start of user-accessible memory.
-  static const int32_t MostNeg;       // Most negative value.
-  static const int32_t NoneSelected;  // Value representing no branch selected.
-  static const int32_t NotProcess;    // Value representing no process.
-  static const int32_t Ready;         // Ready state of alternative.
-  static const int32_t TimeNotSet;    // Tlink time not set.
-  static const int32_t TimeSet;       // Tlink time set.
-  static const int32_t True;          // Truth values.
-  static const int32_t Waiting;       // Waiting state of alternative.
+  static const int32_t
+      Enabling,         // Enabling state of alternative.
+      ExternalChannel,  // Value stored in external channels.
+      False,            // Truth values.
+      MemStart,         // Start of user-accessible memory.
+      MostNeg,          // Most negative value.
+      NoneSelected,     // Value representing no branch selected.
+      NotProcess,       // Value representing no process.
+      Ready,            // Ready state of alternative.
+      TimeNotSet,       // Tlink time not set.
+      TimeSet,          // Tlink time set.
+      True,             // Truth values.
+      Waiting;          // Waiting state of alternative.
 
   // Construct a VM with the given block of memory available as RAM. At least
   // 4KiB must be provided (i.e. array size of at least 1024) and the execution
@@ -45,7 +49,19 @@ class VM {
 
   void setError();              // Set the error bit and (potentially) halt.
 
-  void deschedule();            // Remove the running process from the process queue.
+  // Return true if the address given is associated with an external channel.
+  bool isExternalChannelReader(int32_t address);
+  bool isExternalChannelWriter(int32_t address);
+
+  // Returns a reference to the external channel which is associated with the
+  // given address, or throws an exception if no such channel exists. Note that
+  // since channels are simplex, the type of the channel must match the expected
+  // type, or an exception will be thrown.
+  ChannelReader& channelReader(int32_t address);
+  ChannelWriter& channelWriter(int32_t address);
+
+  void deschedule();            // Remove the running process from the process
+                                // queue.
   void schedule(int32_t desc);  // Schedule the specified process.
   void schedule();              // Schedule the running process (ie. pause it).
   void resumeNext();            // Resume the next process.
@@ -55,9 +71,7 @@ class VM {
   int32_t time();     // Return the time value for the current priority.
   int32_t Wdesc();    // Current process workspace descriptor.
 
-  // Return true if the address stored in the channel is the address of another
-  // processes workspace.
-  bool isExternalChannel(int32_t address);
+
   bool after(int32_t a, int32_t b);  // True iff time a is after time b.
 
   void enqueueProcess(int32_t desc);
@@ -158,6 +172,10 @@ class VM {
   // Main memory.
   std::unique_ptr<int32_t[]> memory_;
   int32_t memory_size_;  // In bytes.
+
+  // Map from internal addresses to external channels.
+  std::unordered_map<int32_t, std::unique_ptr<ChannelReader>> channel_readers_;
+  std::unordered_map<int32_t, std::unique_ptr<ChannelWriter>> channel_writers_;
   
   // (Read-only) code.
   const std::string& bytecode_;
