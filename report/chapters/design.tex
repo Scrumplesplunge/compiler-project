@@ -1,10 +1,9 @@
-The implementation for this project will be broken into two main parts: the
-Occam compiler, and the Transputer virtual machine. The reason for making this
-divide is so that it will be possible to develop multiple versions of the
-virtual machine, potentially with different objectives such as performance or
-debugging. The compiler is implemented in \texttt{Haskell}, since it is well
-suited for the task, whilst the virtual machine is implemented in \texttt{C++}
-for the sake of performance.
+The implementation for this project will be broken into three main parts: the
+Occam compiler, the \gls{transputer} virtual machine, and the runtime systems.
+These components are all conceptually separated, so it is convenient to separate
+them in the implementation to make them more understandable. The compiler for
+the project is written in \texttt{Haskell}, whilst the virtual machine and the
+runtime systems are both written in \texttt{C++}.
 
 \section{Compiler}
 
@@ -37,14 +36,13 @@ The Occam syntax has only a handful of different token types:
   \item \texttt{STRING s} - A string literal, e.g. \texttt{"Hello, World!"}.
   \item \texttt{SYMBOL s} - An operator symbol, e.g. \texttt{*} or \texttt{:=}.
 \end{itemize}
-In addition to these tokens, there are two more which are used to convey
-indentation and formatting:
+In addition to these tokens, there are two more which are only important for
+parsing the indentation of the program:
 \begin{itemize}
   \item \texttt{NEWLINE} - A line break.
   \item \texttt{SPACES n} - A sequence of \texttt{n} spaces.
 \end{itemize}
-These tokens are used in the Indentation Parsing stage to transform the language
-into one which is context-free.
+These tokens are removed or substituted in the Indentation Parsing stage.
 
 \subsection{Indentation Parsing}
 
@@ -58,36 +56,37 @@ Indentation parsing is achieved as follows: the token stream is split into
 groups of tokens, breaking at each \texttt{NEWLINE} token; the \texttt{COMMENT}
 tokens are removed, and \texttt{SPACES} tokens in each line are removed, unless
 they are indentation\footnote{i.e. they are the first token on a line, and the
-next token is not whitespace.}; finally, the indentation tokens are converted
-into \texttt{INDENT} and \texttt{DEDENT} tokens whenever the level of
-indentation is increased or decreased between lines.
-
-At this stage, all indentation has been replaced with \texttt{INDENT} and
-\texttt{DEDENT} tokens, and the line groups are concatenated back together to
-form the resultant token stream. By performing this step, the rest of the syntax
-parsing can be performed in a context-free manner.
+next token is not whitespace.}; finally, the remaining \texttt{SPACES} tokens
+are all indentation, and can be converted into \texttt{INDENT} and
+\texttt{DEDENT} tokens whenever the level of indentation is increased or
+decreased between lines. By performing this transformation, the task of parsing
+the new token stream is now context-free.
 
 \subsection{Syntax Parsing}
 
 Taking the output of the indentation parser as input, it is now possible to
-parse the grammar with a collection of \gls{cfg} rules. These were sourced in
+parse the grammar with a collection of \gls{cfg} rules. The full grammar for
+Occam is quite long and complex, so the majority of these rules were sourced in
 part from \cite[p.~124]{jones}, and otherwise from
-\cite[p.~106]{occ21}\footnote{Although this manual is for a different version of
-Occam, there is a reasonable overlap in functionality.}
+\cite[p.~106]{occ21}\footnote{This manual is actually for a later version of
+Occam, which means that although many of the grammar rules do apply to the first
+version of Occam, it contains several that do not.}.
 
 One possibility for parsing would be to use an existing utility such as
 \textit{Happy}\footnote{\url{https://www.haskell.org/happy/}} to generate a
 parser from the grammar. However, such utilities often require a great deal of
 effort in order to have them correctly track line numbers and columns for the
-sake of generating understandable syntax (or later, semantic) errors, so I have
-elected to implement the parser from scratch.
+sake of generating understandable syntax errors, so I have elected to implement
+the parser from scratch.
 
 The parser consists of two main parts. The first part is a collection of
 functions which describe parsing behaviour for each of a collection of
 context-free combinators, as well as reduction rules which are used to construct
-the \textit{\gls{ast}} from the source. The second part is an expression of each
-of the grammar rules of Occam in terms of these combinators. Together, they form
-a complete parser for the Occam language.
+the \textit{\gls{ast}} from the source. This loosely acts as an alternative to a
+parser generator, but makes it much easier to track source locations for error
+messages. The second part is an expression of each of the grammar rules of Occam
+in terms of these combinators. Together, they form a complete parser for the
+Occam language.
 
 \subsection{Semantic Checking}
 
@@ -102,14 +101,16 @@ SEQ
 Grammatically, there is nothing wrong with the line \texttt{c := 2}. However,
 semantically, it makes no sense to assign an integer value to a channel. Thus,
 it is necessary to perform semantic analysis to ensure that the program makes
-sense. The semantic analysis stage performs checks that
+sense. The list of checks that the semantic analyser could feasibly perform is
+practically endless, but many are beyond the scope of this project. Checks that
+the analyser will perform include:
 \begin{itemize}
-  \item variables are defined before they are used,
-  \item types are not misused in expressions and statements,
-  \item constant-expressions are actually compile-time computable,
+  \item Checks that variables are defined before they are used,
+  \item Checks that types match the requirements in expressions and statements,
+  \item Verification that constant-expressions are compile-time computable,
 \end{itemize}
-among other checks. The analyser can also warn about things which are not
-clearly errors, but might either be a programmer mistake, or could have
+among other simple assertions. The analyser may also warn about things which are
+not categorically errors, but resemble common programmer mistakes, or could have
 unexpected behaviour. Alongside these checks, the analyser is responsible for
 performing other transforms to the \gls{ast} in order to make it easier to
 generate code from the resulting tree.
@@ -126,23 +127,28 @@ perform the compilation.
 The code generation is factorised into a collection of functions, with at least
 one per program construct. Although code generation is mostly a
 functionally-pure process, it is necessary to be able to generate unique labels
-throughout, and so the functions are implemented monadically.
+throughout, so the functions are implemented monadically.
 
 \subsection{Static Data} \label{static-blob}
 
-It is necessary for static data such as string constants or tables to be somehow
-transferred from the source code to the virtual machine, but perhaps
-inappropriate to encode this data in the assembler file that is produced for the
-code. Instead, the compiler will produce a second file which contains this
-binary data in a form which is ready to be passed to the virtual machine. The
-exact structure of this data file is described in \ref{binary-format}.
+Static data such as string constants or tables must somehow be transferred from
+the source code to the virtual machine. One option would be to have a textual
+representation for data in the assembly language syntax, but this would
+unnecessarily complicate the assembler. Instead, the compiler will produce a
+second file which contains this binary data in a form which is ready to be
+passed to the virtual machine. The exact structure of this data file is
+described in \ref{binary-format}.
 
-\subsection{Possibly: Peephole Optimization}
+\subsection{Peephole Optimization}
 
-As an optional extra of the project, a peephole optimizer could be added to the
-tail-end of the compiler in order to clean up some of the most obvious
-bottlenecks. Since this is not essential for getting the compiler to operate
-however, it is a low priority component.
+The code produced by the compiler may be suboptimal due to the recursive
+construction: it may be the case that small but simple local optimisations could
+improve the performance of the program by removing unnecessary instructions.
+This could feasibly be performed by a so-called peephole optimisation phase at
+the end of the compilation which would scan a sliding window over the assembly
+code, looking for simple substitutions that could be performed. However, this
+stage is not necessary for the compiler to function, and is much lower priority
+than the majority of the other features of the project.
 
 \section{Assembler}
 
@@ -164,18 +170,13 @@ Each line in the input consists (in the following order) of:
         (e.g. \texttt{FOO} or \texttt{BAR - BAZ}).
   \item An optional comment, e.g. \texttt{\# Hello, World!}
 \end{itemize}
-
-This syntax can be parsed by the following regular expression\footnote{For those
-unfamiliar with C++11 raw string literals, \texttt{R"foo(bar)foo"} is a string
-containing \texttt{bar}. No escape sequences are processed between the markers
-\texttt{foo(} and \texttt{)foo}, making them perfect for expressing regular
-expressions without having to double-type every backslash, or escape every
-double-quote.}:
-\lstinputlisting[firstline=129,lastline=143,language=c++]{../vm/src/operations.cc}
+This syntax makes the assembly language easy to read and understand, and the
+inclusion of comments both allows human authors to describe what they are doing,
+and for the compiler to justify its output for the purpose of debugging.
 
 \subsection{Symbolic Labels}
 
-The syntax description in the previous section hints at symbolic labels. The
+The syntax description in the previous section mentions symbolic labels. The
 purpose of these labels is to make it easier to mark locations in the source
 code for the purpose of jumping to instructions. The most obvious way to assign
 values to these labels would be to assign them values based upon where the
@@ -201,13 +202,21 @@ pointer and adds it to the value in register A.}.
 
 \subsection{Variable-length Instructions}
 
-As explained in \ref{ops}, the Transputer has only 13 \gls{direct}s. The rest of
-the instruction set is accessed via the \texttt{OPR} instruction, and are
-referred to as \gls{indirect}s. However, the assembler can perform this
-indirection automatically, allowing the programmer to write \texttt{XOR} and
-have the assembler generate the sequence \texttt{PFIX 3, OPR 3} which executes
-the same thing. Additionally, direct instructions may take longer arguments by
-augmenting them using the \texttt{PFIX} and \texttt{NFIX} instructions.
+As explained in \ref{ops}, the \Gls{transputer} has only 13 \gls{direct}s. The
+rest of the instruction set is accessed via the \texttt{OPR} instruction, and
+are referred to as \gls{indirect}s. In practice, the most frequently executed
+instructions have the shortest byte sequences. This means that the size of the
+code is much smaller than it would be if the instructions were encoded using a
+fixed-width encoding\footnote{In truth, the instruction set of the Transputer
+was not variable-length for this reason. Instead, the variable-length encoding
+allowed programs to be compiled in such a way that they were fully transferrable
+between machines with differing native word lengths. For this project, however,
+the main advantage is reducing the size of the code.}. However, the assembler
+can perform this indirection automatically, allowing the programmer to write
+\texttt{XOR} and have the assembler generate the sequence \texttt{PFIX 3, OPR 3}
+which executes the same thing. Additionally, direct instructions may take longer
+arguments by augmenting them using the \texttt{PFIX} and \texttt{NFIX}
+instructions.
 
 Having this automatic conversion is convenient for the programmer, but also
 introduces a few difficulties in the assembler. Symbolic labels have to be
@@ -243,12 +252,13 @@ bound.}
 \section{Virtual Machine}
 
 The virtual machine will execute the bytecode produced by the assembler. It will
-implement most of the Transputer instruction set, with some exceptions. Some of
-the more complicated Transputer instructions are wholly unnecessary for
-implementing the version of Occam which I am using\footnote{Two-dimensional
-block move instructions and floating point support.}. Additionally, it is
-convenient to have direct instructions for printing values to the terminal, for
-the purpose of debugging.
+implement most of the Transputer instruction set, with some exceptions and
+alterations. Some of the more complicated Transputer instructions are wholly
+unnecessary for implementing the version of Occam which I am aiming to
+implement\footnote{Two-dimensional block move instructions and floating point
+support, to name a few.}. Additionally, it is convenient to have direct
+instructions for printing values to the terminal, so that programs can display
+debugging information.
 
 \subsection{Target Executable Format} \label{binary-format}
 
@@ -268,28 +278,29 @@ collection of records, each containing:
     \texttt{byte data[length]} - The data to be loaded into the VM memory.
 \end{itemize}
 
-\subsection{Basic Functionality - Single Instance}
+\section{Runtime System}
 
-A single instance of the virtual machine will aim to emulate a single
-Transputer. This means that although a program running on an instance may
-consist of many different processes, they are not making use of any parallelism.
+The runtime system described in \ref{dist-system} can be broken into two
+components.
 
-\subsection{Advanced Functionality - Multiple Instances}
+\subsection{Process Server}
 
-Since Occam processes communicate via channels rather than by sharing memory, it
-is relatively trivial to imagine these channels being implemented with atomics
-and mutexes in order to allow true parallelism. Alternatively, network sockets
-and a simple protocol could allow them to be used between separate physical
-machines. I aim to implement some of this functionality, to allow true
-parallelism to be taken advantage of.
+The process server is responsible for hosting several instances of the virtual
+machine. The server has one copy of the bytecode for the entire program which it
+shares amongst all VM instances that it owns. The process server is capable of
+starting up new VM instances on demand, but the actual placement of new
+instances is determined by the process master.
 
-\textcolor{red}{PLAN:} In order to implement this, I have devised a modification
-to the conventional manner of compiling parallel processes.
+When a process communicates over a channel, what happens depends upon the
+underlying type of the channel. If the channel is internal to a single instance
+of the VM, then communication is handled entirely by that instance. If it is a
+channel which connects two instances under the same process server, then the
+communication is handled by the process server. If it is a channel which is
+communicating between separate process servers, then the communication handling
+is performed by the process master.
 
-Programs running in the multiple-instance setting will run as part of a system
-of threads and processes, potentially across different machines. The system is
-administered by a master process which acts as both the user interface for the
-program, and a load balancer for the worker processes. The worker processes are
-servers which execute the system bytecode in tiny isolated address spaces. This
-isolation allows \texttt{PAR} constructs to re-use the same addresses for
-\textit{all} sub-processes.
+\subsection{Process Master}
+
+The process master is responsible for load-balancing a collection of process
+servers, whilst also forwarding inter-system communications and acting as a
+system monitor.

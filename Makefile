@@ -1,4 +1,4 @@
-.PHONY: all clean compiler vm report tools
+.PHONY: all clean compiler vm report tools status
 
 all: compiler vm report tools
 
@@ -19,3 +19,9 @@ report:
 
 tools:
 	make -C tools
+
+status:
+	@echo "===== REPORT ====="
+	@find report -name '*.tex' | xargs texcount -nosub -total | tail -n +2
+	@echo "===== CODE ====="
+	@cloc -quiet . | tail -n +3

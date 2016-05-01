@@ -18,10 +18,12 @@
     {Compiling a CSP-like language for a distributed system}
 
 \titleformat{\chapter}
-    {\Large\bfseries}  % Format
-    {}                 % Label
-    {0pt}              % Separation
-    {\huge}            % Before-code
+    {\Large\bfseries}   % Format
+    {\huge\thechapter}  % Label
+    {20pt}              % Separation
+    {\huge}             % Before-code
+\titleclass{\chapter}{straight}
+\titlespacing*{\chapter}{0pt}{30pt}{10pt}
 
 % Code listing style.
 \definecolor{comment}{rgb}{0.0, 0.5, 0.0}
@@ -67,8 +69,10 @@
   \clearpage
   \addcontentsline{toc}{chapter}{Glossary}
     \printglossaries
+  \clearpage
 
   \tableofcontents
+  \clearpage
 
   \chapter{Introduction} \label{introduction}
     \input{chapters/introduction}

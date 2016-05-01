@@ -1,1 +1,100 @@
-...
+The purpose of this project is to explore the intricacies of compiling an
+Occam-like language. Given the highly concurrent nature of Occam, it seems
+natural to consider the possibility of making the runtime environment
+distributed. This chapter will formally set out the scope of the project, and
+address which features will be implemented and with what priority.
+
+\section{Occam Features}
+
+The compiler implemented in this project will aim to implement a large subset of
+the functionality of Occam 1, as well as a handful of customisations. Common
+language features are not the focus of this project. Instead, interesting
+features will be the focus in the compiler, and most of the focus will be aimed
+at making the compiler pleasant to use, and on making the runtime environment
+featureful and efficient.
+
+\subsection{Intended Features}
+
+These are features which could reasonably be considered as fundamental to Occam.
+The main features which I intend to implement are:
+\begin{itemize}
+  \item Integer variables.
+  \item Channels.
+  \item \texttt{SEQ}, \texttt{PAR}, and \texttt{IF} constructs, both with and
+        without replication.
+  \item \texttt{WHILE} and \texttt{ALT} constructs.
+\end{itemize}
+
+\subsection{Language Extensions}
+
+To complement these features, I will introduce a couple of language extensions:
+\begin{itemize}
+  \item
+    The \texttt{RPC $P$} construct, which allows the process $P$ to be performed
+    remotely. In this context, ``remote'' can be taken to mean that the process
+    can be performed in parallel, either in a different thread running on a
+    different processor core, or potentially on a different machine entirely.
+  \item
+    The \texttt{DIST PAR} construct, which acts as a slightly more efficient
+    version of a \texttt{PAR} of \texttt{RPC} constructs.
+\end{itemize}
+These features require more original design than the core features, and can be
+demonstrated, tested, and contrasted in an empirical manner.
+
+\subsection{Features Beyond Scope}
+
+Occam features which are unlikely to be implemented unless I am very far ahead
+of schedule are:
+\begin{itemize}
+  \item Time-related functionality such as timer input or delays.
+  \item Procedures, which provide no new functionality to the language.
+  \item Replicated \texttt{ALT} constructs.
+\end{itemize}
+These features are ones which are challenging to design, but are not necessary
+for the compiler to be useful, and are not things which I intend to focus on.
+
+\section{Runtime Environment}
+
+The compiler will transform the program source into some executable format. It
+is the task of the virtual machine to understand how to run this executable, and
+it is the task of the overall runtime environment to allow multiple instances of
+the virtual machine to interact with each other.
+
+\subsection{Virtual Machine} \label{vm}
+
+The \textit{\gls{vm}} should be capable of executing code which is intended to
+run on a single processor. This does not mean that it is limited to a single
+process, however, rather that it will only provide concurrency rather than
+parallelism. This will be modelled off the instruction set of the
+\gls{transputer}, with appropriate modifications to support the language
+extensions described above with the help of the runtime system.
+
+\subsection{Distributed Runtime System} \label{dist-system}
+
+Since Occam processes communicate via channels rather than by sharing memory, it
+is relatively easy to imagine these channels connecting processes on separate
+threads, or even separate machines, through use of traditional approaches such
+as atomic memory operations, mutexes, or even network sockets. If some mechanism
+for using these more advanced channels was built into the language, then a
+programmer could write separate Occam programs for a collection of VM instances,
+and have them collaborate. The programmer would have to consider the complexity
+of each of the parallel tasks and organise the code such that each of the
+instances had a fair share of the load.
+
+However, sometimes it is not possible to predict the load distribution like
+this. Factors such as user input or other real-world data could easily change
+the load characteristics of the software when values stray from ranges that the
+programmer predicted. This is where the language extensions come into play. By
+removing the responsibility of placement from the programmer, the runtime system
+is able to make that decision based on the properties of each process, and on
+the load of each server at that moment.
+
+For this reason, the runtime system should be capable of supporting
+communication between a large number of instances which may span several
+machines. When new processes are constructed via the \texttt{RPC} or
+\texttt{DIST PAR} constructs, the runtime system should make an informed
+decision about \textit{where} the process should be started. In a production
+system, it would be desirable to also handle failure cases such as loss of
+connection or hardware failure, but this is beyond the scope of this project:
+all hardware is assumed to be perfectly reliable, and all connections are
+assumed to be unbroken.
