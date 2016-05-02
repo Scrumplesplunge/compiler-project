@@ -69,9 +69,9 @@ initialize t size = do
         -- Initialize all except the first two using a loop.
         repeat <- label "INIT"
         loop_end <- label "LOOP_END"
-        return $ Code [Raw [LDC 3, STL 1, LDC size, STL 2], Label repeat,
+        return $ Code [Raw [LDC 3, STL 1, LDC (size - 2), STL 2], Label repeat,
                        Raw [LDL 1, LDLP 0, WSUB, RESETCH, LDLP 1,
-                            LEND repeat loop_end],
+                           LEND repeat loop_end],
                        Label loop_end, Raw [LDLP 1, RESETCH, LDLP 2, RESETCH]]
     _ -> error $ "Don't know how to initialize " ++ show t
 
@@ -206,7 +206,8 @@ gen_expr e =
                 Just (Global a) -> return (load_global ctx a)
                 Just (Local sl off) ->
                   return (load_local ctx (static_level ctx - sl) off)
-            load_global ctx a = Raw [COMMENT x, LDC a, LDNL 0]
+            load_global ctx a =
+              Raw [COMMENT x, MINT, ADC (a - two_pow_31), LDNL 0]
             load_local ctx sl_diff off =
               if sl_diff == 0 then
                 -- We are already at the same static level. Use load-local.
@@ -215,7 +216,7 @@ gen_expr e =
                 -- Need to descend a few static levels. Use non-local.
                 Raw ([COMMENT x, LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
-                     [LDNL (-off)])
+                     [LDNL (1 - off)])
   where desc = COMMENT (prettyPrint e)
 
 -- Generate code for an address.
@@ -347,8 +348,8 @@ gen_guard_enable guard =
                     return $ Code [cc, Raw [LDC 1, ENBC]]
                   else do
                     -- Channel address requires stack space. Hop over the ALT
-                    -- state to compute the channel address, and then hop back to
-                    -- execute the enable instruction.
+                    -- state to compute the channel address, and then hop back
+                    -- to execute the enable instruction.
                     let ctx' = allocate ctx "<ALT>" 5
                     cc <- gc ctx'
                     return $ Code [Raw [AJW (-5)], cc, Raw [AJW 5, LDC 1, ENBC]]
@@ -370,8 +371,8 @@ gen_guard_enable guard =
                     return $ Code [c, Raw [ENBC]]
                   else do
                     -- Channel address requires stack space. Hop over the ALT
-                    -- state to compute the channel address, and then hop back to
-                    -- execute the enable instruction.
+                    -- state to compute the channel address, and then hop back
+                    -- to execute the enable instruction.
                     let ctx' = allocate ctx "<ALT>" 5
                     c <- g ctx'
                     return $ Code [Raw [AJW (-5)], c, Raw [AJW 5, ENBC]]
@@ -408,8 +409,8 @@ gen_guard_disable guard proc =
                                         DISC]]
                   else do
                     -- Channel address requires stack space. Hop over the ALT
-                    -- state to compute the channel address, and then hop back to
-                    -- execute the enable instruction.
+                    -- state to compute the channel address, and then hop back
+                    -- to execute the enable instruction.
                     let ctx' = allocate ctx "<ALT>" 5
                     cc <- gc ctx'
                     return $ Code [Raw [AJW (-5)], cc,
@@ -457,8 +458,8 @@ gen_guard_disable guard proc =
                                         DISC]]
                   else do
                     -- Channel address requires stack space. Hop over the ALT
-                    -- state to compute the channel address, and then hop back to
-                    -- execute the enable instruction.
+                    -- state to compute the channel address, and then hop back
+                    -- to execute the enable instruction.
                     let ctx' = allocate ctx "<ALT>" 5
                     c <- g ctx'
                     return $ Code [Raw [AJW (-5)], c,
@@ -587,7 +588,7 @@ gen_par rp =
                     -- this was not ensured by the semantic analysis, something
                     -- has gone wrong.
                   _ -> error "This should never happen."
-            d = max (depth_required pa) (4 + n * s)
+            d = max (depth_required pa) (11 + n * s)
             code ctx = do
               let ctx1 = allocate ctx i 4
               ca <- ga ctx1
@@ -598,18 +599,19 @@ gen_par rp =
               proc <- label "PROC"
               end <- label "END_PAR"
               return $ Code [desc,
-                             -- Set up the synchronisation monitor.
+                             comment "Construct PAR synchronisation monitor.",
                              Raw [AJW (-4), LDC (1 + n), STL 4, LDA end, STL 3],
-                             -- Set up the replicator.
+                             comment "Set up replicator.",
                              ca, Raw [STL 1, LDC n, DUP, STL 2, CJ loop_end],
                              -- Begin spawning processes.
                              Label loop,
                              Raw [
-                               -- Calculate the new workspace address.
+                               COMMENT "Calculate workspace address.",
                                LDL 2, ADC (-1), LDC (-s), MUL, LDLP (-7), WSUB,
-                               -- Use one copy to initialize the static link.
+                               COMMENT "Use a copy to initialize static link.",
                                DUP, LDLP (stack_depth ctx1), REV, STNL 2,
-                               -- Use another copy to initialize i.
+                               COMMENT ("Use another copy to initialize " ++
+                                        i ++ "."),
                                DUP, LDL 1, REV, STNL 1,
                                -- Spawn the thread.
                                STARTP proc,
@@ -674,8 +676,9 @@ gen_proc p =
                           (gen_expr b) (gen_addr a)
     Call "putc" [e] -> (unop e [PUTC])
     Call "print.dec" [e] -> (unop e [PRINTDEC])
-    Define t x size proc -> (p, code)
+    Define t x size proc -> (promise { depth_required = d }, code)
       where (p, gp) = gen_proc proc
+            d = depth_required p + size
             code ctx = do
               let ctx' = allocate ctx x size
               cp <- gp ctx'

@@ -1,4 +1,4 @@
-DEF num.workers = 10 :
+DEF num.workers = 100 :
 DEF num.iters = 1000 :
 
 CHAN results[num.workers] :
