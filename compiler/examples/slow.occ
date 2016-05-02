@@ -1,0 +1,32 @@
+DEF num.workers = 10 :
+DEF num.iters = 1000 :
+
+CHAN results[num.workers] :
+
+-- Built-in.
+PROC putc(VALUE c) =
+  SKIP
+:
+
+-- Built-in
+PROC print.dec(VALUE i) =
+  SKIP
+:
+
+PAR
+  PAR i = [0 FOR num.workers]
+    VAR x :
+    SEQ
+      -- Perform a (meaningless) slow computation.
+      x := 0
+      SEQ j = [1 FOR num.iters]
+        SEQ k = [i FOR num.iters]
+          x := x + (j - i)
+      results[i] ! x
+
+  SEQ i = [0 FOR num.workers]
+    VAR x :
+    SEQ
+      results[i] ? x
+      print.dec(x)
+      putc(' ')

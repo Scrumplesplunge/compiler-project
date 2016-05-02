@@ -206,15 +206,14 @@ gen_expr e =
                 Just (Global a) -> return (load_global ctx a)
                 Just (Local sl off) ->
                   return (load_local ctx (static_level ctx - sl) off)
-            load_global ctx a = Raw [LDC a, LDNL 0]
+            load_global ctx a = Raw [COMMENT x, LDC a, LDNL 0]
             load_local ctx sl_diff off =
               if sl_diff == 0 then
                 -- We are already at the same static level. Use load-local.
-                Raw [LDL (stack_depth ctx - off + 1)]
+                Raw [COMMENT x, LDL (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([COMMENT (show (environment ctx)),
-                      LDL (stack_depth ctx)] ++
+                Raw ([COMMENT x, LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
                      [LDNL (-off)])
   where desc = COMMENT (prettyPrint e)
@@ -223,9 +222,13 @@ gen_expr e =
 gen_addr :: Expression -> CodeGenerator
 gen_addr e =
   case e of
-    (Index a (t, b)) ->
-      combine index_code conserve_order (gen_expr b) (gen_addr a)
-      where index_code = if t == AST.BYTE then Raw [ADD] else Raw [WSUB]
+    (Index a (t, b)) -> (pc, code)
+      where (pc, gc) =
+              combine index_code conserve_order (gen_expr b) (gen_addr a)
+            index_code = if t == AST.BYTE then Raw [ADD] else Raw [WSUB]
+            code ctx = do
+              cc <- gc ctx
+              return $ Code [comment (prettyPrint e), cc]
     (Slice a (t, b, c)) ->
       (promise, const . return $ comment "Unimplemented: slice assignment.")
     (Name x) -> (promise { depth_required = 1 }, code)
@@ -235,17 +238,17 @@ gen_addr e =
                 Just (Global a) -> return (load_global_pointer ctx a)
                 Just (Local sl off) ->
                   return (load_local_pointer ctx (static_level ctx - sl) off)
-            load_global_pointer ctx a = Raw [MINT, ADC (a - two_pow_31)]
+            load_global_pointer ctx a =
+              Raw [COMMENT x, MINT, ADC (a - two_pow_31)]
             load_local_pointer ctx sl_diff off =
               if sl_diff == 0 then
                 -- We are already at the same static level. Use load-local.
-                Raw [LDLP (stack_depth ctx - off + 1)]
+                Raw [COMMENT x, LDLP (stack_depth ctx - off + 1)]
               else
                 -- Need to descend a few static levels. Use non-local.
-                Raw ([COMMENT (show (environment ctx)),
-                      LDL (stack_depth ctx)] ++
+                Raw ([COMMENT x, LDL (stack_depth ctx)] ++
                      replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
-                     [LDNLP (-off)])
+                     [LDNLP (1 - off)])
     Any -> (promise { depth_required = 1 }, code)
       where code ctx = return $ Raw [LDLP 0]
     _ -> error ("Generating address for non-assignable type: " ++ show e)
@@ -725,6 +728,17 @@ assemble ctx process output = do
   let (pp, gp) = gen_proc process
   let text = run_generator (do
         code <- gp ctx
-        let mem_size = stack_depth ctx + depth_required pp
-        showCode $ Code [Raw [AJW mem_size], code, Raw [STOPP]])
+        let static_size = stack_depth ctx
+        let stack_size = depth_required pp
+        let mem_size = static_size + stack_size + 5
+        let comment1 =
+              comment ("Static data size: " ++ show static_size ++ " word(s)")
+        let comment2 =
+              comment ("Stack space required: " ++ show stack_size ++
+                       " word(s)")
+        let comment3 =
+              comment (show static_size ++ " + " ++ show stack_size ++
+                       " + 5 = " ++ show mem_size)
+        showCode $ Code [comment1, comment2, comment3, Raw [AJW mem_size], code,
+                         Raw [STOPP]])
   hPutStr output text
