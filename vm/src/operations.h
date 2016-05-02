@@ -75,9 +75,16 @@ class Operation {
   int location() const { return location_; }
   void set_location(int value) { location_ = value; }
 
+  void set_forced_length(int length) { forced_length_ = length; }
+
  private:
   Type type_;
   int location_;
+
+  // If non-zero, instruction is forcefully encoded using auxiliary PFIX bytes
+  // to extend it. If the forced length is shorter than the minimum number of
+  // bytes required, an exception will be thrown.
+  int forced_length_ = 0;
 
   union {
     struct {              // type_ == DIRECT

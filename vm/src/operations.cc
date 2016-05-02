@@ -1,5 +1,7 @@
 #include "operations.h"
+
 #include "../../tools/src/string.h"
+#include "util/args.h"
 
 #include <iostream>
 #include <regex>
@@ -109,21 +111,35 @@ string makeBytes(Direct operation, int32_t operand) {
 }
 
 string Operation::toBytes() const {
+  string raw;
   switch (type_) {
     case DIRECT:
       // Direct operations are executed directly, and take an argument.
-      return makeBytes(direct_, operand_);
+      raw = makeBytes(direct_, operand_);
+      break;
     case INDIRECT:
       // Indirect operations act as the argument to the OPR instruction.
-      return makeBytes(OPR, static_cast<int32_t>(indirect_));
+      raw = makeBytes(OPR, static_cast<int32_t>(indirect_));
+      break;
     case UNIT:
       // (Floating point) unit instructions are loaded into the register stack
       // before being invoked by the indirect instruction FPENTRY.
-      return makeBytes(LDC, static_cast<int32_t>(unit_)) +
-             makeBytes(OPR, static_cast<int32_t>(FPENTRY));
+      raw = makeBytes(LDC, static_cast<int32_t>(unit_)) +
+            makeBytes(OPR, static_cast<int32_t>(FPENTRY));
+      break;
     default:
       throw logic_error("Invalid operation type.");
   }
+  if (forced_length_ == 0) return raw;
+
+  // Check that the forced length is valid.
+  if (forced_length_ < static_cast<int>(raw.length())) {
+    throw logic_error("Forced a bad length for instruction \"" + toString() +
+                      "\".");
+  }
+
+  // Return the padded instruction.
+  return string(forced_length_ - raw.length(), static_cast<char>(PFIX)) + raw;
 }
 
 // Instruction pattern.
@@ -195,17 +211,29 @@ bool Reference::apply(vector<Operation>& operations, const Environment& env,
   if (variable_length && !has_symbol2_) {
     // The adjusted jump value is the corrected jump offset, when the length of
     // the jump instruction is taken into consideration.
-    int size, new_size = 1;
+    int size = 1, new_size = 1;
     // Repeatedly compute the jump offset until a fixed point is found. This
     // will happen quickly, since the size grows with the log of the offset, and
     // the offset changes only by this amount in each iteration, so it will
-    // stabilise quickly.
+    // stabilise quickly. The one exception is when the jump offset is between
+    // labels which are either side of the instruction, and for which the offset
+    // is near to a boundary between two different instruction lengths. In such
+    // a scenario, the instruction length may flip between two values
+    // indefinitely. It is possible that the only way of satisfying this is to
+    // encode the instruction inefficiently (ie. by using auxiliary PFIX
+    // instructions).
     do {
-      size = new_size;
+      if (new_size < size) {
+        // Instruction shrank. Forcefully extend it.
+        operations[operation_].set_forced_length(size);
+      } else {
+        // Instruction grew.
+        size = new_size;
+      }
+      here = operations[operation_].location() + size;
+      jump = label1 - here;
       operations[operation_].setOperand(jump);
       new_size = operations[operation_].toBytes().length();
-      here = operations[operation_].location() + new_size;
-      jump = label1 - here;
     } while (new_size != size);
   }
 
@@ -316,7 +344,9 @@ bool encodeOperations(vector<Operation> operations, Environment labels,
   // Loop until a fixed point is reached. This is guaranteed to terminate
   // because label values may only increase, and distances between labels may
   // also only increase, but neither increases unless necessary.
+  int iter_limit = 10;
   do {
+    if (iter_limit-- == 0) throw logic_error("Limit reached: SOURCE level.");
     // Re-assign the references with variable-length awareness.
     for (const Reference& reference : references) {
       // Update the reference. This will only return false if the environment

@@ -75,7 +75,15 @@ void process(int* argc, char** args[]);
           name##_default, &name, #name, description);                          \
     }
 
+#define DECLARE_OPTION(type, name)                                             \
+    namespace options {                                                        \
+      extern type name;                                                        \
+    }                                                                          \
+
 #define FLAG(name, description)                                                \
     OPTION(bool, name, false, description)
+
+#define DECLARE_FLAG(name)                                                     \
+    DECLARE_OPTION(bool, name)
 
 #include "args.inl.h"

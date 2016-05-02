@@ -65,6 +65,12 @@ void VM::run() {
 
     Iptr++;
     op_count_++;
+    // cout << toString() << "\t" << ::toString(op) << " " << argument;
+    // if (op == OPR) {
+    //   Indirect indirect = static_cast<Indirect>(Oreg | argument);
+    //   cout << " (" << ::toString(indirect) << ")";
+    // }
+    // cout << endl;
     performDirect(op, argument);
   } while (running_);
 }
@@ -96,9 +102,8 @@ int32_t& VM::operator[](int32_t address) {
 }
 
 int32_t VM::read(int32_t address) {
-  // cout << "Mem[" << addressString(address) << "] -> "
-  //      << addressString((*this)[address]) << "\n";
-  return (*this)[address];
+  int32_t value = (*this)[address];
+  return value;
 }
 
 int8_t VM::readByte(int32_t address) {
@@ -111,8 +116,6 @@ int8_t VM::readByte(int32_t address) {
 }
 
 void VM::write(int32_t address, int32_t value) {
-  // cout << "Mem[" << addressString(address) << "] <- "
-  //      << addressString(value) << "\n";
   (*this)[address] = value;
 }
 
@@ -167,36 +170,6 @@ int32_t VM::pop() {
   return x;
 }
 
-void VM::perform(const Operation& operation) {
-  Iptr++;
-
-  switch (operation.type()) {
-    case Operation::DIRECT: {
-      Direct op; int32_t argument;
-      if (!operation.getDirect(&op, &argument))
-        throw logic_error("This should never happen.");
-      performDirect(op, argument);
-      break;
-    }
-    case Operation::INDIRECT: {
-      Indirect op;
-      if (!operation.getIndirect(&op))
-        throw logic_error("This should never happen.");
-      performIndirect(op);
-      break;
-    }
-    case Operation::UNIT: {
-      Unit op;
-      if (!operation.getUnit(&op))
-        throw logic_error("This should never happen.");
-      performUnit(op);
-      break;
-    }
-    default:
-      throw logic_error("Operation type is none of DIRECT, INDIRECT, or UNIT.");
-  }
-}
-
 void VM::performDirect(Direct op, int32_t argument) {
   Oreg |= argument;
   switch (op) {
@@ -226,149 +199,55 @@ void VM::performDirect(Direct op, int32_t argument) {
 void VM::performIndirect(Indirect op) {
   switch (op) {
     // See VMIndirect.cc
-    case ADD:           INDIRECT(ADD);            break;
-    case ALT:           INDIRECT(ALT);            break;
-    case ALTEND:        INDIRECT(ALTEND);         break;
-    case ALTWT:         INDIRECT(ALTWT);          break;
-    case AND:           INDIRECT(AND);            break;
-    case BCNT:          INDIRECT(BCNT);           break;
-    case BSUB:          INDIRECT(BSUB);           break;
-    case CCNT1:         INDIRECT(CCNT1);          break;
-    case CFLERR:        INDIRECT(CFLERR);         break;
-    case CLRHALTERR:    INDIRECT(CLRHALTERR);     break;
-    case CRCBYTE:       INDIRECT(CRCBYTE);        break;
-    case CRCWORD:       INDIRECT(CRCWORD);        break;
-    case CSNGL:         INDIRECT(CSNGL);          break;
-    case CSUB0:         INDIRECT(CSUB0);          break;
-    case CWORD:         INDIRECT(CWORD);          break;
-    case DIFF:          INDIRECT(DIFF);           break;
-    case DISC:          INDIRECT(DISC);           break;
-    case DISS:          INDIRECT(DISS);           break;
-    case DIST:          INDIRECT(DIST);           break;
-    case DIV:           INDIRECT(DIV);            break;
-    case DUP:           INDIRECT(DUP);            break;
-    case ENBC:          INDIRECT(ENBC);           break;
-    case ENBS:          INDIRECT(ENBS);           break;
-    case ENBT:          INDIRECT(ENBT);           break;
-    case ENDP:          INDIRECT(ENDP);           break;
-    case FMUL:          INDIRECT(FMUL);           break;
-    case FPADD:         INDIRECT(FPADD);          break;
-    case FPB32TOR64:    INDIRECT(FPB32TOR64);     break;
-    case FPCHKERR:      INDIRECT(FPCHKERR);       break;
-    case FPDIV:         INDIRECT(FPDIV);          break;
-    case FPDUP:         INDIRECT(FPDUP);          break;
-    case FPENTRY:       INDIRECT(FPENTRY);        break;
-    case FPEQ:          INDIRECT(FPEQ);           break;
-    case FPGT:          INDIRECT(FPGT);           break;
-    case FPI32TOR32:    INDIRECT(FPI32TOR32);     break;
-    case FPI32TOR64:    INDIRECT(FPI32TOR64);     break;
-    case FPINT:         INDIRECT(FPINT);          break;
-    case FPLDNLADDDB:   INDIRECT(FPLDNLADDDB);    break;
-    case FPLDNLADDSN:   INDIRECT(FPLDNLADDSN);    break;
-    case FPLDNLDB:      INDIRECT(FPLDNLDB);       break;
-    case FPLDNLDBI:     INDIRECT(FPLDNLDBI);      break;
-    case FPLDNLMULDB:   INDIRECT(FPLDNLMULDB);    break;
-    case FPLDNLMULSN:   INDIRECT(FPLDNLMULSN);    break;
-    case FPLDNLSN:      INDIRECT(FPLDNLSN);       break;
-    case FPLDNLSNI:     INDIRECT(FPLDNLSNI);      break;
-    case FPLDZERODB:    INDIRECT(FPLDZERODB);     break;
-    case FPLDZEROSN:    INDIRECT(FPLDZEROSN);     break;
-    case FPMUL:         INDIRECT(FPMUL);          break;
-    case FPNAN:         INDIRECT(FPNAN);          break;
-    case FPNOTFINITE:   INDIRECT(FPNOTFINITE);    break;
-    case FPORDERED:     INDIRECT(FPORDERED);      break;
-    case FPREMFIRST:    INDIRECT(FPREMFIRST);     break;
-    case FPREMSTEP:     INDIRECT(FPREMSTEP);      break;
-    case FPREV:         INDIRECT(FPREV);          break;
-    case FPRTOI32:      INDIRECT(FPRTOI32);       break;
-    case FPSTNLDB:      INDIRECT(FPSTNLDB);       break;
-    case FPSTNLI32:     INDIRECT(FPSTNLI32);      break;
-    case FPSTNLSN:      INDIRECT(FPSTNLSN);       break;
-    case FPSUB:         INDIRECT(FPSUB);          break;
-    case FPTESTERR:     INDIRECT(FPTESTERR);      break;
-    case GAJW:          INDIRECT(GAJW);           break;
-    case GCALL:         INDIRECT(GCALL);          break;
-    case GT:            INDIRECT(GT);             break;
-    case IN:            INDIRECT(IN);             break;
-    case LADD:          INDIRECT(LADD);           break;
-    case LB:            INDIRECT(LB);             break;
-    case LDIFF:         INDIRECT(LDIFF);          break;
-    case LDINF:         INDIRECT(LDINF);          break;
-    case LDIV:          INDIRECT(LDIV);           break;
-    case LDPI:          INDIRECT(LDPI);           break;
-    case LDPRI:         INDIRECT(LDPRI);          break;
-    case LDTIMER:       INDIRECT(LDTIMER);        break;
-    case LEND:          INDIRECT(LEND);           break;
-    case LSHL:          INDIRECT(LSHL);           break;
-    case LSHR:          INDIRECT(LSHR);           break;
-    case LSUB:          INDIRECT(LSUB);           break;
-    case LSUM:          INDIRECT(LSUM);           break;
-    case MINT:          INDIRECT(MINT);           break;
-    case MOVE:          INDIRECT(MOVE);           break;
-    case MOVE2DALL:     INDIRECT(MOVE2DALL);      break;
-    case MOVE2DINIT:    INDIRECT(MOVE2DINIT);     break;
-    case MOVE2DNONZERO: INDIRECT(MOVE2DNONZERO);  break;
-    case MOVE2DZERO:    INDIRECT(MOVE2DZERO);     break;
-    case MUL:           INDIRECT(MUL);            break;
-    case NORM:          INDIRECT(NORM);           break;
-    case NOT:           INDIRECT(NOT);            break;
-    case OR:            INDIRECT(OR);             break;
-    case OUT:           INDIRECT(OUT);            break;
-    case OUTBYTE:       INDIRECT(OUTBYTE);        break;
-    case OUTWORD:       INDIRECT(OUTWORD);        break;
-    case POSTNORMSN:    INDIRECT(POSTNORMSN);     break;
-    case PROD:          INDIRECT(PROD);           break;
-    case REM:           INDIRECT(REM);            break;
-    case RESETCH:       INDIRECT(RESETCH);        break;
-    case RET:           INDIRECT(RET);            break;
-    case REV:           INDIRECT(REV);            break;
-    case ROUNDSN:       INDIRECT(ROUNDSN);        break;
-    case RUNP:          INDIRECT(RUNP);           break;
-    case SAVEH:         INDIRECT(SAVEH);          break;
-    case SAVEL:         INDIRECT(SAVEL);          break;
-    case SB:            INDIRECT(SB);             break;
-    case SETERR:        INDIRECT(SETERR);         break;
-    case SETHALTERR:    INDIRECT(SETHALTERR);     break;
-    case SHL:           INDIRECT(SHL);            break;
-    case SHR:           INDIRECT(SHR);            break;
-    case STARTP:        INDIRECT(STARTP);         break;
-    case STHB:          INDIRECT(STHB);           break;
-    case STHF:          INDIRECT(STHF);           break;
-    case STLB:          INDIRECT(STLB);           break;
-    case STLF:          INDIRECT(STLF);           break;
-    case STOPERR:       INDIRECT(STOPERR);        break;
-    case STOPP:         INDIRECT(STOPP);          break;
-    case STTIMER:       INDIRECT(STTIMER);        break;
-    case SUB:           INDIRECT(SUB);            break;
-    case SUM:           INDIRECT(SUM);            break;
-    case TALT:          INDIRECT(TALT);           break;
-    case TALTWT:        INDIRECT(TALTWT);         break;
-    case TESTERR:       INDIRECT(TESTERR);        break;
-    case TESTHALTERR:   INDIRECT(TESTHALTERR);    break;
-    case TESTPRANAL:    INDIRECT(TESTPRANAL);     break;
-    case TIN:           INDIRECT(TIN);            break;
-    case UNPACKSN:      INDIRECT(UNPACKSN);       break;
-    case WCNT:          INDIRECT(WCNT);           break;
-    case WSUB:          INDIRECT(WSUB);           break;
-    case WSUBDB:        INDIRECT(WSUBDB);         break;
-    case XDBLE:         INDIRECT(XDBLE);          break;
-    case XOR:           INDIRECT(XOR);            break;
-    case XWORD:         INDIRECT(XWORD);          break;
+    case ADD:     INDIRECT(ADD);     break;
+    case ALT:     INDIRECT(ALT);     break;
+    case ALTEND:  INDIRECT(ALTEND);  break;
+    case ALTWT:   INDIRECT(ALTWT);   break;
+    case AND:     INDIRECT(AND);     break;
+    case DIFF:    INDIRECT(DIFF);    break;
+    case DISC:    INDIRECT(DISC);    break;
+    case DISS:    INDIRECT(DISS);    break;
+    case DIV:     INDIRECT(DIV);     break;
+    case DUP:     INDIRECT(DUP);     break;
+    case ENBC:    INDIRECT(ENBC);    break;
+    case ENBS:    INDIRECT(ENBS);    break;
+    case ENDP:    INDIRECT(ENDP);    break;
+    case GT:      INDIRECT(GT);      break;
+    case IN:      INDIRECT(IN);      break;
+    case LB:      INDIRECT(LB);      break;
+    case LDPI:    INDIRECT(LDPI);    break;
+    case LEND:    INDIRECT(LEND);    break;
+    case MINT:    INDIRECT(MINT);    break;
+    case MUL:     INDIRECT(MUL);     break;
+    case NOT:     INDIRECT(NOT);     break;
+    case OR:      INDIRECT(OR);      break;
+    case OUT:     INDIRECT(OUT);     break;
+    case OUTWORD: INDIRECT(OUTWORD); break;
+    case REM:     INDIRECT(REM);     break;
+    case RESETCH: INDIRECT(RESETCH); break;
+    case REV:     INDIRECT(REV);     break;
+    case RUNP:    INDIRECT(RUNP);    break;
+    case SB:      INDIRECT(SB);      break;
+    case SHL:     INDIRECT(SHL);     break;
+    case SHR:     INDIRECT(SHR);     break;
+    case STARTP:  INDIRECT(STARTP);  break;
+    case STOPP:   INDIRECT(STOPP);   break;
+    case SUB:     INDIRECT(SUB);     break;
+    case WSUB:    INDIRECT(WSUB);    break;
+    case XOR:     INDIRECT(XOR);     break;
 
     // META operations.
-    case PUTC:          INDIRECT(PUTC);           break;
-    case PUTS:          INDIRECT(PUTS);           break;
-    case PRINTDEC:      INDIRECT(PRINTDEC);       break;
-    case PRINTHEX:      INDIRECT(PRINTHEX);       break;
-    case PRINTR:        INDIRECT(PRINTR);         break;
+    case PUTC:     INDIRECT(PUTC);     break;
+    case PUTS:     INDIRECT(PUTS);     break;
+    case PRINTDEC: INDIRECT(PRINTDEC); break;
+    case PRINTHEX: INDIRECT(PRINTHEX); break;
+    case PRINTR:   INDIRECT(PRINTR);   break;
 
     default:
-      throw logic_error("Unrecognised indirect instruction: " + ::toString(op) +
+      throw logic_error("Unimplemented indirect instruction: " + ::toString(op) +
                         "(" + to_string(op) + ")");
   }
 }
-
-void VM::performUnit(Unit op) UNIMPLEMENTED_FP;
 
 void VM::setError() {
   Error = true;
