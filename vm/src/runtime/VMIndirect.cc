@@ -8,7 +8,8 @@ using namespace std;
 
 // Add.
 DEFINE_INDIRECT(ADD) {
-  push(pop() + pop());
+  A += B;
+  B = C;
   // TODO: Check for overflow.
 }
 
@@ -24,7 +25,7 @@ DEFINE_INDIRECT(ALTEND) {
 
 // Alt wait.
 DEFINE_INDIRECT(ALTWT) {
-  write(Wptr, -1);  // Indicate that no branch yet selected.
+  write(Wptr, NoneSelected);  // Indicate that no branch yet selected.
   if (read(Wptr - 12) != Ready) deschedule();
 }
 
@@ -54,7 +55,7 @@ DEFINE_INDIRECT(DISC) {
     chan.markDisabled();
     is_ready = chan.is_ready();
   } else {
-    is_ready = (read(C) != Wdesc());
+    is_ready = (read(C) != makeWdesc(Wptr));
   }
 
   // A channel guard is detectably ready if the value stored in the channel does
@@ -81,7 +82,7 @@ DEFINE_INDIRECT(DISS) {
 // Divide.
 DEFINE_INDIRECT(DIV) {
   if (A == 0 || (A == -1 && B == MostNeg)) {
-    setError();
+    // TODO: Handle error.
   } else {
     A = B / A;
     B = C;
@@ -90,7 +91,8 @@ DEFINE_INDIRECT(DIV) {
 
 // Duplicate.
 DEFINE_INDIRECT(DUP) {
-  push(A);
+  C = B;
+  B = A;
 }
 
 // Enable channel.
@@ -101,15 +103,15 @@ DEFINE_INDIRECT(ENBC) {
   bool is_ready = false;
   if (isExternalChannelReader(B)) {
     ChannelReader& chan = channelReader(B);
-    chan.markEnabled(Wdesc());
+    chan.markEnabled(makeWdesc(Wptr));
     is_ready = chan.is_ready();
   } else {
-    is_ready = (read(B) != Wdesc());
+    is_ready = (read(B) != makeWdesc(Wptr));
   }
 
   if (read(B) == NotProcess) {
     // No process waiting on channel B.
-    write(B, Wdesc());
+    write(B, makeWdesc(Wptr));
   } else if (is_ready) {
     // Another process is waiting on channel B.
     write(Wptr - 12, Ready);
@@ -137,7 +139,7 @@ DEFINE_INDIRECT(ENDP) {
 
 // Greater than.
 DEFINE_INDIRECT(GT) {
-  A = (B > A ? True : False);
+  A = (B > A);
   B = C;
 }
 
@@ -150,7 +152,7 @@ DEFINE_INDIRECT(IN) {
       chan.read(C, A, this);
     } else {
       // Writer is not waiting. Wait for the writer.
-      chan.readWait(Wdesc());
+      chan.readWait(makeWdesc(Wptr));
       deschedule();
     }
   } else {
@@ -158,7 +160,7 @@ DEFINE_INDIRECT(IN) {
     if (chan_value == NotProcess) {
       // No process is currently waiting on this channel. Initiate
       // communication by putting this process id in the channel.
-      write(B, Wdesc());
+      write(B, makeWdesc(Wptr));
       write(Wptr - 12, C);
       deschedule();
     } else {
@@ -199,7 +201,9 @@ DEFINE_INDIRECT(LEND) {
 
 // Minimum integer.
 DEFINE_INDIRECT(MINT) {
-  push(MostNeg);
+  C = B;
+  B = A;
+  A = MostNeg;
 }
 
 // Multiply.
@@ -230,7 +234,7 @@ DEFINE_INDIRECT(OUT) {
       chan.write(*this, C, A);
     } else {
       // Channel is not ready. Wait for the reader.
-      chan.writeWait(Wdesc());
+      chan.writeWait(makeWdesc(Wptr));
       deschedule();
     }
   } else {
@@ -238,7 +242,7 @@ DEFINE_INDIRECT(OUT) {
     if (chan_value == NotProcess) {
       // No process is currently waiting on this channel. Initiate
       // communication by putting this process id in the channel.
-      write(B, Wdesc());
+      write(B, makeWdesc(Wptr));
       write(Wptr - 12, C);
       deschedule();
     } else {
@@ -248,7 +252,7 @@ DEFINE_INDIRECT(OUT) {
       if (dest == Waiting) {
         // A process is waiting via an ALT. Initiate the communication and
         // reschedule the process.
-        write(B, Wdesc());
+        write(B, makeWdesc(Wptr));
         write(dest_address, Ready);
         write(Wptr - 12, C);
         schedule(chan_value);
@@ -279,7 +283,7 @@ DEFINE_INDIRECT(OUTWORD) {
 // Remainder.
 DEFINE_INDIRECT(REM) {
   if (A == 0 || ((A == -1 && B == MostNeg))) {
-    setError();
+    // TODO: Handle error.
   } else {
     A = B % A;
     B = C;
@@ -306,15 +310,8 @@ DEFINE_INDIRECT(REV) {
 
 // Run process.
 DEFINE_INDIRECT(RUNP) {
-  if ((A & 0x3) < priority) {
-    // Process is less important than the running process.
-    schedule(A);
-  } else {
-    // Process can run.
-    Wptr = (A & ~0x3);
-    priority = A & 0x3;
-    Iptr = read(Wptr - 4);
-  }
+  Wptr = (A & ~0x3);
+  Iptr = read(Wptr - 4);
 }
 
 // Store byte.
@@ -372,8 +369,10 @@ DEFINE_INDIRECT(XOR) {
 
 // Print a byte to the console.
 DEFINE_INDIRECT(PUTC) {
-  char c = static_cast<char>(pop());
+  char c = static_cast<char>(A);
   putc(c, stdout);
+  A = B;
+  B = C;
 }
 
 // Print A bytes pointed to by B to the console.
@@ -386,12 +385,16 @@ DEFINE_INDIRECT(PUTS) {
 
 // Print a word to the console (decimal).
 DEFINE_INDIRECT(PRINTDEC) {
-  printf("%d", pop());
+  printf("%d", A);
+  A = B;
+  B = C;
 }
 
 // Print a word to the console (hexadecimal).
 DEFINE_INDIRECT(PRINTHEX) {
-  printf("%x", static_cast<uint32_t>(pop()));
+  printf("%x", static_cast<uint32_t>(A));
+  A = B;
+  B = C;
 }
 
 // Print A words from the array pointed to by B.
@@ -399,4 +402,5 @@ DEFINE_INDIRECT(PRINTR) {
   for (int i = 0; i < A; i++) {
     printf("[0x%08x] = %d\n", B + 4 * i, read(B + 4 * i));
   }
+  A = C;
 }

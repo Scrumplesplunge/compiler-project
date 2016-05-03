@@ -18,8 +18,6 @@ class VM {
       NoneSelected,     // Value representing no branch selected.
       NotProcess,       // Value representing no process.
       Ready,            // Ready state of alternative.
-      TimeNotSet,       // Tlink time not set.
-      TimeSet,          // Tlink time set.
       True,             // Truth values.
       Waiting;          // Waiting state of alternative.
 
@@ -67,17 +65,17 @@ class VM {
   void yield();                 // schedule(); resumeNext();
   void stop();                  // End current process and resume the next.
 
-  int32_t time();     // Return the time value for the current priority.
-  int32_t Wdesc();    // Current process workspace descriptor.
+  // Convert between workspace descriptor and workspace pointer. In this case,
+  // these are identity functions, but are abstracted in case this changes.
+  static int32_t makeWdesc(int32_t Wptr) { return Wptr; }
+  static int32_t makeWptr(int32_t Wdesc) { return Wdesc; }
 
-
-  bool after(int32_t a, int32_t b);  // True iff time a is after time b.
-
+  // Enqueues the process with the specified workspace descriptor.
   void enqueueProcess(int32_t desc);
-  int32_t dequeueProcess(int32_t pri);
 
-  void push(int32_t x);  // Push a value onto the register stack.
-  int32_t pop();         // Pop a value off the register stack.
+  // Dequeues a process from the process queue and returns its workspace
+  // descriptor.
+  int32_t dequeueProcess();
 
   // Direct operations.
   DECLARE_DIRECT(ADC);  DECLARE_DIRECT(AJW);   DECLARE_DIRECT(CALL);
@@ -135,21 +133,6 @@ class VM {
   int32_t op_count_;
   int32_t yield_after_ = 64;
 
-  int32_t priority;  // Priority of the current running process (0 or 1).
-
-  // Each of the registers below correspond to either high priority (0) or low
-  // priority (1) processes, and can only be accessed by processes of the
-  // matching priority level.
-
-  // ClockReg0 ticks once every microsecond. ClockReg1 ticks once every 64
-  // microseconds.
-  int32_t ClockReg[2];  // Clock registers for each priority.
-  int32_t BptrReg[2];   // Back pointers for process queues.
-  int32_t FptrReg[2];   // Front pointers for process queues.
-
-  // Timer queue head pointers.
-  int32_t TptrLoc[2];
-
-  bool Error;        // Error bit.
-  bool HaltOnError;  // Do we halt on errors?
+  int32_t BptrReg;   // Back pointers for process queues.
+  int32_t FptrReg;   // Front pointers for process queues.
 };

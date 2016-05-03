@@ -15,8 +15,6 @@ const int32_t VM::MostNeg         = 0x80000000;
 const int32_t VM::NoneSelected    = 0xFFFFFFFF;
 const int32_t VM::NotProcess      = 0x80000000;
 const int32_t VM::Ready           = 0x80000003;
-const int32_t VM::TimeNotSet      = 0xFFFFFFFF;
-const int32_t VM::TimeSet         = 0xFFFFFFFE;
 const int32_t VM::True            = 0xFFFFFFFF;
 const int32_t VM::Waiting         = 0x80000002;
 
@@ -33,22 +31,14 @@ static string addressString(int32_t address) {
 
 VM::VM(unique_ptr<int32_t[]> memory, int memory_size, const string& bytecode)
     : memory_(move(memory)), memory_size_(memory_size), bytecode_(bytecode) {
-  if (memory_size < 0x1000)
-    throw logic_error("Minimum memory size is 4KiB.");
+  op_count_ = 0;
 
   // Initialize the registers.
   Wptr = MemStart;
   Iptr = 0;
-  A = B = C = Oreg = ClockReg[0] = ClockReg[1] = 0;
+  A = B = C = Oreg = 0;
 
-  op_count_ = 0;
-
-  priority = 0;
-  Error = HaltOnError = false;
-  
-  BptrReg[0] = BptrReg[1] = NotProcess;
-  FptrReg[0] = FptrReg[1] = NotProcess;
-  TptrLoc[0] = TptrLoc[1] = NotProcess;
+  BptrReg = FptrReg = NotProcess;
 }
 
 void VM::run() {
@@ -86,14 +76,14 @@ string VM::toString() {
 }
 
 int32_t& VM::operator[](int32_t address) {
-  if (address >= memory_size_ + MostNeg) {
+  if (address >= memory_size_ + MemStart) {
     throw runtime_error(
         "Address " + addressString(address) + " >= " +
-        to_string(memory_size_) + " + " + addressString(MostNeg) + " = " +
+        to_string(memory_size_) + " + " + addressString(MemStart) + " = " +
         addressString(memory_size_ + MostNeg));
   }
 
-  address -= MostNeg;
+  address -= MemStart;
   
   // These type conversions are necessary: We want a logical right-shift
   // (which requires an unsigned argument).
@@ -129,45 +119,24 @@ void VM::writeByte(int32_t address, int8_t value) {
 }
 
 void VM::enqueueProcess(int32_t desc) {
-  int32_t pri = desc & 0x3;
-  if (pri != 0 && pri != 1)
-    throw runtime_error("Bad priority level: " + to_string(pri));
-
   // Point the previous process (if it exists) at this one.
-  if (FptrReg[pri] == NotProcess) {
+  if (FptrReg == NotProcess) {
     // Queue was empty. Make the new process the front process.
-    FptrReg[pri] = desc;
+    FptrReg = desc;
   } else {
     // Queue is non-empty. Update the current last to point at this process.
-    write((BptrReg[pri] & ~0x3) - 8, desc);
+    write(makeWptr(BptrReg) - 8, desc);
   }
-  BptrReg[pri] = desc;
+  BptrReg = desc;
 }
 
-int32_t VM::dequeueProcess(int32_t pri) {
-  if (pri != 0 && pri != 1)
-    throw runtime_error("Bad priority level: " + to_string(pri));
-
-  int32_t desc = FptrReg[pri];
+int32_t VM::dequeueProcess() {
+  int32_t desc = FptrReg;
 
   // Update the front pointer if necessary.
-  if (desc != NotProcess)
-    FptrReg[pri] = read((desc & ~0x3) - 8);
+  if (desc != NotProcess) FptrReg = read(makeWptr(desc) - 8);
 
   return desc;
-}
-
-void VM::push(int32_t x) {
-  C = B;
-  B = A;
-  A = x;
-}
-
-int32_t VM::pop() {
-  int32_t x = A;
-  A = B;
-  B = C;
-  return x;
 }
 
 void VM::performDirect(Direct op, int32_t argument) {
@@ -249,12 +218,6 @@ void VM::performIndirect(Indirect op) {
   }
 }
 
-void VM::setError() {
-  Error = true;
-  if (HaltOnError)
-    throw runtime_error("An error occurred and HaltOnError is set.");
-}
-
 bool VM::isExternalChannelReader(int32_t address) {
   return channel_readers_.count(address) == 1;
 }
@@ -289,7 +252,7 @@ void VM::deschedule() {
 }
 
 void VM::schedule(int32_t desc) {
-  int32_t new_Wptr = desc & ~0x3;
+  int32_t new_Wptr = makeWptr(desc);
 
   // Set the next pointer of the new process.
   write(new_Wptr - 8, NotProcess);
@@ -299,21 +262,19 @@ void VM::schedule(int32_t desc) {
 void VM::schedule() {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   write(Wptr - 8, NotProcess);  // This process is at the back of the queue.
-  schedule(Wdesc());
+  schedule(makeWdesc(Wptr));
 }
 
 void VM::resumeNext() {
   int32_t next_Wdesc;
-  if (FptrReg[0] != NotProcess) {
-    next_Wdesc = dequeueProcess(0);
-  } else if (FptrReg[1] != NotProcess) {
-    next_Wdesc = dequeueProcess(1);
+  if (FptrReg != NotProcess) {
+    next_Wdesc = dequeueProcess();
   } else {
     // All processes have stopped. Exit gracefully.
     running_ = false;
     return;
   }
-  Wptr = next_Wdesc & ~0x3;
+  Wptr = makeWptr(next_Wdesc);
   Iptr = read(Wptr - 4);
 }
 
@@ -328,17 +289,4 @@ void VM::yield() {
 
 void VM::stop() {
   deschedule();
-}
-
-int32_t VM::time() {
-  return ClockReg[priority];
-}
-
-int32_t VM::Wdesc() {
-  return Wptr | priority;
-}
-
-bool VM::after(int32_t a, int32_t b) {
-  uint32_t offset = static_cast<uint32_t>(a) - static_cast<uint32_t>(b);
-  return (offset < 0x80000000);
 }

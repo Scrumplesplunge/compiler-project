@@ -32,14 +32,15 @@ DEFINE_DIRECT(CJ) {
   if (A == 0) {
     Iptr += Oreg;
   } else {
-    pop();
+    A = B;
+    B = C;
   }
   Oreg = 0;
 }
 
 // Equals constant.
 DEFINE_DIRECT(EQC) {
-  A = (A == Oreg ? True : False);
+  A = (A == Oreg);
   Oreg = 0;
 }
 
@@ -52,19 +53,25 @@ DEFINE_DIRECT(J) {
 
 // Load constant.
 DEFINE_DIRECT(LDC) {
-  push(Oreg);
+  C = B;
+  B = A;
+  A = Oreg;
   Oreg = 0;
 }
 
 // Load local.
 DEFINE_DIRECT(LDL) {
-  push(read(Wptr + 4 * Oreg));
+  C = B;
+  B = A;
+  A = read(Wptr + 4 * Oreg);
   Oreg = 0;
 }
 
 // Load local pointer.
 DEFINE_DIRECT(LDLP) {
-  push(Wptr + 4 * Oreg);
+  C = B;
+  B = A;
+  A = Wptr + 4 * Oreg;
   Oreg = 0;
 }
 
@@ -98,7 +105,9 @@ DEFINE_DIRECT(PFIX) {
 
 // Store local.
 DEFINE_DIRECT(STL) {
-  write(Wptr + 4 * Oreg, pop());
+  write(Wptr + 4 * Oreg, A);
+  A = B;
+  B = C;
   Oreg = 0;
 }
 
