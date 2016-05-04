@@ -13,15 +13,14 @@ FLAG(receiver, "Set up as the receiver.");
 FLAG(sender, "Set up as the sender.");
 
 enum Data {
-  VAR_INT,
-  STRING,
-  DOUBLE
+  VAR_INT = 0,
+  STRING = 1,
+  DOUBLE = 2
 };
 
-struct VarIntMessage : public Message<Data> {
+struct VarIntMessage : public Message<VAR_INT> {
   VarIntMessage() : VarIntMessage(0) {}
-  VarIntMessage(int64_t value)
-      : Message<Data>(VAR_INT), payload(value) {}
+  VarIntMessage(int64_t value) : payload(value) {}
 
   void encode(BinaryWriter& writer) const override {
     writer.writeVarInt(payload);
@@ -32,27 +31,18 @@ struct VarIntMessage : public Message<Data> {
   int64_t payload;
 };
 
-struct StringMessage : public PayloadMessage<Data, string> {
-  StringMessage() : StringMessage("") {}
-  StringMessage(string value)
-      : PayloadMessage<Data, string>(STRING, move(value)) {}
-};
+typedef PayloadMessage<STRING, string> StringMessage;
+typedef PayloadMessage<DOUBLE, double> DoubleMessage;
 
-struct DoubleMessage : public PayloadMessage<Data, double> {
-  DoubleMessage() : DoubleMessage(0.0) {}
-  DoubleMessage(double value)
-      : PayloadMessage<Data, double>(DOUBLE, move(value)) {}
-};
-
-void on_var_int(Data type, const VarIntMessage& message) {
+void on_var_int(const VarIntMessage& message) {
   cout << "var_int " << message.payload << "\n";
 }
 
-void on_string(Data type, const StringMessage& message) {
+void on_string(const StringMessage& message) {
   cout << "string \"" << message.payload << "\"\n";
 }
 
-void on_double(Data type, const DoubleMessage& message) {
+void on_double(const DoubleMessage& message) {
   cout << "double " << message.payload << "\n";
 }
 
@@ -67,7 +57,7 @@ int main(int argc, char* args[]) {
   if (options::sender) {
     Socket socket;
     socket.connect(options::host, options::port);
-    Messenger<Data> messenger(move(socket));
+    Messenger messenger(move(socket));
 
     // Repeatedly send messages.
     cout << ">> ";
@@ -100,7 +90,7 @@ int main(int argc, char* args[]) {
     Socket server;
     server.bind(options::host, options::port);
     server.listen();
-    Messenger<Data> messenger(move(server.accept()));
+    Messenger messenger(move(server.accept()));
 
     messenger.on<VarIntMessage>(VAR_INT, on_var_int);
     messenger.on<StringMessage>(STRING, on_string);

@@ -13,7 +13,6 @@
 // All message type classes should be representable as this type.
 typedef uint64_t MessageType;
 
-// All messages should be sub-classes of this.
 struct MessageBase {
   MessageBase(MessageType type)
       : message_type(type) {}
@@ -25,6 +24,37 @@ struct MessageBase {
   const MessageType message_type;
 };
 
+// Basic payload message with payload type P.
+template <typename P>
+struct PayloadMessageBase : public MessageBase {
+  PayloadMessageBase(MessageType type, P value)
+      : MessageBase(type), payload(value) {}
+  virtual ~PayloadMessageBase() = default;
+
+  void encode(BinaryWriter& writer) const override { writer.write<P>(payload); }
+  void decode(BinaryReader& reader) override { payload = reader.read<P>(); }
+
+  P payload;
+};
+
+// Message of the specified type.
+template <MessageType type>
+struct Message : public MessageBase {
+  Message()
+      : MessageBase(type) {}
+  virtual ~Message() = default;
+};
+
+// Payload message of the specified type.
+template <MessageType type, typename P>
+struct PayloadMessage : public PayloadMessageBase<P> {
+  PayloadMessage()
+      : PayloadMessage(P()) {}
+  PayloadMessage(P value)
+      : PayloadMessageBase<P>(type, value) {}
+  virtual ~PayloadMessage() = default;
+};
+
 typedef std::function<void(MessageType, BinaryReader&)> MessageHandlerBase;
 
 void no_handler(MessageType type, BinaryReader& message);
@@ -32,9 +62,12 @@ void no_handler(MessageType type, BinaryReader& message);
 // Base class for all messengers.
 class MessengerBase {
  public:
-  MessengerBase(Socket&& socket,
+  MessengerBase(Socket socket,
                 MessageHandlerBase default_handler = no_handler)
       : socket_(std::move(socket)), default_handler_(default_handler) {}
+  MessengerBase(MessengerBase&& other)
+      : socket_(std::move(other.socket_)),
+        default_handler_(other.default_handler_) {}
   virtual ~MessengerBase() = default;
 
   void on(MessageType type, MessageHandlerBase handler);
@@ -55,52 +88,27 @@ class MessengerBase {
   std::unordered_map<MessageType, MessageHandlerBase> handlers_;
 };
 
-// Messages from type class T.
-template <typename T>
-struct Message : public MessageBase {
-  Message(T type)
-      : MessageBase(static_cast<MessageType>(type)) {}
-  virtual ~Message() = default;
-
-  void encode(BinaryWriter& writer) const override { }
-  void decode(BinaryReader& reader) override { }
-
-  T type() const { return static_cast<T>(message_type); }
-};
-
-// Basic payload message from type class T, with payload type P.
-template <typename T, typename P>
-struct PayloadMessage : public Message<T> {
-  PayloadMessage(T type, P&& value)
-      : Message<T>(type), payload(value) {}
-
-  void encode(BinaryWriter& writer) const override { writer.write<P>(payload); }
-  void decode(BinaryReader& reader) override { payload = reader.read<P>(); }
-
-  P payload;
-};
-
 // Message handlers for message of type M.
-template <typename T, typename M>
-using MessageHandler = std::function<void(T, const M&)>;
+template <typename M>
+using MessageHandler = std::function<void(const M&)>;
 
-// Messenger for messages of type class T.
-template <typename T>
 class Messenger : public MessengerBase {
  public:
-  Messenger(Socket&& socket)
+  Messenger(Socket socket)
       : MessengerBase(std::move(socket)) {}
+  Messenger(Messenger&& other)
+      : MessengerBase(std::move(reinterpret_cast<MessengerBase&>(other))) {}
   virtual ~Messenger() = default;
 
   template <typename M>
-  void on(T type, MessageHandler<T, M> handler) {
+  void on(MessageType type, MessageHandler<M> handler) {
     // Wrap the handler with an appropriate decoder.
     MessageHandlerBase raw_handler =
         [handler](MessageType type, BinaryReader& message_reader) {
       M message;
       message.decode(message_reader);
-      return handler(static_cast<T>(type), message);
+      return handler(message);
     };
-    MessengerBase::on(static_cast<MessageType>(type), raw_handler);
+    MessengerBase::on(type, raw_handler);
   }
 };

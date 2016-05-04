@@ -68,10 +68,13 @@ void process(int* argc, char** args[]) {
 
   // Handle special options.
   if (options::help || options::defaults) {
+    // Show the usage information.
     if (description) {
       arrange(cout, description, 0, 80);
       cout << "\n";
     }
+
+    // Construct the arguments table.
     Table table(4);
     table.setColumnWidth(0, 2);
     int argument_width = 0;
@@ -82,13 +85,16 @@ void process(int* argc, char** args[]) {
         argument_width = option.first.length();
       table.setCell(row, 1, "--" + option.first);
       if (options::defaults) {
+        // Show the default values.
         string value = string("= ") + option.second->default_value();
         if (static_cast<int>(value.length()) > value_width)
           value_width = value.length();
         table.setCell(row, 2, value);
       }
-      if (options::help)
+      if (options::help) {
+        // Show the option descriptions.
         table.setCell(row, 3, option.second->description());
+      }
       row++;
     }
     table.setColumnWidth(1, argument_width + 3);
