@@ -1,12 +1,12 @@
 #include "operations.h"
 #include "../gen/Direct.h"
-#include "util.h"
-#include "util/args.h"
-#include "util/table.h"
+#include "../util.h"
 
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <util/args.h>
+#include <util/table.h>
 #include <vector>
 
 using namespace std;

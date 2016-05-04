@@ -129,24 +129,3 @@ bool parseOperations(std::istream& input, std::vector<Operation>* operations,
 bool encodeOperations(std::vector<Operation> operations, Environment labels,
                       const std::vector<Reference>& references,
                       std::ostream* output);
-
-#define DECLARE_DIRECT(name)   void perform_##name()
-#define DECLARE_INDIRECT(name) void perform_##name()
-#define DECLARE_UNIT(name)     void perform_##name()
-
-#define DEFINE_DIRECT(name)   void VM::perform_##name()
-#define DEFINE_INDIRECT(name) void VM::perform_##name()
-#define DEFINE_UNIT(name)     void VM::perform_##name()
-
-#define DIRECT(name)   perform_##name()
-#define INDIRECT(name) perform_##name()
-#define UNIT(name)     perform_##name()
-
-#define UNIMPLEMENTED(description) {                                  \
-  throw std::runtime_error(                                           \
-      "Unimplemented operation: " + std::string(description));        \
-}
-#define UNIMPLEMENTED_FP {  \
-  throw std::runtime_error(  \
-      "No floating point support is provided.");  \
-}

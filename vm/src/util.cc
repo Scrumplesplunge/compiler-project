@@ -1,5 +1,7 @@
 #include "util.h"
 
+#include <fstream>
+
 using namespace std;
 
 char hex(int8_t value) {
@@ -15,4 +17,11 @@ string addressString(int32_t address) {
     raw >>= 4;
   }
   return "0x" + string(out, 8);
+}
+
+string getFileContents(string filename) {
+  ifstream file(filename, ios::binary);
+  if (!file)
+    throw runtime_error("Could not open \"" + filename + "\" for reading.");
+  return string(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
 }

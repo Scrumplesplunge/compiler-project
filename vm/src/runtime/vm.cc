@@ -1,8 +1,5 @@
-#include "operations.h"
-#include "runtime/VM.h"
-#include "util.h"
-#include "util/args.h"
-#include "util/binary.h"
+#include "../util.h"
+#include "VM.h"
 
 #include <chrono>
 #include <fstream>
@@ -11,6 +8,8 @@
 #include <memory>
 #include <stdint.h>
 #include <string>
+#include <util/args.h>
+#include <util/binary.h>
 
 using namespace std::chrono;
 using namespace std;

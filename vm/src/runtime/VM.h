@@ -1,11 +1,33 @@
 #pragma once
 
-#include "../operations.h"
 #include "channel.h"
+#include "Direct.h"
+#include "Indirect.h"
 
 #include <memory>
 #include <stdint.h>
 #include <unordered_map>
+
+#define DECLARE_DIRECT(name)   void perform_##name()
+#define DECLARE_INDIRECT(name) void perform_##name()
+#define DECLARE_UNIT(name)     void perform_##name()
+
+#define DEFINE_DIRECT(name)   void VM::perform_##name()
+#define DEFINE_INDIRECT(name) void VM::perform_##name()
+#define DEFINE_UNIT(name)     void VM::perform_##name()
+
+#define DIRECT(name)   perform_##name()
+#define INDIRECT(name) perform_##name()
+#define UNIT(name)     perform_##name()
+
+#define UNIMPLEMENTED(description) {                                  \
+  throw std::runtime_error(                                           \
+      "Unimplemented operation: " + std::string(description));        \
+}
+#define UNIMPLEMENTED_FP {  \
+  throw std::runtime_error(  \
+      "No floating point support is provided.");  \
+}
 
 class VM {
  public:
