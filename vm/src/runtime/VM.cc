@@ -1,5 +1,7 @@
 #include "VM.h"
 
+#include "../util.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -7,62 +9,76 @@
 
 using namespace std;
 
+// COMPILE OPTIONS:
+// DISABLE_BOUND_CHECKS - If defined, bound checks for the instruction memory
+//                        and program memory will not be performed. This
+//                        improves performance by a significant amount in
+//                        optimised builds.
 const int32_t VM::Enabling        = 0x80000001;
 const int32_t VM::ExternalChannel = 0x80000002;
 const int32_t VM::False           = 0x00000000;
-const int32_t VM::MemStart        = 0x80000070;
 const int32_t VM::MostNeg         = 0x80000000;
 const int32_t VM::NoneSelected    = 0xFFFFFFFF;
 const int32_t VM::NotProcess      = 0x80000000;
 const int32_t VM::Ready           = 0x80000003;
-const int32_t VM::True            = 0xFFFFFFFF;
+const int32_t VM::True            = 0x00000001;
 const int32_t VM::Waiting         = 0x80000002;
 
-static string addressString(int32_t address) {
-  uint32_t raw = static_cast<uint32_t>(address);
-  const char digits[] = "0123456789abcdef";
-  char out[8];
-  for (int i = 8; i-- > 0;) {
-    out[i] = digits[raw & 0xF];
-    raw >>= 4;
-  }
-  return "0x" + string(out, 8);
-}
-
-VM::VM(unique_ptr<int32_t[]> memory, int memory_size, const string& bytecode)
-    : memory_(move(memory)), memory_size_(memory_size), bytecode_(bytecode) {
-  op_count_ = 0;
-
-  // Initialize the registers.
-  Wptr = MemStart;
-  Iptr = 0;
-  A = B = C = Oreg = 0;
-
-  BptrReg = FptrReg = NotProcess;
+VM::VM(int32_t memory_start, unique_ptr<int32_t[]> memory, int memory_size,
+       const char* bytecode, int bytecode_size)
+    : bytecode_(bytecode), bytecode_size_(bytecode_size), memory_(move(memory)),
+      memory_start_(memory_start), memory_size_(memory_size),
+      memory_end_(memory_start + memory_size) {
+  Wptr = memory_start;
 }
 
 void VM::run() {
   running_ = true;
-  int n = bytecode_.length();
   do {
-    if (Iptr < 0)
-      throw runtime_error("Error: Iptr outside code (negative).");
-    if (n <= Iptr)
-      throw runtime_error("Error: Iptr outside code (positive).");
-    char code = bytecode_[Iptr];
+    #ifdef DISABLE_BOUND_CHECKS
+      #warning "Will not check that instruction pointer stays within code."
+    #else
+      if (Iptr < 0)
+        throw runtime_error("Error: Iptr outside code (negative).");
+      if (bytecode_size_ <= Iptr)
+        throw runtime_error("Error: Iptr outside code (positive).");
+    #endif
+
+    int8_t code = fetch();
     Direct op = static_cast<Direct>(code & 0xF0);
     int32_t argument = code & 0xF;
 
-    Iptr++;
-    op_count_++;
-    // cout << toString() << "\t" << ::toString(op) << " " << argument;
-    // if (op == OPR) {
-    //   Indirect indirect = static_cast<Indirect>(Oreg | argument);
-    //   cout << " (" << ::toString(indirect) << ")";
-    // }
-    // cout << endl;
     performDirect(op, argument);
   } while (running_);
+}
+
+void VM::step(bool debug) {
+  if (debug) cerr << toString() << "\t";
+  
+  int8_t code = fetch();
+  Direct op = static_cast<Direct>(code & 0xF0);
+  int32_t argument = code & 0xF;
+  while (op == PFIX || op == NFIX) {
+    performDirect(op, argument);
+
+    code = fetch();
+    op = static_cast<Direct>(code & 0xF0);
+    argument = code & 0xF;
+  }
+
+  if (debug) {
+    int32_t final_operand = Oreg | argument;
+    if (op == OPR) {
+      // Show the indirect instruction.
+      Indirect code = static_cast<Indirect>(final_operand);
+      cerr << ::toString(code) << "\n";
+    } else {
+      // Show the direct instruction.
+      cerr << ::toString(op) << " " << to_string(final_operand) << "\n";
+    }
+  }
+
+  performDirect(op, argument);
 }
 
 string VM::toString() {
@@ -76,14 +92,21 @@ string VM::toString() {
 }
 
 int32_t& VM::operator[](int32_t address) {
-  if (address >= memory_size_ + MemStart) {
-    throw runtime_error(
-        "Address " + addressString(address) + " >= " +
-        to_string(memory_size_) + " + " + addressString(MemStart) + " = " +
-        addressString(memory_size_ + MostNeg));
-  }
+  #ifdef DISABLE_BOUND_CHECKS
+    #warning "Will not check that memory access stays within allocated memory."
+  #else
+    if (address < memory_start_) {
+      throw runtime_error(
+          "Address " + addressString(address) + " < " +
+          addressString(memory_start_));
+    } else if (address >= memory_end_) {
+      throw runtime_error(
+          "Address " + addressString(address) + " >= " +
+          addressString(memory_end_));
+    }
+  #endif
 
-  address -= MemStart;
+  address -= memory_start_;
   
   // These type conversions are necessary: We want a logical right-shift
   // (which requires an unsigned argument).
@@ -102,7 +125,7 @@ int8_t VM::readByte(int32_t address) {
   // These type conversions are necessary: We want a logical right-shift (which
   // requires an unsigned argument).
   return
-      static_cast<int8_t>(static_cast<uint32_t>(word) >> (8 * (address & 0x3)));
+      static_cast<int8_t>(static_cast<uint32_t>(word) >> (8 * (address % 4)));
 }
 
 void VM::write(int32_t address, int32_t value) {
@@ -113,7 +136,7 @@ void VM::writeByte(int32_t address, int8_t value) {
   // Read the current word value, substitute the appropriate byte with the new
   // value, and write back to memory.
   int32_t word = read(address);
-  int shift = 8 * (address & 0x3);
+  int shift = 8 * (address % 4);
   int32_t mask = ~(0xFF << shift);
   write(address, (word & mask) | (value << shift));
 }
@@ -139,6 +162,11 @@ int32_t VM::dequeueProcess() {
   return desc;
 }
 
+int8_t VM::fetch() {
+  op_count_++;
+  return bytecode_[Iptr++];
+}
+
 void VM::performDirect(Direct op, int32_t argument) {
   Oreg |= argument;
   switch (op) {
@@ -160,6 +188,7 @@ void VM::performDirect(Direct op, int32_t argument) {
     case STL:   DIRECT(STL);   break;
     case STNL:  DIRECT(STNL);  break;
     default:
+      // This should be unreachable.
       throw logic_error("Unrecognised direct instruction: " + ::toString(op) +
                         "(" + to_string(op) + ")");
   }
@@ -280,8 +309,8 @@ void VM::resumeNext() {
 
 void VM::yield() {
   // Yield only if the process has been running for long enough.
-  if (op_count_ >= yield_after_) {
-    op_count_ = 0;
+  if (op_count_ >= next_yield_) {
+    next_yield_ = op_count_ + time_slice_;
     schedule();
     resumeNext();
   }

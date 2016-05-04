@@ -1,7 +1,8 @@
 #include "operations.h"
 #include "../gen/Direct.h"
-#include "../lib/util/args.h"
-#include "../lib/util/table.h"
+#include "util.h"
+#include "util/args.h"
+#include "util/table.h"
 
 #include <fstream>
 #include <functional>
@@ -14,18 +15,6 @@ USAGE("Usage: das --bytecode_file [filename]\n\n"
       "Disassemble Transputer bytecode into human-readable assembler.\n");
 
 OPTION(string, bytecode_file, "", "File containing Transputer bytecode.\n");
-
-const char hex_digits[] = "0123456789abcdef";
-
-static string addressString(int32_t address) {
-  uint32_t raw = static_cast<uint32_t>(address);
-  char out[8];
-  for (int i = 8; i-- > 0;) {
-    out[i] = hex_digits[raw & 0xF];
-    raw >>= 4;
-  }
-  return "0x" + string(out, 8);
-}
 
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
@@ -89,8 +78,8 @@ int main(int argc, char* args[]) {
 
     // Add the byte to the bytes field.
     if (bytes.length() > 0) bytes.push_back(' ');
-    bytes.push_back(hex_digits[static_cast<unsigned int>(op) >> 4]);
-    bytes.push_back(hex_digits[argument]);
+    bytes.push_back(hex(static_cast<unsigned int>(op) >> 4));
+    bytes.push_back(hex(argument));
 
     // Handle the byte semantically.
     switch (op) {

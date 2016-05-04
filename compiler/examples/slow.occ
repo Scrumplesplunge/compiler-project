@@ -24,9 +24,11 @@ PAR
           x := x + (j - i)
       results[i] ! x
 
-  SEQ i = [0 FOR num.workers]
-    VAR x :
-    SEQ
-      results[i] ? x
-      print.dec(x)
-      putc(' ')
+  SEQ
+    SEQ i = [0 FOR num.workers]
+      VAR x :
+      SEQ
+        results[i] ? x
+        print.dec(x)
+        putc(' ')
+    putc('*N')

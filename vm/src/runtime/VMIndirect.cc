@@ -399,8 +399,7 @@ DEFINE_INDIRECT(PRINTHEX) {
 
 // Print A words from the array pointed to by B.
 DEFINE_INDIRECT(PRINTR) {
-  for (int i = 0; i < A; i++) {
+  for (int i = 0; i < A; i++)
     printf("[0x%08x] = %d\n", B + 4 * i, read(B + 4 * i));
-  }
   A = C;
 }

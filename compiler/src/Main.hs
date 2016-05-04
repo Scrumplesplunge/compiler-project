@@ -28,7 +28,7 @@ defaults = Options {
   input_file = Nothing,
   assembler_file = "code.s",
   data_file = "data.bin",
-  memory_start = 0x80000070
+  memory_start = 0x80000000
 }
 
 is_valid :: Options -> Bool

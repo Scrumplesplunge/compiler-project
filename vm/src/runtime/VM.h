@@ -13,7 +13,6 @@ class VM {
       Enabling,         // Enabling state of alternative.
       ExternalChannel,  // Value stored in external channels.
       False,            // Truth values.
-      MemStart,         // Start of user-accessible memory.
       MostNeg,          // Most negative value.
       NoneSelected,     // Value representing no branch selected.
       NotProcess,       // Value representing no process.
@@ -21,14 +20,27 @@ class VM {
       True,             // Truth values.
       Waiting;          // Waiting state of alternative.
 
-  // Construct a VM with the given block of memory available as RAM. At least
-  // 4KiB must be provided (i.e. array size of at least 1024) and the execution
-  // will begin at IPtr = 0. Note that memory_size should be in *bytes*.
-  VM(std::unique_ptr<int32_t[]> memory, int memory_size,
-     const std::string& bytecode);
+  // Construct a VM with the given block of memory available as RAM. Note that
+  // memory_size should be in *bytes*, and that the memory will be loaded such
+  // that index 0 is at address MemStart.
+  VM(int32_t memory_start, std::unique_ptr<int32_t[]> memory, int memory_size,
+     const char* bytecode, int bytecode_size);
 
   // Run the virtual machine until all processes stop.
   void run();
+
+  // Begin the program. This should be called before stepping.
+  void begin() { running_ = true; }
+
+  // Perform a single instruction. Note that PFIX and NFIX instructions do not
+  // count on their own and are included as part of their summary instruction.
+  // If the debug flag is set, this will display the state of the registers
+  // *before* executing the instruction, and will print the instruction that is
+  // about to be performed.
+  void step(bool debug = false);
+
+  // Check whether the program is running.
+  bool running() const { return running_; }
 
   std::string toString();
 
@@ -40,7 +52,14 @@ class VM {
   void write(int32_t address, int32_t value);
   void writeByte(int32_t address, int8_t value);
 
+  // Returns the total number of cycles performed.
+  int64_t cycles() const { return op_count_; }
+
+  void set_instruction_pointer(int32_t value) { Iptr = value; }
+  void set_workspace_pointer(int32_t value) { Wptr = value; }
+
  private:
+  int8_t fetch();  // Fetch a single instruction for execution.
   void performDirect(Direct op, int32_t argument);
   void performIndirect(Indirect op);
 
@@ -112,27 +131,29 @@ class VM {
 
   // END OPERATIONS
 
-  // Main memory.
-  std::unique_ptr<int32_t[]> memory_;
-  int32_t memory_size_;  // In bytes.
-
   // Map from internal addresses to external channels.
   std::unordered_map<int32_t, std::unique_ptr<ChannelReader>> channel_readers_;
   std::unordered_map<int32_t, std::unique_ptr<ChannelWriter>> channel_writers_;
   
   // (Read-only) code.
-  const std::string& bytecode_;
-  bool running_;
+  const char* bytecode_;
+  int32_t bytecode_size_;
+  bool running_ = false;
 
-  int32_t Wptr;     // Workspace pointer.
-  int32_t Iptr;     // Instruction pointer.
-  int32_t A, B, C;  // Register stack.
-  int32_t Oreg;     // Operand register.
+  // Main memory.
+  std::unique_ptr<int32_t[]> memory_;
+  int32_t memory_start_, memory_size_, memory_end_;  // In bytes.
+
+  int32_t Wptr;                 // Workspace pointer.
+  int32_t Iptr = 0;             // Instruction pointer.
+  int32_t A = 0, B = 0, C = 0;  // Register stack.
+  int32_t Oreg = 0;             // Operand register.
+
+  int32_t BptrReg = NotProcess; // Back pointers for process queues.
+  int32_t FptrReg = NotProcess; // Front pointers for process queues.
 
   // Number of operations executed since the last successful yield.
-  int32_t op_count_;
-  int32_t yield_after_ = 64;
-
-  int32_t BptrReg;   // Back pointers for process queues.
-  int32_t FptrReg;   // Front pointers for process queues.
+  int64_t op_count_ = 0;              // Number of cycles performed.
+  int64_t next_yield_ = time_slice_;  // Cycle at which to allow yielding.
+  int64_t time_slice_ = 64;           // Min. number of cycles between slices.
 };
