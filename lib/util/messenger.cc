@@ -4,62 +4,68 @@
 
 using namespace std;
 
-void no_handler(MessageType type, BinaryReader& message) {
-  cerr << "Warning: Message of type " << type << " unhandled.\n";
+void Messenger::poll() {
+  unique_lock<mutex> reader_lock(reader_mutex_);
+  unlockedPoll(reader_lock);
 }
 
-void MessengerBase::on(MessageType type, MessageHandlerBase handler) {
-  // Add the handler to the list for this message type.
-  if (handlers_.count(type) > 0) {
-    throw logic_error("Registered multiple handlers for message type " +
-                      to_string(type));
+void Messenger::serve() {
+  unique_lock<mutex> reader_lock(reader_mutex_);
+  while (true) unlockedPoll(reader_lock);
+}
+
+void Messenger::writeHeader(
+    const MessageHeader& header, unique_lock<mutex>& writer_lock) {
+  writer_.writeVarUint(header.type);
+  writer_.writeVarUint(header.length);
+}
+
+MessageHeader Messenger::readHeader(unique_lock<mutex>& reader_lock) {
+  MessageHeader out;
+  out.type = reader_.readVarUint();
+  out.length = reader_.readVarUint();
+  return out;
+}
+
+void Messenger::sendBytes(MessageTypeID type, const string& bytes) {
+  MessageHeader header{type, bytes.length()};
+  unique_lock<mutex> writer_lock(writer_mutex_);
+  writeHeader(header, writer_lock);
+  writer_.writeBytes(bytes.c_str(), bytes.length());
+}
+
+void Messenger::on(MessageTypeID type, MessageHandlerBase handler) {
+  if (!handlers_.emplace(type, handler).second) {
+    // Overriding an existing handler.
+    throw logic_error(
+        "Overriding existing handler for type ID " + to_string(type) + ".");
   }
-  handlers_.emplace(type, handler);
 }
 
-void MessengerBase::send(const MessageBase& message) {
-  // Serialise the message.
-  string bytes;
-  {
-    ostringstream builder;
-    StandardOutputStream stream(builder);
-    BinaryWriter writer(stream);
-    message.encode(writer);
-    bytes = builder.str();
-  }
-
-  // Send the message header, followed by the message.
-  unique_lock<mutex> lock(send_lock_);
-  BinaryWriter writer(socket_);
-  writer.writeVarUint(message.message_type);
-  writer.writeString(bytes);
-}
-
-void MessengerBase::poll() {
-  unique_lock<mutex> lock(receive_lock_);
-  unlocked_poll();
-}
-
-void MessengerBase::serve() {
-  unique_lock<mutex> lock(receive_lock_);
-  try {
-    while (true) unlocked_poll();
-  } catch (const runtime_error& error) { }
-}
-
-void MessengerBase::unlocked_poll() {
-  // Read the message from the socket.
+void Messenger::unlockedPoll(unique_lock<mutex>& reader_lock) {
   BinaryReader reader(socket_);
-  MessageType type = reader.readVarUint();
-  istringstream bytes(reader.readString());
-  StandardInputStream stream(bytes);
-  BinaryReader message_reader(stream);
 
-  if (handlers_.count(type) == 0) {
-    // No handler is set for this message type.
-    default_handler_(type, message_reader);
-  } else {
-    // Use the configured handler.
-    handlers_[type](type, message_reader);
+  MessageHeader header = readHeader(reader_lock);
+  cerr << "Received message of type " << header.type << ", length "
+       << header.length << "\n";
+  if (handlers_.count(header.type) == 0) {
+    cerr << "Warning: Not handling message with type " << header.type << ".\n";
+    // Unrecognised ID. Discard the message.
+    const uint64_t BUFFER_SIZE = 32;
+    char buffer[32];
+    uint64_t length = header.length;
+    
+    while (length > 0) {
+      if (length > BUFFER_SIZE) {
+        reader.readBytes(buffer, BUFFER_SIZE);
+        length -= BUFFER_SIZE;
+      } else {
+        reader.readBytes(buffer, length);
+        length = 0;
+      }
+    }
   }
+
+  // Handle the message.
+  handlers_.at(header.type)();
 }

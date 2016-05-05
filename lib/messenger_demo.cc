@@ -18,32 +18,30 @@ enum Data {
   DOUBLE = 2
 };
 
-struct VarIntMessage : public Message<VAR_INT> {
-  VarIntMessage() : VarIntMessage(0) {}
-  VarIntMessage(int64_t value) : payload(value) {}
-
-  void encode(BinaryWriter& writer) const override {
-    writer.writeVarInt(payload);
-  }
-
-  void decode(BinaryReader& reader) override { payload = reader.readVarInt(); }
-
-  int64_t payload;
+struct VarInt {
+  int64_t value;
 };
 
-typedef PayloadMessage<STRING, string> StringMessage;
-typedef PayloadMessage<DOUBLE, double> DoubleMessage;
-
-void on_var_int(const VarIntMessage& message) {
-  cout << "var_int " << message.payload << "\n";
+template <>
+VarInt BinaryReader::read<VarInt>() {
+  return VarInt{readVarInt()};
 }
 
-void on_string(const StringMessage& message) {
-  cout << "string \"" << message.payload << "\"\n";
+template <>
+void BinaryWriter::write<VarInt>(VarInt var_int) {
+  writeVarInt(var_int.value);
 }
 
-void on_double(const DoubleMessage& message) {
-  cout << "double " << message.payload << "\n";
+void on_var_int(const VarInt& message) {
+  cout << "var_int " << message.value << "\n";
+}
+
+void on_string(const string& message) {
+  cout << "string \"" << message << "\"\n";
+}
+
+void on_double(const double& message) {
+  cout << "double " << message << "\n";
 }
 
 int main(int argc, char* args[]) {
@@ -66,17 +64,17 @@ int main(int argc, char* args[]) {
 
     while (cin) {
       if (type == "var_int") {
-        uint64_t value;
+        int64_t value;
         cin >> value;
-        messenger.send(VarIntMessage(value));
+        messenger.send(VAR_INT, VarInt{value});
       } else if (type == "string") {
         string line;
         getline(cin, line);
-        messenger.send(StringMessage(line.substr(1)));
+        messenger.send(STRING, line.substr(1));
       } else if (type == "double") {
         double value;
         cin >> value;
-        messenger.send(DoubleMessage(value));
+        messenger.send(DOUBLE, value);
       } else {
         cout << "Unrecognised type.\n";
       }
@@ -92,9 +90,9 @@ int main(int argc, char* args[]) {
     server.listen();
     Messenger messenger(move(server.accept()));
 
-    messenger.on<VarIntMessage>(VAR_INT, on_var_int);
-    messenger.on<StringMessage>(STRING, on_string);
-    messenger.on<DoubleMessage>(DOUBLE, on_double);
+    messenger.on<VarInt>(VAR_INT, on_var_int);
+    messenger.on<string>(STRING, on_string);
+    messenger.on<double>(DOUBLE, on_double);
 
     messenger.serve();
   }
