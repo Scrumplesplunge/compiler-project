@@ -174,8 +174,7 @@ class VM {
   int32_t BptrReg = NotProcess; // Back pointers for process queues.
   int32_t FptrReg = NotProcess; // Front pointers for process queues.
 
-  // Number of operations executed since the last successful yield.
+  int64_t time_slice_ = 64;           // Min. number of cycles between slices.
   int64_t op_count_ = 0;              // Number of cycles performed.
   int64_t next_yield_ = time_slice_;  // Cycle at which to allow yielding.
-  int64_t time_slice_ = 64;           // Min. number of cycles between slices.
 };
