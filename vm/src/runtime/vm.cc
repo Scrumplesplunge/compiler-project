@@ -23,7 +23,6 @@ OPTION(string, data_file, "",
        "File containing the application data. This will be used to initialize "
        "the RAM of the virtual machine before the program is started.");
 
-FLAG(debug, "Show debugging information whilst running.");
 FLAG(step, "Run the program step-by-step.");
 FLAG(summary, "Show a performance summary upon completion.");
 
@@ -62,7 +61,7 @@ int main(int argc, char* args[]) {
   }
 
   // Open the bytecode file and load the contents.
-  if (options::debug)
+  if (options::verbose)
     cerr << "Loading bytecode..\n";
   ifstream bytecode_file(options::bytecode_file, ios::binary);
   if (!bytecode_file) {
@@ -71,24 +70,24 @@ int main(int argc, char* args[]) {
   }
   string bytecode = string(istreambuf_iterator<char>(bytecode_file),
                            istreambuf_iterator<char>());
-  if (options::debug)
+  if (options::verbose)
     cerr << "Bytecode size: " << bytecode.length() << "\n";
 
   // Construct the program memory.
   int memory_size = 1 << 20;
-  if (options::debug)
+  if (options::verbose)
     cerr << "Constructing memory buffer of size " << memory_size << "..\n";
   unique_ptr<int32_t[]> memory(new int32_t[memory_size / 4]);
 
   // Initialize the virtual machine.
-  if (options::debug)
+  if (options::verbose)
     cerr << "Creating virtual machine instance..\n";
   VM vm(VM::MostNeg, move(memory), memory_size, bytecode.c_str(),
         bytecode.length());
 
   if (options::data_file != "") {
     // Open the data file and load the contents.
-    if (options::debug)
+    if (options::verbose)
       cerr << "Loading data file..\n";
     ifstream data_file(options::data_file, ios::binary);
     if (!data_file) {
@@ -105,7 +104,7 @@ int main(int argc, char* args[]) {
     reader.readBytes(buffer.get(), length);
 
     while (!data_file.eof()) {
-      if (options::debug) {
+      if (options::verbose) {
         cerr << "Loading blob " << addressString(address) << ", size " << length
              << "\n";
       }
@@ -124,7 +123,7 @@ int main(int argc, char* args[]) {
     }
   }
 
-  if (options::debug) cerr << "Starting VM..\n\n";
+  if (options::verbose) cerr << "Starting VM..\n\n";
   high_resolution_clock::time_point start = high_resolution_clock::now();
   if (options::debug || options::step) {
     // Step through the program.
@@ -141,7 +140,7 @@ int main(int argc, char* args[]) {
     vm.run();
   }
   high_resolution_clock::time_point end = high_resolution_clock::now();
-  if (options::debug) cerr << "Done.\n";
+  if (options::verbose) cerr << "Done.\n";
 
   if (options::summary) {
     cerr << "Total time   : "

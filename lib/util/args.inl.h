@@ -60,5 +60,4 @@ class OptionInformation<bool> : public GenericOption {
   bool* output_;
 };
 
-
 }  // namespace args

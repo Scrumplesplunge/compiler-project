@@ -11,6 +11,8 @@ using namespace std;
 
 FLAG(help, "Show this help message.");
 FLAG(defaults, "List the default values for all special arguments.");
+FLAG(debug, "Enable debugging features, if present.");
+FLAG(verbose, "Print additional information to stderr whilst running.");
 
 namespace args {
 namespace {

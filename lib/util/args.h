@@ -86,4 +86,7 @@ void process(int* argc, char** args[]);
 #define DECLARE_FLAG(name)                                                     \
     DECLARE_OPTION(bool, name)
 
+DECLARE_FLAG(debug);
+DECLARE_FLAG(verbose);
+
 #include "args.inl.h"
