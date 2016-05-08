@@ -9,6 +9,7 @@
 \usepackage{hyperref}
 \usepackage[utf8]{inputenc}
 \usepackage{listings}
+\usepackage{lmodern}
 \usepackage{titlesec}
 
 \pagestyle{fancy}
@@ -18,10 +19,10 @@
     {Compiling a CSP-like language for a distributed system}
 
 \titleformat{\chapter}
-    {\Large\bfseries}   % Format
-    {\huge\thechapter}  % Label
-    {20pt}              % Separation
-    {\huge}             % Before-code
+    {\Large\bfseries}    % Format
+    {\huge\thechapter)}  % Label
+    {20pt}               % Separation
+    {\huge}              % Before-code
 \titleclass{\chapter}{straight}
 \titlespacing*{\chapter}{0pt}{30pt}{10pt}
 
@@ -100,8 +101,8 @@
 
   \appendix
 
-  \chapter{Additional Content} \label{additional}
-    \input{chapters/additional}
+  \chapter{Parser Evaluation Rules} \label{parser-lib}
+    \lstinputlisting[firstline=76, lastline=137, language=haskell]{code.txt}
 
   \clearpage
   \addcontentsline{toc}{chapter}{Bibliography}

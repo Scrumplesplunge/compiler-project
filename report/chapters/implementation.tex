@@ -1,14 +1,246 @@
-...
+This chapter follows the implementation process for the project. It is broken up
+very similarly to the design section, and details the implementation
+difficulties which occurred when implementing each of the components.
+
+\section{Compiler}
+
+The compiler is broken into a pipeline of steps. I implemented these components
+in the order that they would be performed by the compiler, and tested them at
+each stage (as detailed in chapter \ref{testing}).
+
+I have previously mentioned that the compiler is written in Haskell, and that
+choosing a functional language was for the convenience it presents in handling
+highly recursive processes such as code generation. However, Haskell presents
+another convenience: \gls{lazy-eval}. This allows some of the code to be much
+simpler without sacrificing performance.
+
+\subsection{Lexer}
+
+As described in \ref{design-lexer}, the lexer takes the plain source text as
+input, and produces a token stream as output. However, for the purpose of
+producing reasonable error messages throughout computation, the lexer also has
+to track the line number and column at which each token occurs. The
+implementation for this functionality is broken up as follows:
+
+\begin{description}
+  \item[Reader:] To encapsulate the location tracking behaviour, the
+    \texttt{Reader} monad provides a way of reading characters from a string and
+    having the line and column values be automatically tracked and updated. Each
+    token matcher can then be implemented as something of type \texttt{Reader
+    Token}, and can be executed by calling \texttt{run\_reader token\_matcher
+    "input string"}. A \texttt{Reader} can fail, in which case it returns
+    \texttt{Nothing}. The monad also has the following combinators:
+    \begin{itemize}
+      \item
+        \texttt{(>>=) :: Reader a -> (a -> Reader b) -> Reader b},
+        
+        which applies the first reader and then (assuming it succeeded) applies
+        the second reader, combining the results. This is effectively
+        the concatenation of two readers.
+      \item
+        \texttt{(>>!) :: Reader a -> Reader a -> Reader a},
+        
+        which applies the first reader and then if it fails, applies the second
+        reader instead. This is effectively the union of two readers.
+    \end{itemize}
+  \item[Token:] Since there are two separate token streams produced during
+    compilation, the \texttt{Token} datatype is parameterised by a separate
+    datatype, \texttt{RawType}. The \texttt{Token} type tracks the location and
+    comes with a small collection of utility functions for token matching which
+    are used in the parsing phase, whilst the \texttt{RawType} datatype
+    expresses the selection of token types which was described in
+    \ref{design-lexer}.
+  \item[Lexer:] The lexer then consists of a collection of definitions for
+    various instances of \texttt{Reader (Token RawType)}, which are combined
+    together to produce a single reader for whatever token is at the head of the
+    input source. Repeated application of this reader gives the first token
+    stream.
+\end{description}
+
+\subsection{Indentation Parser}
+
+Section \ref{design-indent} outlines the procedure by which indentation parsing
+is achieved. The token stream produced by the lexer is broken into lines before
+having the whitespace stripped out and replaced with \texttt{INDENT} and
+\texttt{DEDENT} tokens where necessary. The conversion is performed with a
+single pass over the list of lines. The indentation level of the program is
+tracked, and when the indentation changes, \texttt{INDENT} or \texttt{DEDENT}
+tokens are produced.
+
+The main source of complexity with this implementation is with handling
+continuation lines: some lines may be prematurely broken in order to improve
+readability. For instance, the statement
+\lstinputlisting[firstline=33, lastline=33, language=occam]{code.txt}
+could be rewritten as
+\lstinputlisting[firstline=35, lastline=36, language=occam]{code.txt}
+to improve readability. In this case, the indentation of the second line must
+not be converted into \texttt{INDENT} tokens, and any subsequent lines should
+not produce \texttt{DEDENT} lines because of it.
+
+The solution to this is to have a classifier function which determines whether
+or not a line has ended with a continuation token\footnote{This is a
+well-defined subset of the possible tokens upon which it is acceptable to
+prematurely break the line.}. When processing the indentation of a line which
+follows one which ended with a continuation token do not generate any
+indentation tokens, and do not update the record of the current indentation
+level.
+
+\subsection{Parser}
+
+Section \ref{design-parser} explains that the parser for this project is
+implemented from scratch, and that it is broken into two parts:
+
+\subsubsection{The Parsing Library}
+
+The parsing library defines a \texttt{Parser} monad along with a collection of
+combinators for building parsers. The \texttt{Parser} type is defined
+as\footnote{This uses the Generalised Algebraic Data-Types extension to GHC to
+allow for more complicated type definitions.}:
+\lstinputlisting[firstline=44, lastline=50, language=haskell]{code.txt}
+These parser types can be summarised as follows:
+\begin{description}
+  \item[\texttt{Epsilon}] matches the empty-string.
+  \item[\texttt{Match "foo" f}] matches tokens which satisfy the predicate \texttt{f},
+    and displays \texttt{foo} in error messages which concern this location in
+    the parse tree.
+  \item[\texttt{Union ps}] matches any of the parsers in \texttt{ps}.
+  \item[\texttt{Concat p q}] matches the concatenation of parsers \texttt{p} and
+    \texttt{q}.
+  \item[\texttt{Star p}] matches zero or more repetitions of parser \texttt{p}.
+  \item[\texttt{Reduce f p}] matches parser \texttt{p}, but then applies
+    \texttt{f} to the result. This is what allows the parse tree to be
+    transformed into the \gls{ast}.
+\end{description}
+Combinations of these parsers can be used to parse any of the grammars that we
+will need to parse. A parser can be invoked with:
+\lstinputlisting[firstline=52, lastline=53, language=haskell]{code.txt}
+That is, \texttt{run\_parser p ts} will run the parser \texttt{p} on the token
+list \texttt{ts}, and produce a list of \texttt{Result}s, each of which is
+either \texttt{Success (partial\_parse, remaining\_tokens)} or
+\texttt{Failure location description}. The implementation of this function for
+each of the parser types is given in appendix \ref{parser-lib}.
+
+By producing all parse trees rather than just one, the parser does not have to
+backtrack when a failure occurs\footnote{Arguably the parser is still
+backtracking: the lazy evaluation semantics mean that the parse trees are
+computed in exactly the same order as a backtracking parser, but the code is
+simpler.}, and it is easy to debug ambiguous grammars as the different parses
+will both appear in the results list. Additionally, when no \texttt{Success}
+instances appear in the results list, the parse has failed and the
+\texttt{Failure} instances give a selection of potential failure locations to
+consider for error messages. The heuristic that I have used is to display the
+\texttt{Failure} which has the location furthest into the source text. This has
+proven to be reasonably accurate in the simple syntax error cases that I have
+considered.
+
+When a parser combinator fails, it will produce a \texttt{Failure} rather than a
+success. Naturally, almost every branch of a \texttt{Union} will be a
+\texttt{Failure}, so this can lead to there being a large number of
+\texttt{Failure} instances, often identical to several other instances in the
+results list. This was a significant performance issue, but was easily solved by
+removing duplicate entries from the results list generated at each level of the
+execution of the parser\footnote{The example program that I was testing my
+parser on would parse in 3 seconds prior to the change, and 0.07s afterwards.}.
+
+To facilitate writing parser rules, the parser library also includes the
+following infix combinators:
+\begin{description}
+  \item[\texttt{(|||) :: Parser a -> Parser a -> Parser a}],
+
+    An infix representation of \texttt{Union} between two parsers.
+
+    \texttt{p ||| q = Union [p, q]}.
+  \item[\texttt{(+++) :: Parser a -> Parser b -> Parser (a, b)}],
+
+    An infix representation of \texttt{Concat}.
+
+    \texttt{p +++ q = Concat p q}.
+  \item[\texttt{(>>>) :: Parser a -> (a -> b) -> Parser b}],
+
+    An infix representation of \texttt{Reduce}.
+
+    \texttt{p >>> f = Reduce f p}.
+\end{description}
+
+Together, these combinators allow a parser definition such as
+\lstinputlisting[firstline=55, lastline=58, language=haskell]{code.txt}
+to be rewritten as
+\lstinputlisting[firstline=60, lastline=63, language=haskell]{code.txt}
+It is arguably more clear what is being parsed by the second version than the
+first.
+
+The one remaining quirk of the parsing library is that due to the way that the
+combinators are implemented, it is necessary to explicitly denote left-recursive
+grammars so that they can be treated differently:
+\lstinputlisting[firstline=65, lastline=74, language=haskell]{code.txt}
+
+\subsubsection{The Occam Parser} \label{occam-parser-impl}
+
+Implementing the Occam parser was mostly a case of transcribing the Occam
+grammar as described in \cite{jones}. However, directly transcribing the rules
+for expressions gave the following definition:
+\lstinputlisting[firstline=139, lastline=151, language=haskell]{code.txt}
+Parts have been excluded for the sake of brevity. A large number of the rules
+here start with the same component: \texttt{operand}. This meant that when the
+expression being parsed was, for example, \texttt{(complicated expression) * 2},
+the \texttt{complicated expression} would be parsed from scratch for every
+branch of the union up until the branch for multiplication expressions. By
+refactoring this code into the following, the parsing time was reduced by 97\%:
+\lstinputlisting[firstline=154, lastline=167, language=haskell]{code.txt}
+
+\subsection{Semantic Analysis}
 
 {
   \color{red}
   Things to mention:
 
   \begin{itemize}
-    \item
-      The na\"ive grammar for expression parsing results in exponentially many
-      parse trees to be explored when the code contains a syntax error. This is
-      solved by factorising the grammar.
+    \item SemanticAnalyser monad.
+    \item Constant expression handling.
+  \end{itemize}
+}
+
+\subsection{Code Generation}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item Two-stage compilation.
+    \item Comments generated in assembly output.
+  \end{itemize}
+}
+
+\section{Assembler}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
+  \end{itemize}
+}
+
+\subsection{Parser}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
+  \end{itemize}
+}
+
+\subsection{Bytecode Generation}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
     \item
       Intricacies of variable-length instructions:
       \begin{itemize}
@@ -24,5 +256,49 @@
           Forward jump which lies near the boundary between two different
           instruction lengths are a pain.
       \end{itemize}
+  \end{itemize}
+}
+
+\section{Runtime Environment}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
+  \end{itemize}
+}
+
+\subsection{Virtual Machine}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
+  \end{itemize}
+}
+
+\subsection{Process Server}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
+  \end{itemize}
+}
+
+\subsection{Process Master}
+
+{
+  \color{red}
+  Things to mention:
+
+  \begin{itemize}
+    \item ...
   \end{itemize}
 }

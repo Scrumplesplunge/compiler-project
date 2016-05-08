@@ -39,34 +39,7 @@ version of Occam.
 
 By today's standards, Occam has an unusual syntax:
 
-\begin{lstlisting}[language=occam]
-PROC foo(VALUE a, b, CHAN c, d) =
-  PAR i = [0 FOR n]  -- Replicated parallel.
-    SEQ              -- Explicit sequence.
-      VAR x :        -- Declare variable x.
-      bar(x, i)      -- Call procedure bar.
-      IF             -- If statement.
-        x < b        -- if (x < b) {
-          c ! a      --   Output a to channel c.
-        x >= b       -- } else if (x >= b) {
-          d ! ANY    --   Output something (it doesn't matter what) to d.
-:                    -- }
-
-PROC bar(VAR x, VALUE i) =          -- Occam has no operator precedence:
-  x := ((i * i) \ (i + i + i)) - i  -- It is necessary to bracket all except
-:                                   -- sequences of some associative operator.
-
-CHAN c, d :
-VAR x, e, f :
-PAR
-  foo(-1, 1, c, d)   -- Run the process foo.
-  SEQ i = [0 FOR n]  -- Loop n times:
-    ALT              -- Alternative: perform one of the following:
-      c ? x          -- Read a value x from c.
-        e := e + x
-      d ? ANY        -- Read something (it doesn't matter what) from d.
-        f := f + 1
-\end{lstlisting}
+\lstinputlisting[firstline=2, lastline=27, language=occam]{code.txt}
 
 The above (meaningless) program demonstrates some of the details of the
 language. Note that unlike many other languages, Occam requires sequences of
