@@ -1,24 +1,26 @@
+MAKEFLAGS = -j8
+
 .PHONY: all clean compiler vm report tools status
 
 all: compiler vm report tools
 
 clean:
-	make -C compiler clean
-	make -C vm clean
-	make -C report clean
-	make -C tools clean
+	${MAKE} -C compiler clean
+	${MAKE} -C vm clean
+	${MAKE} -C report clean
+	${MAKE} -C tools clean
 
 compiler:
-	make -C compiler
+	${MAKE} -C compiler
 
 vm:
-	make -C vm
+	${MAKE} -C vm
 
 report:
-	make -C report
+	${MAKE} -C report
 
 tools:
-	make -C tools
+	${MAKE} -C tools
 
 status:
 	@echo "===== REPORT ====="

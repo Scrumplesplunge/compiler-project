@@ -1,8 +1,8 @@
 #include "operations.h"
-#include "../lib/util/args.h"
 
 #include <fstream>
 #include <iostream>
+#include <util/args.h>
 #include <vector>
 
 using namespace std;

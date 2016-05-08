@@ -1,11 +1,10 @@
 #include "operations.h"
 
-#include "../../tools/src/string.h"
-#include "util/args.h"
-
 #include <iostream>
 #include <regex>
 #include <sstream>
+#include <util/string.h>
+#include <util/args.h>
 
 using namespace std;
 

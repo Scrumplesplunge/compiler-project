@@ -1,27 +1,36 @@
+MAKEFLAGS = -j8
 CXXFLAGS = -std=c++14 -Igen -I../lib -Ofast -s -flto -Wall -Wl,--gc-sections  \
 					 -pthread
 
+.PHONY: all clean
+
 all: bin/socket_demo bin/messenger_demo bin/pipe_demo
 
-bin/socket_demo: socket_demo.cc util/socket.cc util/args.cc util/table.cc  \
-	               util/text.cc util/stream.cc util/binary.cc  \
-							 | bin util/socket.h util/args.h util/table.h util/text.h  \
-							   util/stream.h util/binary.h
+ARGS = $(addprefix obj/util/, args table text)
+BINARY = $(addprefix obj/util/, stream binary)
+
+SOCKET_DEMO_LIBS = obj/util/socket ${ARGS} ${BINARY}
+bin/socket_demo: $(addsuffix .o, obj/socket_demo ${SOCKET_DEMO_LIBS}) | bin
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-bin/messenger_demo: messenger_demo.cc util/messenger.cc util/socket.cc  \
-	                  util/args.cc util/table.cc util/text.cc util/stream.cc  \
-										util/binary.cc  \
-							    | bin util/socket.h util/args.h util/table.h util/text.h  \
-							      util/stream.h util/binary.h util/messenger.h
+MESSENGER_DEMO_LIBS = $(addprefix obj/util/, messenger socket) ${ARGS} ${BINARY}
+bin/messenger_demo:  \
+		$(addsuffix .o, obj/messenger_demo ${MESSENGER_DEMO_LIBS}) | bin
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-bin/pipe_demo: pipe_demo.cc util/stream.cc util/pipe.cc  \
-						 | bin util/stream.h util/pipe.h
+PIPE_DEMO_LIBS = obj/util/pipe ${BINARY}
+bin/pipe_demo: $(addsuffix .o, obj/pipe_demo ${PIPE_DEMO_LIBS}) | bin 
 	${CXX} ${CXXFLAGS} $^ -o $@
+
+obj/%.o: src/%.cc | $(wildcard %.h) obj
+	@mkdir -p $(dir $@)
+	${CXX} ${CXXFLAGS} -c $^ -o $@
 
 bin:
 	mkdir bin
 
+obj:
+	mkdir obj
+
 clean:
-	rm -rf bin
+	rm -rf bin obj
