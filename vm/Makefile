@@ -1,6 +1,17 @@
-CXXFLAGS = -std=c++11 -Igen -I../lib -Ofast -s -flto -Wall -Wl,--gc-sections
+MAKEFLAGS = -j16
+CXXFLAGS = -std=c++14 -Igen -I../lib -Ofast -s -flto -Wall -Wl,--gc-sections
 TOOLS = ../tools
 ENUM = ${TOOLS}/bin/enum
+
+# Libraries.
+ARGS = $(addprefix ../lib/util/, args table text)
+BINARY = $(addprefix ../lib/util/, binary stream)
+JSON = ../lib/util/json
+NETWORK = src/network gen/Network  \
+					$(addprefix ../lib/util/, binary messenger stream socket)
+OPERATIONS = $(addprefix gen/, Direct Indirect Unit)
+
+.PHONY: all clean
 
 all: bin/as bin/das bin/vm bin/master bin/worker
 
@@ -8,64 +19,37 @@ ${ENUM}:
 	@echo "Building enum compiler.."
 	make -C ../tools bin/enum
 
-bin/as: src/assembler/as.cc src/assembler/operations.cc  \
-	      gen/Direct.cc gen/Indirect.cc gen/Unit.cc  \
-	      ../lib/util/args.cc ../lib/util/table.cc ../lib/util/text.cc  \
-	    | bin src/assembler/operations.h  \
-			  gen/Direct.h gen/Indirect.h gen/Unit.h  \
-			  ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h
+BIN_AS_LIBS = src/assembler/operations ${ARGS} ${OPERATIONS}
+bin/as: $(addsuffix .cc, src/assembler/as ${BIN_AS_LIBS})  \
+	    | bin $(addsuffix .h, ${BIN_AS_LIBS})
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-bin/das: src/assembler/das.cc src/assembler/operations.cc  \
-				 src/util.cc  \
-	       gen/Direct.cc gen/Indirect.cc gen/Unit.cc  \
-				 ../lib/util/args.cc ../lib/util/table.cc ../lib/util/text.cc  \
-	     | bin src/assembler/operations.h  \
-			   gen/Direct.h gen/Indirect.h gen/Unit.h  \
-			   ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h  \
-				 src/util.h
+BIN_DAS_LIBS = src/util src/assembler/operations ${ARGS} ${OPERATIONS}
+bin/das: $(addsuffix .cc, src/assembler/das ${BIN_DAS_LIBS})  \
+	     | bin $(addsuffix .h, ${BIN_DAS_LIBS})
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-bin/vm: src/runtime/vm.cc src/runtime/VM.cc src/runtime/VMDirect.cc  \
-	      src/runtime/VMIndirect.cc  \
-				gen/Direct.cc gen/Indirect.cc gen/Unit.cc  \
-			  ../lib/util/args.cc ../lib/util/table.cc ../lib/util/text.cc  \
-				../lib/util/binary.cc ../lib/util/stream.cc  \
-				src/util.cc  \
-			| bin src/runtime/VM.h  \
-			  gen/Direct.h gen/Indirect.h gen/Unit.h  \
-			  ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h  \
-				../lib/util/binary.h ../lib/util/stream.h  \
-				src/util.h
+BIN_VM_LIBS = src/util src/runtime/VM ${ARGS} ${BINARY} ${OPERATIONS}
+BIN_VM_SRC = $(addprefix src/runtime/, vm VMDirect VMIndirect)
+bin/vm: $(addsuffix .cc, ${BIN_VM_SRC} ${BIN_VM_LIBS})  \
+			| bin $(addsuffix .h, ${BIN_VM_LIBS})
 	${CXX} ${CXXFLAGS} -DDISABLE_BOUND_CHECKS $^ -o $@
 
-bin/master: src/master/master.cc src/master/config.cc  \
-	          ../lib/util/args.cc ../lib/util/table.cc ../lib/util/text.cc  \
-						../lib/util/json.cc ../lib/util/socket.cc ../lib/util/stream.cc  \
-						../lib/util/messenger.cc  \
-						src/util.cc  \
-					| bin src/master/config.h  \
-					  ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h  \
-						../lib/util/json.h ../lib/util/socket.h ../lib/util/stream.h  \
-						../lib/util/messenger.h  \
-						src/util.h 
+BIN_MASTER_LIBS = src/util $(addprefix src/master/, config ProcessMaster) \
+									${ARGS} ${JSON} ${NETWORK}
+bin/master: $(addsuffix .cc, src/master/master ${BIN_MASTER_LIBS})  \
+					| bin $(addsuffix .h, ${BIN_MASTER_LIBS})
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-bin/worker: src/worker/worker.cc  \
-	          ../lib/util/args.cc ../lib/util/table.cc ../lib/util/text.cc  \
-						../lib/util/json.cc ../lib/util/socket.cc ../lib/util/stream.cc  \
-						../lib/util/messenger.cc  \
-						src/util.cc  \
-					| bin src/master/config.h  \
-					  ../lib/util/args.h ../lib/util/table.h ../lib/util/text.h  \
-						../lib/util/json.h ../lib/util/socket.h ../lib/util/stream.h  \
-						../lib/util/messenger.h  \
-						src/util.h 
+BIN_WORKER_LIBS = src/util src/worker/ProcessServer ${ARGS} ${JSON} ${NETWORK}
+bin/worker: $(addsuffix .cc, src/worker/worker ${BIN_WORKER_LIBS})  \
+					| bin $(addsuffix .h, ${BIN_WORKER_LIBS})
 	${CXX} ${CXXFLAGS} $^ -o $@
 
-gen/%.h: gen/%.cc
-gen/%.cc: src/%.enum | ${ENUM} gen
+gen/%.h gen/%.cc: src/%.enum | ${ENUM} gen
 	(cd gen; ../${ENUM} ../$< $*)
+
+obj/%.o:
 
 bin:
 	mkdir bin
@@ -74,4 +58,4 @@ gen:
 	mkdir gen
 
 clean:
-	rm -rf bin gen
+	rm -rf bin gen obj

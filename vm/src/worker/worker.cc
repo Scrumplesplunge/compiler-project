@@ -1,5 +1,4 @@
-#include "../runtime/VM.h"
-#include "../util.h"
+#include "ProcessServer.h"
 
 #include <iostream>
 #include <util/args.h>
@@ -17,30 +16,33 @@ OPTION(string, host, "0.0.0.0",
 OPTION(int, port, 17994,
        "Port to bind the worker server to.");
 
-FLAG(debug, "Show debugging information whilst running.");
-
-void serve(Socket client) {
-  Messenger messenger(move(client));
+void serve(Socket socket) {
+  if (options::verbose)
+    cerr << "Constructing Process Server instance..\n";
+  ProcessServer server(move(socket));
+  if (options::verbose)
+    cerr << "Serving..\n";
+  server.serve();
 }
 
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
 
-  if (options::debug)
+  if (options::verbose)
     cerr << "Creating server socket..\n";
   Socket server;
   server.bind(options::host, options::port);
-  if (options::debug)
+  if (options::verbose)
     cerr << "Listening for incoming connections..\n";
   server.listen();
 
   while (true) {
-    Socket client = server.accept();
-    string hostport = client.hostPort();
-    if (options::debug)
+    Socket socket = server.accept();
+    string hostport = socket.hostPort();
+    if (options::verbose)
       cerr << "Accepted connection from " << hostport << ".\n";
-    serve(move(client));
-    if (options::debug)
+    serve(move(socket));
+    if (options::verbose)
       cerr << "Stopped serving " << hostport << ".\n";
   }
 }

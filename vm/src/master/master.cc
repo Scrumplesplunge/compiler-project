@@ -1,4 +1,6 @@
+#include "../network.h"
 #include "config.h"
+#include "ProcessMaster.h"
 
 #include <iostream>
 #include <string>
@@ -15,19 +17,15 @@ USAGE("Usage: master --job_file [filename]\n\n"
 OPTION(string, job_file, "",
        "JSON file containing the configuration for the job.");
 
-FLAG(debug, "Show debugging information whilst running.");
-
-void serve(vector<Messenger> workers) {
-}
-
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
 
-  if (options::debug)
+  // Open the configuration file.
+  if (options::verbose)
     cerr << "Parsing job file..\n";
   JobConfig config = loadConfig(options::job_file);
 
-  if (options::debug) {
+  if (options::verbose) {
     cerr << "Bytecode file : " << config.bytecode_file << "\n"
          << "Data file     : " << config.data_file << "\n"
          << "Workers       : ";
@@ -40,22 +38,11 @@ int main(int argc, char* args[]) {
     }
   }
 
-  vector<Messenger> workers;
-  for (WorkerAddress& address : config.workers) {
-    if (options::debug)
-      cerr << "Connecting to " << address.host << ":" << address.port << "..\n";
-    Socket socket;
-    try {
-      socket.connect(address.host, address.port);
-    } catch (const socket_error& error) {
-      cerr << "Failed to connect to worker " << address.host << ":"
-           << address.port << ". Aborting.\n";
-      return 1;
-    }
-    workers.push_back(Messenger(move(socket)));
-  }
+  if (options::verbose)
+    cerr << "Initializing Process Master..\n";
+  ProcessMaster master(config);
 
-  if (options::debug)
+  if (options::verbose)
     cerr << "Serving..\n";
-  serve(move(workers));
+  master.serve();
 }

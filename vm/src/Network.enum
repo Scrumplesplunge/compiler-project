@@ -1,0 +1,5 @@
+# Message types for the master and worker network connections.
+
+# Spawn a new process server on a worker. This message includes the static data
+# and bytecode for the program that is being executed.
+START_PROCESS_SERVER
