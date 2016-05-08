@@ -26,7 +26,7 @@ typedef std::function<void()> MessageHandlerBase;
 
 // Message handlers for message of type M.
 template <typename M>
-using MessageHandler = std::function<void(const M&)>;
+using MessageHandler = std::function<void(M&&)>;
 
 // Base class for all messengers.
 class Messenger {

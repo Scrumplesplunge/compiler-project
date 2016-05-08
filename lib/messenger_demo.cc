@@ -32,15 +32,15 @@ void BinaryWriter::write<VarInt>(VarInt var_int) {
   writeVarInt(var_int.value);
 }
 
-void on_var_int(const VarInt& message) {
+void on_var_int(VarInt&& message) {
   cout << "var_int " << message.value << "\n";
 }
 
-void on_string(const string& message) {
+void on_string(string&& message) {
   cout << "string \"" << message << "\"\n";
 }
 
-void on_double(const double& message) {
+void on_double(double&& message) {
   cout << "double " << message << "\n";
 }
 
