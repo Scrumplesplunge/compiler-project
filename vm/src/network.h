@@ -7,33 +7,37 @@
 #include <util/binary.h>
 
 #define READER(name)  \
-  template <> name##_Message BinaryReader::read<name##_Message>()
+  template <> void BinaryReader::read(name##_Message* message)
 #define WRITER(name)  \
-  template <> void BinaryWriter::write<name##_Message>(name##_Message message)
+  template <> void BinaryWriter::write(const name##_Message& message)
+#define DECLARE_MESSAGE(name)  \
+  struct name##_Message;  \
+  READER(name);  \
+  WRITER(name);  \
+  struct name##_Message : public MessageNameChecker<name>
+#define MESSAGE(name)  \
+  name##_Message
 
 template <Network message_type>
 struct MessageNameChecker {
   static Network type;
 };
 
-#define DECLARE_MESSAGE(name)  \
-  struct name##_Message;  \
-  READER(name);  \
-  WRITER(name);  \
-  struct name##_Message : public MessageNameChecker<name>
-
 DECLARE_MESSAGE(START_PROCESS_SERVER) {
   std::string data;
+  int32_t data_start;
   std::string bytecode;
 };
 
+DECLARE_MESSAGE(REQUEST_INSTANCE) {
+  int32_t workspace_pointer;
+  int32_t instruction_pointer;
+  int32_t space_needed;
+};
+
+DECLARE_MESSAGE(START_INSTANCE) {
+  MESSAGE(REQUEST_INSTANCE) request;
+  int64_t instance_id;
+};
+
 #undef DECLARE_MESSAGE
-
-#define MESSAGE(name)  \
-  name##_Message
-
-// Utilities for configuring the Messenger.
-#define ON(name, handler)  \
-  on<MESSAGE(name)>(name, handler)
-#define SEND(message)  \
-  send(message.type, message)

@@ -75,15 +75,11 @@ int main(int argc, char* args[]) {
 
   // Construct the program memory.
   int memory_size = 1 << 20;
-  if (options::verbose)
-    cerr << "Constructing memory buffer of size " << memory_size << "..\n";
-  unique_ptr<int32_t[]> memory(new int32_t[memory_size / 4]);
 
   // Initialize the virtual machine.
   if (options::verbose)
     cerr << "Creating virtual machine instance..\n";
-  VM vm(VM::MostNeg, move(memory), memory_size, bytecode.c_str(),
-        bytecode.length());
+  VM vm(VM::MostNeg, memory_size, bytecode.c_str(), bytecode.length());
 
   if (options::data_file != "") {
     // Open the data file and load the contents.

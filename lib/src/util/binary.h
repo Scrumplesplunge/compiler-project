@@ -48,7 +48,7 @@ class BinaryReader {
   // into the string.
   std::string readString();
 
-  template <typename T> T read();
+  template <typename T> void read(T* value);
  private:
   double readFloating(uint64_t value, int bytes, int significand_bits);
 
@@ -95,12 +95,9 @@ class BinaryWriter {
 
   // Write a varint representing the string length, followed by the string
   // bytes.
-  void writeString(std::string value);
+  void writeString(const std::string& value);
 
-  // This is a convenience wrapper for ReadFromByteStream and so should not be
-  // specialised. Instead, specialise ReadFromByteStream, which is declared in
-  // streams/streams.h
-  template <typename T> void write(T value);
+  template <typename T> void write(const T& value);
  private:
   // Encodes a floating point number. The following restrictions apply:
   // 1 <= bytes <= 8, significand_bits <= 8 * bytes - 2,
@@ -112,28 +109,28 @@ class BinaryWriter {
 };
 
 // Provided specializations.
-template <> bool BinaryReader::read<bool>();
-template <> int8_t BinaryReader::read<int8_t>();
-template <> int16_t BinaryReader::read<int16_t>();
-template <> int32_t BinaryReader::read<int32_t>();
-template <> int64_t BinaryReader::read<int64_t>();
-template <> uint8_t BinaryReader::read<uint8_t>();
-template <> uint16_t BinaryReader::read<uint16_t>();
-template <> uint32_t BinaryReader::read<uint32_t>();
-template <> uint64_t BinaryReader::read<uint64_t>();
-template <> float BinaryReader::read<float>();
-template <> double BinaryReader::read<double>();
-template <> std::string BinaryReader::read<std::string>();
+template <> void BinaryReader::read(bool* value);
+template <> void BinaryReader::read(int8_t* value);
+template <> void BinaryReader::read(int16_t* value);
+template <> void BinaryReader::read(int32_t* value);
+template <> void BinaryReader::read(int64_t* value);
+template <> void BinaryReader::read(uint8_t* value);
+template <> void BinaryReader::read(uint16_t* value);
+template <> void BinaryReader::read(uint32_t* value);
+template <> void BinaryReader::read(uint64_t* value);
+template <> void BinaryReader::read(float* value);
+template <> void BinaryReader::read(double* value);
+template <> void BinaryReader::read(std::string* value);
 
-template <> void BinaryWriter::write<bool>(bool value);
-template <> void BinaryWriter::write<int8_t>(int8_t value);
-template <> void BinaryWriter::write<int16_t>(int16_t value);
-template <> void BinaryWriter::write<int32_t>(int32_t value);
-template <> void BinaryWriter::write<int64_t>(int64_t value);
-template <> void BinaryWriter::write<uint8_t>(uint8_t value);
-template <> void BinaryWriter::write<uint16_t>(uint16_t value);
-template <> void BinaryWriter::write<uint32_t>(uint32_t value);
-template <> void BinaryWriter::write<uint64_t>(uint64_t value);
-template <> void BinaryWriter::write<float>(float value);
-template <> void BinaryWriter::write<double>(double value);
-template <> void BinaryWriter::write<std::string>(std::string value);
+template <> void BinaryWriter::write(const bool& value);
+template <> void BinaryWriter::write(const int8_t& value);
+template <> void BinaryWriter::write(const int16_t& value);
+template <> void BinaryWriter::write(const int32_t& value);
+template <> void BinaryWriter::write(const int64_t& value);
+template <> void BinaryWriter::write(const uint8_t& value);
+template <> void BinaryWriter::write(const uint16_t& value);
+template <> void BinaryWriter::write(const uint32_t& value);
+template <> void BinaryWriter::write(const uint64_t& value);
+template <> void BinaryWriter::write(const float& value);
+template <> void BinaryWriter::write(const double& value);
+template <> void BinaryWriter::write(const std::string& value);

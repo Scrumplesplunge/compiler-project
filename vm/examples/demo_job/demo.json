@@ -2,7 +2,6 @@
   "bytecode_file" : "code.bin",
   "data_file" : "data.bin",
   "workers" : [
-    {"host" : "0.0.0.0", "port" : 17994},
-    {"host" : "0.0.0.0", "port" : 17995}
+    {"host" : "0.0.0.0", "port" : 17994}
   ]
 }

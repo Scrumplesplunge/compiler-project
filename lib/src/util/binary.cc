@@ -83,25 +83,29 @@ string BinaryReader::readString() {
   return string(buffer.get(), length);
 }
 
-template <> bool     BinaryReader::read<bool>()     { return readBool(); }
-template <> int8_t   BinaryReader::read<int8_t>()   { return readInt8(); }
-template <> int16_t  BinaryReader::read<int16_t>()  { return readInt16(); }
-template <> int32_t  BinaryReader::read<int32_t>()  { return readInt32(); }
-template <> int64_t  BinaryReader::read<int64_t>()  { return readInt64(); }
-template <> uint8_t  BinaryReader::read<uint8_t>()  { return readUint8(); }
-template <> uint16_t BinaryReader::read<uint16_t>() { return readUint16(); }
-template <> uint32_t BinaryReader::read<uint32_t>() { return readUint32(); }
-template <> uint64_t BinaryReader::read<uint64_t>() { return readUint64(); }
-template <> float    BinaryReader::read<float>()    { return readFloat(); }
-template <> double   BinaryReader::read<double>()   { return readDouble(); }
-template <> string   BinaryReader::read<string>()   { return readString(); }
+template <> void BinaryReader::read(bool* value)     { *value = readBool(); }
+template <> void BinaryReader::read(int8_t* value)   { *value = readInt8(); }
+template <> void BinaryReader::read(int16_t* value)  { *value = readInt16(); }
+template <> void BinaryReader::read(int32_t* value)  { *value = readInt32(); }
+template <> void BinaryReader::read(int64_t* value)  { *value = readInt64(); }
+template <> void BinaryReader::read(uint8_t* value)  { *value = readUint8(); }
+template <> void BinaryReader::read(uint16_t* value) { *value = readUint16(); }
+template <> void BinaryReader::read(uint32_t* value) { *value = readUint32(); }
+template <> void BinaryReader::read(uint64_t* value) { *value = readUint64(); }
+template <> void BinaryReader::read(float* value)    { *value = readFloat(); }
+template <> void BinaryReader::read(double* value)   { *value = readDouble(); }
+
+template <> void BinaryReader::read(string* value) {
+  *value = move(readString());
+}
 
 double BinaryReader::readFloating(
     uint64_t value, int bytes, int significand_bits) {
   int exponent_bits = 8 * bytes - significand_bits - 1;
   // Read the components.
   uint64_t significand = value & ((1ULL << significand_bits) - 1);
-  uint64_t exponent = (value >> significand_bits) & ((1ULL << exponent_bits) - 1);
+  uint64_t exponent =
+    (value >> significand_bits) & ((1ULL << exponent_bits) - 1);
   bool negative = value >> (8 * bytes - 1);
   if (exponent == (1ULL << exponent_bits) - 1) {
     // Edge case values.
@@ -192,49 +196,56 @@ void BinaryWriter::writeBytes(const char buffer[], int64_t num_bytes) {
     throw write_error("Output stream closed unexpectedly.");
 }
 
-void BinaryWriter::writeString(string value) {
+void BinaryWriter::writeString(const string& value) {
   writeVarUint(value.length());
   writeBytes(value.c_str(), value.length());
 }
 
-template <> void BinaryWriter::write<bool>(bool value) { writeBool(value); }
-template <> void BinaryWriter::write<int8_t>(int8_t value) { writeInt8(value); }
+template <> void BinaryWriter::write(const bool& value) {
+  writeBool(value);
+}
 
-template <> void BinaryWriter::write<int16_t>(int16_t value) {
+template <> void BinaryWriter::write(const int8_t& value) {
+  writeInt8(value);
+}
+
+template <> void BinaryWriter::write(const int16_t& value) {
   writeInt16(value);
 }
 
-template <> void BinaryWriter::write<int32_t>(int32_t value) {
+template <> void BinaryWriter::write(const int32_t& value) {
   writeInt32(value);
 }
 
-template <> void BinaryWriter::write<int64_t>(int64_t value) {
+template <> void BinaryWriter::write(const int64_t& value) {
   writeInt64(value);
 }
 
-template <> void BinaryWriter::write<uint8_t>(uint8_t value) {
+template <> void BinaryWriter::write(const uint8_t& value) {
   writeUint8(value);
 }
 
-template <> void BinaryWriter::write<uint16_t>(uint16_t value) { 
+template <> void BinaryWriter::write(const uint16_t& value) { 
   writeUint16(value);
 }
 
-template <> void BinaryWriter::write<uint32_t>(uint32_t value) {
+template <> void BinaryWriter::write(const uint32_t& value) {
   writeUint32(value);
 }
 
-template <> void BinaryWriter::write<uint64_t>(uint64_t value) {
+template <> void BinaryWriter::write(const uint64_t& value) {
   writeUint64(value);
 }
 
-template <> void BinaryWriter::write<float>(float value) { writeFloat(value); }
+template <> void BinaryWriter::write(const float& value) {
+  writeFloat(value);
+}
 
-template <> void BinaryWriter::write<double>(double value) {
+template <> void BinaryWriter::write(const double& value) {
   writeDouble(value);
 }
 
-template <> void BinaryWriter::write<string>(string value) {
+template <> void BinaryWriter::write(const string& value) {
   writeString(value);
 }
 

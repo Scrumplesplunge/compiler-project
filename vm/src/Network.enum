@@ -1,5 +1,16 @@
 # Message types for the master and worker network connections.
 
 # Spawn a new process server on a worker. This message includes the static data
-# and bytecode for the program that is being executed.
+# and bytecode for the program that is being executed, and should be sent at the
+# start of a connection to a worker.
 START_PROCESS_SERVER
+
+# Request the master to spawn a new VM instance on a worker. Includes the
+# workspace address and instruction pointer that the process should start at, as
+# well as the size of the memory required by the instance.
+REQUEST_INSTANCE
+
+# Command a worker to spawn a new VM instance. Includes the same fields as
+# REQUEST_INSTANCE, but also contains an instance ID to associate the new
+# instance with.
+START_INSTANCE

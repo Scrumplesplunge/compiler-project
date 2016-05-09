@@ -1,6 +1,5 @@
 #pragma once
 
-#include "channel.h"
 #include "Direct.h"
 #include "Indirect.h"
 
@@ -29,6 +28,12 @@
       "No floating point support is provided.");  \
 }
 
+// COMPILE OPTIONS:
+// DISABLE_BOUND_CHECKS - If defined, bound checks for the instruction memory
+//                        and program memory will not be performed. This
+//                        improves performance by a significant amount in
+//                        optimised builds.
+
 class VM {
  public:
   static const int32_t
@@ -45,8 +50,9 @@ class VM {
   // Construct a VM with the given block of memory available as RAM. Note that
   // memory_size should be in *bytes*, and that the memory will be loaded such
   // that index 0 is at address MemStart.
-  VM(int32_t memory_start, std::unique_ptr<int32_t[]> memory, int memory_size,
+  VM(int32_t memory_start, int memory_size,
      const char* bytecode, int bytecode_size);
+  virtual ~VM() = default;
 
   // Run the virtual machine until all processes stop.
   void run();
@@ -79,6 +85,10 @@ class VM {
 
   void set_instruction_pointer(int32_t value) { Iptr = value; }
   void set_workspace_pointer(int32_t value) { Wptr = value; }
+
+ protected:
+  // Handler used when a read has an address smaller than memory_start_.
+  virtual int32_t readBeforeStart(int32_t address);
 
  private:
   int8_t fetch();  // Fetch a single instruction for execution.

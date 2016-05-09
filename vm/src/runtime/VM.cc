@@ -9,11 +9,6 @@
 
 using namespace std;
 
-// COMPILE OPTIONS:
-// DISABLE_BOUND_CHECKS - If defined, bound checks for the instruction memory
-//                        and program memory will not be performed. This
-//                        improves performance by a significant amount in
-//                        optimised builds.
 const int32_t VM::Enabling        = 0x80000001;
 const int32_t VM::ExternalChannel = 0x80000002;
 const int32_t VM::False           = 0x00000000;
@@ -24,11 +19,11 @@ const int32_t VM::Ready           = 0x80000003;
 const int32_t VM::True            = 0x00000001;
 const int32_t VM::Waiting         = 0x80000002;
 
-VM::VM(int32_t memory_start, unique_ptr<int32_t[]> memory, int memory_size,
+VM::VM(int32_t memory_start, int memory_size,
        const char* bytecode, int bytecode_size)
-    : bytecode_(bytecode), bytecode_size_(bytecode_size), memory_(move(memory)),
-      memory_start_(memory_start), memory_size_(memory_size),
-      memory_end_(memory_start + memory_size) {
+    : bytecode_(bytecode), bytecode_size_(bytecode_size),
+      memory_(new int32_t[(memory_size + 3) / 4]), memory_start_(memory_start),
+      memory_size_(memory_size), memory_end_(memory_start + memory_size) {
   Wptr = memory_start;
 }
 
@@ -115,6 +110,8 @@ int32_t& VM::operator[](int32_t address) {
 }
 
 int32_t VM::read(int32_t address) {
+  if (__builtin_expect((address < memory_start_), 0))
+    return readBeforeStart(address);
   int32_t value = (*this)[address];
   return value;
 }
@@ -141,25 +138,9 @@ void VM::writeByte(int32_t address, int8_t value) {
   write(address, (word & mask) | (value << shift));
 }
 
-void VM::enqueueProcess(int32_t desc) {
-  // Point the previous process (if it exists) at this one.
-  if (FptrReg == NotProcess) {
-    // Queue was empty. Make the new process the front process.
-    FptrReg = desc;
-  } else {
-    // Queue is non-empty. Update the current last to point at this process.
-    write(makeWptr(BptrReg) - 8, desc);
-  }
-  BptrReg = desc;
-}
-
-int32_t VM::dequeueProcess() {
-  int32_t desc = FptrReg;
-
-  // Update the front pointer if necessary.
-  if (desc != NotProcess) FptrReg = read(makeWptr(desc) - 8);
-
-  return desc;
+int32_t VM::readBeforeStart(int32_t address) {
+  throw runtime_error("Address " + addressString(address) + " < " +
+                      addressString(memory_start_));
 }
 
 int8_t VM::fetch() {
@@ -290,4 +271,25 @@ void VM::yield() {
 
 void VM::stop() {
   deschedule();
+}
+
+void VM::enqueueProcess(int32_t desc) {
+  // Point the previous process (if it exists) at this one.
+  if (FptrReg == NotProcess) {
+    // Queue was empty. Make the new process the front process.
+    FptrReg = desc;
+  } else {
+    // Queue is non-empty. Update the current last to point at this process.
+    write(makeWptr(BptrReg) - 8, desc);
+  }
+  BptrReg = desc;
+}
+
+int32_t VM::dequeueProcess() {
+  int32_t desc = FptrReg;
+
+  // Update the front pointer if necessary.
+  if (desc != NotProcess) FptrReg = read(makeWptr(desc) - 8);
+
+  return desc;
 }

@@ -1,69 +1,75 @@
 MAKEFLAGS = -j8
-CXXFLAGS = -std=c++14 -Igen -I../lib/src -Ofast -s -flto -Wall -Wl,--gc-sections
-ENUM = ../tools/bin/enum
-
-# Generated code.
-GEN = $(addprefix gen/, Direct Indirect Unit Network)
-
-# Libraries.
-ARGS = $(addprefix ../lib/obj/util/, args table text)
-BINARY = $(addprefix ../lib/obj/util/, binary stream)
-JSON = ../lib/obj/util/json
-NETWORK = gen/Network obj/network  \
-					$(addprefix ../lib/obj/util/, binary messenger stream socket)
-OPERATIONS = $(addprefix gen/, Direct Indirect Unit)
+CXXFLAGS = -std=c++14 -pthread -Igen -I../lib/src -Ofast -s -flto -Wall  \
+					 -Wl,--gc-sections
 
 .PHONY: all clean
 
 all: bin/as bin/das bin/vm bin/master bin/worker
 
+# Sources.
+SOURCES = $(shell find src -name '*.cc')
+OBJECTS = $(patsubst src/%.cc, obj/%.o, ${SOURCES})
+DEPENDS = $(patsubst src/%.cc, dep/%.d, ${SOURCES})
+GEN = $(patsubst src/%.enum, gen/%.o, $(shell find src -name '*.enum'))
+
+ARGS = $(addprefix ../lib/obj/util/, args.o table.o text.o)
+BINARY = $(addprefix ../lib/obj/util/, binary.o stream.o)
+JSON = ../lib/obj/util/json.o
+NETWORK = gen/Network.o obj/network.o ${BINARY}  \
+					$(addprefix ../lib/obj/util/, messenger.o socket.o)
+OPERATIONS = $(addprefix gen/, Direct.o Indirect.o Unit.o)
+VM = $(addprefix obj/runtime/, VM.o VMDirect.o VMIndirect.o)
+
+AS_DEPS     = obj/assembler/operations.o ${ARGS} ${OPERATIONS}
+DAS_DEPS    = obj/util.o obj/assembler/operations.o ${ARGS} ${OPERATIONS}
+VM_DEPS     = obj/util.o ${ARGS} ${BINARY} ${OPERATIONS} ${VM}
+MASTER_DEPS = obj/util.o $(addprefix obj/master/, config.o ProcessMaster.o)  \
+							${ARGS} ${JSON} ${BINARY} ${NETWORK} ${VM} ${OPERATIONS}
+WORKER_DEPS = obj/util.o $(addprefix obj/worker/, Instance.o ProcessServer.o)  \
+							${ARGS} ${JSON} ${BINARY} ${NETWORK} ${OPERATIONS} ${VM}
+
+bin/as: obj/assembler/as.o ${AS_DEPS} | bin
+	${CXX} ${CXXFLAGS} $^ -o $@
+bin/das: obj/assembler/das.o ${DAS_DEPS} | bin
+	${CXX} ${CXXFLAGS} $^ -o $@
+bin/vm: obj/runtime/vm.o ${VM_DEPS} | bin
+	${CXX} ${CXXFLAGS} $^ -o $@
+bin/master: obj/master/master.o ${MASTER_DEPS} | bin
+	${CXX} ${CXXFLAGS} $^ -o $@
+bin/worker: obj/worker/worker.o ${WORKER_DEPS} | bin
+	${CXX} ${CXXFLAGS} $^ -o $@
+
+# External dependencies.
+ENUM = ../tools/bin/enum
 ${ENUM}:
 	@echo "Building enum compiler.."
 	${MAKE} -C ../tools bin/enum
 
-BIN_AS_LIBS = ${ARGS} ${OPERATIONS} obj/assembler/operations 
-bin/as: $(addsuffix .o, obj/assembler/as ${BIN_AS_LIBS}) | bin
-	${CXX} ${CXXFLAGS} $^ -o $@
+../lib/%:
+	${MAKE} -C ../lib $*
 
-BIN_DAS_LIBS = ${ARGS} ${OPERATIONS} obj/util obj/assembler/operations
-bin/das: $(addsuffix .o, obj/assembler/das ${BIN_DAS_LIBS}) | bin
-	${CXX} ${CXXFLAGS} $^ -o $@
-
-BIN_VM_LIBS = ${ARGS} ${BINARY} ${OPERATIONS} obj/util obj/runtime/VM
-BIN_VM = $(addprefix obj/runtime/, vm VMDirect VMIndirect)
-bin/vm: $(addsuffix .o, ${BIN_VM} ${BIN_VM_LIBS}) | bin
-	${CXX} ${CXXFLAGS} -DDISABLE_BOUND_CHECKS $^ -o $@
-
-BIN_MASTER_LIBS = obj/util $(addprefix obj/master/, config ProcessMaster) \
-									${ARGS} ${JSON} ${NETWORK}
-bin/master: $(addsuffix .o, obj/master/master ${BIN_MASTER_LIBS}) | bin
-	${CXX} ${CXXFLAGS} $^ -o $@
-
-BIN_WORKER_LIBS = ${ARGS} ${JSON} ${NETWORK} obj/util obj/worker/ProcessServer
-bin/worker: $(addsuffix .o, obj/worker/worker ${BIN_WORKER_LIBS}) | bin
-	${CXX} ${CXXFLAGS} $^ -o $@
-
-gen/%.h gen/%.cc: src/%.enum | ${ENUM} gen
+# Generated code.
+gen/%.h gen/%.cc: src/%.enum | ${ENUM}
+	@mkdir -p gen
 	cd gen && ../${ENUM} ../$^ $*
 
 gen/%.o: gen/%.cc | gen/%.h
 	${CXX} ${CXXFLAGS} -c $^ -o $@
 
-../lib/%:
-	${MAKE} -C ../lib $*
+# Dependency graph.
+dep/%.d: src/%.cc | ${GEN}
+	@mkdir -p dep/$(dir $*)
+	${CXX} ${CXXFLAGS} -M -MG -MF dep/$*.d $^
 
-obj/%.o: src/%.cc | $(wildcard %.h) obj $(addsuffix .o, ${GEN})
-	@mkdir -p $(dir $@)
+# Object files.
+obj/%.o: src/%.cc
+	@mkdir -p obj/$(dir $*)
 	${CXX} ${CXXFLAGS} -c $^ -o $@
 
 bin:
 	mkdir bin
 
-gen:
-	mkdir gen
-
-obj:
-	mkdir obj
-
 clean:
-	rm -rf bin gen obj
+	rm -rf bin dep gen obj
+
+-include ${DEPENDS}

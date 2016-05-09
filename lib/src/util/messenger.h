@@ -41,7 +41,9 @@ class Messenger {
   void on(MessageTypeID type, MessageHandler<T> handler) {
     // Wrap the handler with a decoder for the message.
     on(type, [this, handler]() {
-      handler(reader_.read<T>());
+      T message;
+      reader_.read(&message);
+      handler(std::move(message));
     });
   }
 
