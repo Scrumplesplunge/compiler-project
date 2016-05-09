@@ -46,8 +46,6 @@ void Messenger::unlockedPoll(unique_lock<mutex>& reader_lock) {
   BinaryReader reader(socket_);
 
   MessageHeader header = readHeader(reader_lock);
-  cerr << "Received message of type " << header.type << ", length "
-       << header.length << "\n";
   if (handlers_.count(header.type) == 0) {
     cerr << "Warning: Not handling message with type " << header.type << ".\n";
     // Unrecognised ID. Discard the message.

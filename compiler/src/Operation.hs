@@ -1,5 +1,6 @@
 module Operation where
 
+import Data.Int
 import Data.List
 import Generator
 import Prelude hiding (EQ, GT)
@@ -7,9 +8,9 @@ import Prelude hiding (EQ, GT)
 data Operation =
       NOP
     | COMMENT String
-    | ADC Integer       -- A += x;
+    | ADC Int32         -- A += x;
     | ADD               -- B = pop(); A = pop(); push(A + B);
-    | AJW Integer       -- Wptr += x;
+    | AJW Int32         -- Wptr += x;
     | ALT               -- Begin alternative.
     | ALTEND            -- End alternative.
     | ALTWT             -- Begin waiting.
@@ -25,24 +26,24 @@ data Operation =
     | ENBS              -- Enable skip.
     | ENDP              -- A = pop(); End process with refcount workspace A.
     | EQ                -- B = pop(); A = pop(); push(A == B);
-    | EQC Integer       -- A = pop(); push(A == x);
+    | EQC Int32         -- A = pop(); push(A == x);
     | GT                -- B = pop(); A = pop(); push(A > B);
-    | IN Integer        -- Read x bytes from chan A to loc B. Pop both.
+    | IN Int32          -- Read x bytes from chan A to loc B. Pop both.
     | J Label           -- Iptr = x;
     | LB                -- push((byte) Mem[pop()]);
     | LDO Label Label   -- Load the offset from the second label to the first.
     | LDA Label         -- Load the (non-relative) address of a label.
-    | LDC Integer       -- push(x);
-    | LDL Integer       -- push(Mem[Wptr + 4 * x]);
-    | LDLP Integer      -- push(Wptr + 4 * x);
-    | LDNL Integer      -- A = pop(); push(Mem[A + 4 * x]);
-    | LDNLP Integer     -- A = pop(); push(A + 4 * x);
+    | LDC Int32         -- push(x);
+    | LDL Int32         -- push(Mem[Wptr + 4 * x]);
+    | LDLP Int32        -- push(Wptr + 4 * x);
+    | LDNL Int32        -- A = pop(); push(Mem[A + 4 * x]);
+    | LDNLP Int32       -- A = pop(); push(A + 4 * x);
     | LEND Label Label  -- Loop end.
     | MINT              -- Minimum integer.
     | MUL               -- B = pop(); A = pop(); push(A * B);
     | NOT               -- A = pop(); push(¬A);
     | OR                -- B = pop(); A = pop(); push(A | B);
-    | OUT Integer       -- Write x bytes from loc B to chan A. Pop both.
+    | OUT Int32         -- Write x bytes from loc B to chan A. Pop both.
     | OUTWORD           -- Output word B to channel A.
     | REM               -- B = pop(); A = pop(); push(A % B);
     | RESETCH           -- Reset channel.
@@ -53,8 +54,8 @@ data Operation =
     | SHL               -- B = pop(); A = pop(); push(A << B);
     | SHR               -- B = pop(); A = pop(); push(A >> B);  // 0-filled.
     | STARTP Label      -- Start process x with workspace y.
-    | STL Integer       -- Mem[Wptr + 4 * x] = A;
-    | STNL Integer      -- Mem[A + 4 * x] = B;
+    | STL Int32         -- Mem[Wptr + 4 * x] = A;
+    | STNL Int32        -- Mem[A + 4 * x] = B;
     | STOPP             -- Stop and dequeue the current process.
     | SUB               -- B = pop(); A = pop(); push(A - B);
     | WSUB              -- B = pop(); A = pop(); push(4 * B + A);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../network.h"
+#include "../runtime/metadata.h"
 #include "config.h"
 
 #include <memory>
@@ -11,7 +12,7 @@
 
 class ProcessServerHandle {
  public:
-  ProcessServerHandle(Socket&& socket, int32_t data_start, std::string&& data,
+  ProcessServerHandle(Socket&& socket, int32_t data_start, std::string data,
                       std::string bytecode);
 
   void startInstance(int32_t workspace_pointer, int32_t instruction_pointer,
@@ -30,6 +31,9 @@ class ProcessMaster {
   void serve();
  private:
   int32_t data_end_;
+
+  std::string bytecode_;
+  MetaData metadata_;
 
   std::vector<std::unique_ptr<ProcessServerHandle>> workers_;
 };

@@ -2,6 +2,7 @@ module SemanticAnalyser where
 
 import AST (L (L))
 import qualified AST
+import Data.Int
 import Data.List
 import Control.Monad
 import AnnotatedAST
@@ -16,12 +17,12 @@ type NameInfo = (Type, Location)
 type Environment = [(AST.Name, NameInfo)]
 
 data State = State {
-  environment :: Environment,      -- Variables currently in scope.
+  environment :: Environment,    -- Variables currently in scope.
   num_errors :: Integer,
   num_warnings :: Integer,
-  next_static_address :: Integer,  -- Next address to assign to static data.
-  static :: [(Integer, Static)],   -- Static data currently defined.
-  static_chain :: [Integer]        -- Position information in the static chain.
+  next_static_address :: Int32,  -- Next address to assign to static data.
+  static :: [(Int32, Static)],   -- Static data currently defined.
+  static_chain :: [Int32]        -- Position information in the static chain.
 }
 
 instance Show State where
@@ -102,13 +103,13 @@ get_level =
   S (\state -> return (toInteger . length $ static_chain state, state))
 
 -- Allocate space in the static chain. Return the allocation.
-alloc :: Integer -> SemanticAnalyser Allocation
+alloc :: Int32 -> SemanticAnalyser Allocation
 alloc x = do
   -- Fetch the static chain.
   chain <- S (\state -> return (static_chain state, state))
 
   -- Compute the allocation.
-  let static_level = (toInteger . length) chain - 1
+  let static_level = (fromIntegral . length) chain - 1
   let old_value = head chain
   let new_value = old_value - x
   let chain' = new_value : tail chain
@@ -128,7 +129,7 @@ new_level analyser = do
   return a
 
 -- Register a new static blob.
-add_static :: Static -> SemanticAnalyser Integer
+add_static :: Static -> SemanticAnalyser Int32
 add_static s = do
   -- Read the next static address to assign.
   address <- S (\state -> return (next_static_address state, state))
@@ -136,8 +137,8 @@ add_static s = do
   id <- S (\state -> return (length (static state), state))
   -- Compute the static data blob size.
   let size = case s of
-               WordArray ws -> 4 * toInteger (length ws)
-               ByteArray bs -> 4 * ((toInteger (length bs) + 3) `div` 4)
+               WordArray ws -> 4 * fromIntegral (length ws)
+               ByteArray bs -> 4 * ((fromIntegral (length bs) + 3) `div` 4)
   -- Store the blob.
   S (\state ->
     let state' = state {
@@ -149,12 +150,12 @@ add_static s = do
 
 -- Access a static blob using its address. Note that access to the innards of
 -- the blob is not supported.
-lookup_address :: Integer -> [(Integer, Static)] -> Maybe (Integer, Static)
+lookup_address :: Int32 -> [(Int32, Static)] -> Maybe (Int32, Static)
 lookup_address address [] = Nothing
 lookup_address address ((a, v) : as) =
   if a <= address then Just (a, v) else lookup_address address as
 
-get_static :: Location -> Integer -> SemanticAnalyser Static
+get_static :: Location -> Int32 -> SemanticAnalyser Static
 get_static loc address = do
   ss <- S (\state -> return (static state, state))
   case lookup_address address ss of
@@ -163,18 +164,18 @@ get_static loc address = do
       let index = (address - a) `div` 4
       if (address `mod` 4) /= 0 then do
         print_warning loc "Unaligned access to word array. Treating as aligned."
-      else if index >= toInteger (length ws) then
+      else if index >= fromIntegral (length ws) then
         print_error loc "Static array access out of bounds."
       else
         return ()
-      return (WordArray (drop (fromInteger index) ws))
+      return (WordArray (drop (fromIntegral index) ws))
     Just (a, ByteArray bs) -> do
       let index = address - a
-      if address >= toInteger (length bs) then
+      if address >= fromIntegral (length bs) then
         print_error loc "Static array access out of bounds."
       else
         return ()
-      return (ByteArray (drop (fromInteger index) bs))
+      return (ByteArray (drop (fromIntegral index) bs))
 
 -- Save the environment, perform an analysis, then restore the environment.
 new_scope :: SemanticAnalyser a -> SemanticAnalyser a

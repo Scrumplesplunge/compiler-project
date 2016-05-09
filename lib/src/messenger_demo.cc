@@ -23,12 +23,12 @@ struct VarInt {
 };
 
 template <>
-VarInt BinaryReader::read<VarInt>() {
-  return VarInt{readVarInt()};
+void BinaryReader::read(VarInt* message) {
+  message->value = readVarInt();
 }
 
 template <>
-void BinaryWriter::write<VarInt>(VarInt var_int) {
+void BinaryWriter::write(const VarInt& var_int) {
   writeVarInt(var_int.value);
 }
 

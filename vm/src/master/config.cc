@@ -31,8 +31,8 @@ JobConfig loadConfig(string job_file) {
   checkMemberType(config, "bytecode_file", JSON::Type::STRING);
   out.bytecode_file = config["bytecode_file"].asString();
 
-  checkMemberType(config, "data_file", JSON::Type::STRING);
-  out.data_file = config["data_file"].asString();
+  checkMemberType(config, "metadata_file", JSON::Type::STRING);
+  out.metadata_file = config["metadata_file"].asString();
 
   checkMemberType(config, "workers", JSON::Type::ARRAY);
   JSON::Array workers = config["workers"].asArray();

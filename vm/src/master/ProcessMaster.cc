@@ -15,7 +15,7 @@ using namespace std;
 using namespace std::placeholders;
 
 ProcessServerHandle::ProcessServerHandle(
-    Socket&& socket, int32_t data_start, string&& data, string bytecode)
+    Socket&& socket, int32_t data_start, string data, string bytecode)
     : messenger_(move(socket)) {
   // Send the handshake message.
   MESSAGE(START_PROCESS_SERVER) message;
@@ -36,23 +36,9 @@ void ProcessServerHandle::startInstance(
   send(message);
 }
 
-ProcessMaster::ProcessMaster(const JobConfig& config) {
-  // Load the bytecode.
-  string bytecode = getFileContents(config.bytecode_file);
-
-  // Set up a reader for the data file.
-  ifstream data_file(config.data_file, ios::binary);
-  StandardInputStream stream(data_file);
-  BinaryReader reader(stream);
-
-  // Read the data blob.
-  int32_t data_start = reader.readInt32();
-  int32_t data_length = reader.readInt32();
-  data_end_ = data_start + data_length;
-  unique_ptr<char[]> buffer(new char[data_length]);
-  reader.readBytes(buffer.get(), data_length);
-  string data(buffer.get(), data_length);
-
+ProcessMaster::ProcessMaster(const JobConfig& config)
+    : bytecode_(getFileContents(config.bytecode_file)),
+      metadata_(loadMetaData(config.metadata_file)) {
   // Connect to all the workers.
   for (const WorkerAddress& address : config.workers) {
     if (options::verbose)
@@ -60,7 +46,8 @@ ProcessMaster::ProcessMaster(const JobConfig& config) {
     Socket socket;
     socket.connect(address.host, address.port);
     workers_.push_back(make_unique<ProcessServerHandle>(
-        move(socket), data_start, move(data), bytecode));
+        move(socket), metadata_.memory_start, metadata_.static_data,
+        bytecode_));
   }
 }
 
@@ -68,6 +55,6 @@ void ProcessMaster::serve() {
   // Run the program on the first worker.
   // TODO: Make a way for the program to specify how much space the *initial*
   // process requires.
-  workers_[0]->startInstance(data_end_, 0, 1024, 0);
+  workers_[0]->startInstance(metadata_.workspace_pointer, 0, metadata_.memory_size, 0);
   cin.get();
 }

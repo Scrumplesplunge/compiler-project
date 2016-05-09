@@ -10,7 +10,7 @@ struct WorkerAddress {
 
 struct JobConfig {
   std::string bytecode_file;
-  std::string data_file;
+  std::string metadata_file;
   std::vector<WorkerAddress> workers;
 };
 

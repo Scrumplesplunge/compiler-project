@@ -1,5 +1,6 @@
 #include "../util.h"
 #include "VM.h"
+#include "metadata.h"
 
 #include <chrono>
 #include <fstream>
@@ -14,14 +15,15 @@
 using namespace std::chrono;
 using namespace std;
 
-USAGE("Usage: vm --bytecode_file [filename] --data_file [filename]\n\n"
+USAGE("Usage: vm --bytecode_file [filename] --metadata_file [filename]\n\n"
       "Execute a program using the virtual machine.\n");
 
 OPTION(string, bytecode_file, "",
        "File containing the application bytecode to be executed.");
-OPTION(string, data_file, "",
-       "File containing the application data. This will be used to initialize "
-       "the RAM of the virtual machine before the program is started.");
+OPTION(string, metadata_file, "",
+       "File containing the application data and configuration parameters. "
+       "This will be used to initialize the RAM of the virtual machine before "
+       "the program is started.");
 
 FLAG(step, "Run the program step-by-step.");
 FLAG(summary, "Show a performance summary upon completion.");
@@ -59,6 +61,10 @@ int main(int argc, char* args[]) {
     cerr << "A bytecode file must be specified.\n";
     return 1;
   }
+  if (options::metadata_file == "") {
+    cerr << "A metadata file must be specified.\n";
+    return 1;
+  }
 
   // Open the bytecode file and load the contents.
   if (options::verbose)
@@ -73,53 +79,32 @@ int main(int argc, char* args[]) {
   if (options::verbose)
     cerr << "Bytecode size: " << bytecode.length() << "\n";
 
-  // Construct the program memory.
-  int memory_size = 1 << 20;
+  // Load the metadata.
+  if (options::verbose)
+    cerr << "Loading metadata..\n";
+  MetaData metadata = loadMetaData(options::metadata_file);
+
+  if (options::verbose)
+    cerr << "Memory required: " << metadata.memory_size << "\n";
 
   // Initialize the virtual machine.
   if (options::verbose)
     cerr << "Creating virtual machine instance..\n";
-  VM vm(VM::MostNeg, memory_size, bytecode.c_str(), bytecode.length());
+  VM vm(metadata.memory_start, metadata.memory_size, bytecode.c_str(),
+        bytecode.length());
 
-  if (options::data_file != "") {
-    // Open the data file and load the contents.
-    if (options::verbose)
-      cerr << "Loading data file..\n";
-    ifstream data_file(options::data_file, ios::binary);
-    if (!data_file) {
-      cerr << "Failed to open data file for reading.\n";
-      return 1;
-    }
-    StandardInputStream data_stream(data_file);
-    BinaryReader reader(data_stream);
+  vm.set_workspace_pointer(metadata.workspace_pointer);
 
-    int32_t address = reader.readInt32();
-    int32_t length = reader.readInt32();
-    int buffer_size = 2 * length;
-    unique_ptr<char[]> buffer(new char[buffer_size]);
-    reader.readBytes(buffer.get(), length);
-
-    while (!data_file.eof()) {
-      if (options::verbose) {
-        cerr << "Loading blob " << addressString(address) << ", size " << length
-             << "\n";
-      }
-      // Copy the blob into the main memory of the VM.
-      for (int32_t i = 0; i < length; i++)
-        vm.writeByte(address + i, buffer[i]);
-
-      // Load the next blob.
-      address = reader.readInt32();
-      length = reader.readInt32();
-      if (length > buffer_size) {
-        buffer_size = 2 * length;
-        buffer.reset(new char[buffer_size]);
-      }
-      reader.readBytes(buffer.get(), length);
-    }
+  // Copy the static data into the main memory of the VM.
+  int32_t i = 0;
+  for (char c : metadata.static_data) {
+    vm.writeByte(metadata.memory_start + i, c);
+    i++;
   }
 
-  if (options::verbose) cerr << "Starting VM..\n\n";
+  if (options::verbose)
+    cerr << "Starting VM..\n\n";
+
   high_resolution_clock::time_point start = high_resolution_clock::now();
   if (options::debug || options::step) {
     // Step through the program.

@@ -1,7 +1,9 @@
+import AnnotatedAST
 import CodeGen
 import qualified Data.ByteString.Lazy as BL
-import Data.Tree
+import Data.Int
 import IndentParser
+import qualified MetaData
 import Parser
 import Parsing
 import SemanticAnalyser hiding (putStdErr)
@@ -19,16 +21,16 @@ putStdErr = hPutStrLn stderr
 -- Compilation options.
 data Options = Options {
   input_file :: Maybe String,
-  assembler_file :: String,
-  data_file :: String,
-  memory_start :: Integer
+  assembly_file :: String,
+  metadata_file :: String,
+  memory_start :: Int32
 }
 
 defaults = Options {
   input_file = Nothing,
-  assembler_file = "code.s",
-  data_file = "data.bin",
-  memory_start = 0x80000000
+  assembly_file = "code.s",
+  metadata_file = "metadata.json",
+  memory_start = two_pow_31
 }
 
 is_valid :: Options -> Bool
@@ -52,10 +54,10 @@ read_args = do
             [] -> return options
             ("--assembly_file" : v : args') -> do
               -- Set the output assembler file.
-              read_args' args' (options { assembler_file = v })
-            ("--data_file" : v : args') -> do
-              -- Set the output data file.
-              read_args' args' (options { data_file = v })
+              read_args' args' (options { assembly_file = v })
+            ("--metadata_file" : v : args') -> do
+              -- Set the output metadata file.
+              read_args' args' (options { metadata_file = v })
             ("--memory_start" : v : args') -> do
               -- Set the address where available memory starts.
               read_args' args' (options { memory_start = read v })
@@ -86,24 +88,30 @@ main = do
   let state = empty_state { next_static_address = memory_start options }
   (proc, state') <- run_analyser (check_process x) state
 
-  -- let x = full_parse process tokens
-  -- (res, state) <- run_analyser (check_process x)
-  -- putStrLn . ("\nFinal Tree:\n\n" ++) . show $ res
-  -- putStrLn . ("\nFinal State:\n\n" ++) . show $ state
-
   if num_errors state' > 0 then
     hPutStrLn stderr ("Compilation failed with " ++ show (num_errors state') ++
                       " error(s) and " ++ show (num_warnings state') ++
                       " warning(s).")
   else do
     -- Write assembler file.
-    assembler_handle <- open (assembler_file options) WriteMode stdout
-    let static_size = next_static_address state' - memory_start options
-    assemble (context { stack_depth = static_size }) proc assembler_handle
+    let workspace_pointer = next_static_address state'
+    let static_size = workspace_pointer - memory_start options
+
+    assembler_handle <- open (assembly_file options) WriteMode stdout
+    max_depth <- assemble context proc assembler_handle
     hClose assembler_handle
 
-    -- Write data file.
-    data_handle <- open (data_file options) WriteMode stdout
-    let blob = make_blob (static state')
-    BL.hPut data_handle blob
-    hClose data_handle
+    -- Write metadata file.
+    let (static_data_start, static_data) = make_blob (static state')
+    if static_data_start /= memory_start options then
+      error "Compiler error: static data does not start at memory start."
+    else do
+      let metadata = MetaData.MetaData {
+            MetaData.memory_start = memory_start options,
+            MetaData.workspace_pointer = workspace_pointer,
+            MetaData.memory_size = 4 * (6 + max_depth) + static_size,
+            MetaData.assembly_file = assembly_file options,
+            MetaData.static_data = static_data}
+      metadata_handle <- open (metadata_file options) WriteMode stdout
+      hPutStr metadata_handle (MetaData.encode metadata)
+      hClose metadata_handle

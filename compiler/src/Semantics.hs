@@ -3,6 +3,7 @@ module Semantics where
 -- import Control.Monad
 -- import Data.Bits
 import Data.Char
+import Data.Int
 import qualified Data.List
 import AST (L (L))
 import qualified AST
@@ -198,9 +199,9 @@ check_definition ((L d loc) : ds) p = do
       case value of
         Integer size -> do
           -- Define the array.
-          add_name name (raw_array_type t size, loc)
+          add_name name (raw_array_type t (fromIntegral size), loc)
           ds' <- check_definition ds p
-          return $ Define t name size ds'
+          return $ Define t name (fromIntegral size) ds'
         _ -> do
           type_mismatch (AST.location l_expr) INT t'
           check_definition ds p
@@ -488,13 +489,13 @@ check_and_compute_constexpr (L expr loc) =
           case v' of
             WordArray ws ->
               if array_type == AST.INT then
-                return (INT, Integer $ ws !! (fromInteger i))
+                return (INT, Integer . fromIntegral $ ws !! fromIntegral i)
               else do
                 print_error loc "Byte-access to word-arrays is unimplemented."
                 return (INT, Integer 0)
             ByteArray bs ->
               if array_type == AST.BYTE then
-                return (INT, Integer . toInteger . ord $ bs !! (fromInteger i))
+                return (INT, Integer . fromIntegral . ord $ bs !! fromIntegral i)
               else do
                 print_error loc "Word-access to byte-arrays is unimplemented."
                 return (INT, Integer 0)
@@ -506,28 +507,28 @@ check_and_compute_constexpr (L expr loc) =
     AST.Literal l ->
       case l of
         AST.Bool b -> return (INT, Integer $ if b then true else false)
-        AST.Char c -> return (INT, Integer . toInteger . ord $ c)
+        AST.Char c -> return (INT, Integer . fromIntegral . ord $ c)
         AST.Integer i -> return (INT, Integer $ value i)
         AST.String s -> do
           -- Store the table in the static blob.
           address <- add_static (ByteArray s)
           -- Return a pointer to the string.
-          return (BYTE_ARRAY . toInteger $ (length s), Address address)
+          return (BYTE_ARRAY . fromIntegral $ (length s), Address address)
         AST.Table AST.INT es -> do
           -- Compute the value of the table.
           vs <- mapM check_and_compute_value es
           -- Store the table in the static blob.
           address <- add_static (WordArray vs)
           -- Return a pointer to the table.
-          return (INT_ARRAY . toInteger $ length vs,
+          return (INT_ARRAY . fromIntegral $ length vs,
                   Address address)
         AST.Table AST.BYTE es -> do
           -- Compute the value of the table.
           vs <- mapM check_and_compute_value es
           -- Store the table in a static blob.
-          let r = map (chr . fromInteger . (`mod` 256)) vs
+          let r = map (chr . fromIntegral . (`mod` 256)) vs
           address <- add_static (ByteArray r)
-          return (BYTE_ARRAY . toInteger $ length vs,
+          return (BYTE_ARRAY . fromIntegral $ length vs,
                   Address address)
     AST.Mod a b -> do
       x1 <- check_and_compute_value a
@@ -560,10 +561,10 @@ check_and_compute_constexpr (L expr loc) =
       j <- check_and_compute_value b
       if i < 0 then do  -- Check that the start is at least at 0.
         print_error loc ("Negative start index in slice: " ++ show i ++ ".")
-        return (INT_ARRAY_REF, Address mem_start)
+        return (INT_ARRAY_REF, Address 0)
       else if j < 0 then do  -- Check that the slice non-negative.
         print_error loc ("Negative range in slice: " ++ show j ++ ".")
-        return (INT_ARRAY_REF, Address mem_start)
+        return (INT_ARRAY_REF, Address 0)
       else
         -- Check that the table and slicer have the same type.
         case v of
@@ -571,8 +572,8 @@ check_and_compute_constexpr (L expr loc) =
             v' <- get_static loc a
             case v' of
               WordArray ws -> do
-                let ws' = drop (fromInteger i) ws
-                let len = toInteger (length ws')
+                let ws' = drop (fromIntegral i) ws
+                let len = fromIntegral (length ws')
                 
                 if i > len then do
                   print_error loc "Slice begins past end of array."
@@ -583,8 +584,8 @@ check_and_compute_constexpr (L expr loc) =
                 else
                   return (INT_ARRAY j, Address (a + 4 * i))
               ByteArray bs -> do
-                let bs' = drop (fromInteger i) bs
-                let len = toInteger (length bs')
+                let bs' = drop (fromIntegral i) bs
+                let len = fromIntegral (length bs')
                 
                 if i > len then do
                   print_error loc "Slice begins past end of array."
@@ -626,7 +627,7 @@ check_and_compute_constexpr (L expr loc) =
 
 -- Compute the value of an integer const-expression, or produce an error if the
 -- expression is not constant.
-check_and_compute_value :: L AST.Expression -> SemanticAnalyser Integer
+check_and_compute_value :: L AST.Expression -> SemanticAnalyser Int32
 check_and_compute_value a = do
   (t, v) <- check_and_compute_constexpr a
   x <- case v of

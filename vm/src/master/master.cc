@@ -27,7 +27,7 @@ int main(int argc, char* args[]) {
 
   if (options::verbose) {
     cerr << "Bytecode file : " << config.bytecode_file << "\n"
-         << "Data file     : " << config.data_file << "\n"
+         << "Data file     : " << config.metadata_file << "\n"
          << "Workers       : ";
 
     bool indent = false;

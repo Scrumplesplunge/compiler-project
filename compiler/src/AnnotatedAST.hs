@@ -3,6 +3,7 @@ module AnnotatedAST where
 import qualified AST
 import Data.Bits
 import Data.Char
+import Data.Int
 import Data.List
 import Text.Printf
 import qualified Data.ByteString as S
@@ -12,9 +13,9 @@ class Pretty a where
   prettyPrint :: a -> String
 
 -- Allocation information for a variable.
-data Allocation = Global Integer         -- Global address.
-                | Local Integer Integer  -- Static link, local offset.
-                | Constant Integer       -- Constant integer value.
+data Allocation = Global Int32       -- Global address.
+                | Local Int32 Int32  -- Static link, local offset.
+                | Constant Int32     -- Constant integer value.
   deriving Eq
 
 instance Show Allocation where
@@ -25,13 +26,13 @@ instance Show Allocation where
 -- Type associated with a given name.
 data Type = ANY_TYPE  -- Pseudo-type that casts to any other. Used internally.
           | BYTE
-          | BYTE_ARRAY Integer
+          | BYTE_ARRAY Int32
           | CHAN
-          | CHAN_ARRAY Integer
+          | CHAN_ARRAY Int32
           | CONST Type Value
           | PROC [Type] Process
           | INT
-          | INT_ARRAY Integer
+          | INT_ARRAY Int32
           | INT_REF
           | INT_ARRAY_REF
           | CHAN_ARRAY_REF
@@ -56,7 +57,7 @@ instance Show Type where
 
 -- Returns the amount of space (in words) required in the workspace for a
 -- particular data type.
-space_needed :: Type -> Integer
+space_needed :: Type -> Int32
 space_needed ANY_TYPE = 0                      -- Use some temporary space.
 space_needed BYTE = 1                          -- Use a word for storing bytes.
 space_needed (BYTE_ARRAY x) = (x + 3) `div` 4  -- Round up to the next word.
@@ -79,7 +80,7 @@ raw_type t =
   error ("This raw type (" ++ show t ++ ") should not appear in the AST.")
 
 -- Convert raw type to array of type.
-raw_array_type :: AST.RawType -> Integer -> Type
+raw_array_type :: AST.RawType -> Int32 -> Type
 raw_array_type AST.CHAN size = CHAN_ARRAY size
 raw_array_type AST.VALUE size = INT_ARRAY size
 raw_array_type t _ =
@@ -109,7 +110,7 @@ data Nestable a b = Nested a
 data Process = Alt Alternative
              | Assign Expression Expression
              | Call Name [Expression]
-             | Define AST.RawType Name Integer Process
+             | Define AST.RawType Name Int32 Process
              | DefineConstant Name Value Process
              | DefineProcedure Name Process
              | Delay Expression
@@ -268,25 +269,22 @@ instance Pretty Condition where
   prettyPrint (Condition rc) = prettyRep "IF" rc
 
 -- Compile-time constant value.
-data Value = Integer Integer
-           | Address Integer
+data Value = Integer Int32
+           | Address Int32
   deriving Eq
 
 instance Show Value where
   show (Integer i) = show i
-  show (Address a) = printf "0x%08x" (a + if a < 0 then two_pow_32 else 0)
+  show (Address a) = printf "0x%08x" a
 
 -- Constant values.
-two_pow_32 = 0x100000000 :: Integer
-two_pow_31 = 0x080000000 :: Integer
-mem_start  = value 0x80000070
+two_pow_31 = value 0x80000000
 true       = value 1
 false      = value 0
 
 -- Compile-time computation on values.
 -- TODO: Adjust these to agree with the transputer calculations.
-value a = if x >= two_pow_31 then x - two_pow_32 else x
-  where x = a `mod` two_pow_32
+value a = (fromIntegral a) :: Int32
 val_add a b = value (a + b)
 val_and a b = if a == true then b else false
 val_bitwise_and a b = value (a .&. b)
@@ -304,6 +302,6 @@ val_mul a b = value (a * b)
 val_neg a = value (-a)
 val_not a = value (complement a)
 val_or a b = if a == false then b else true
-val_shift_left a b = value (shift a (fromInteger b))
-val_shift_right a b = value (shift a (-fromInteger b))
+val_shift_left a b = value (shift a (fromIntegral b))
+val_shift_right a b = value (shift a (-fromIntegral b))
 val_sub a b = value (a - b)

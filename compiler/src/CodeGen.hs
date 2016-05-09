@@ -4,13 +4,14 @@ import Prelude hiding (EQ, GT)
 import AnnotatedAST
 import qualified AST
 import Code
+import Data.Int
 import Data.List
 import Data.Ord (comparing)
 import Generator
 import Operation
 import System.IO
 
-type StackDepth = Integer
+type StackDepth = Int32
 
 data Promise = Promise {
   depth_required :: StackDepth
@@ -24,7 +25,7 @@ promise = Promise {
 type Environment = [(Name, Allocation)]
 
 data Context = Context {
-  static_level :: Integer,    -- Current static link level.
+  static_level :: Int32,      -- Current static link level.
   stack_depth :: StackDepth,  -- Stack depth in current link level.
   environment :: Environment, -- Defined variables.
   if_exit_label :: String,    -- Exit location for the enclosing IF statement.
@@ -47,7 +48,7 @@ new_static_level ctx = ctx { static_level = static_level ctx + 1,
                              stack_depth = 1 }
 
 -- Allocate a variable in the context.
-allocate :: Context -> Name -> Integer -> Context
+allocate :: Context -> Name -> Int32 -> Context
 allocate ctx x size = ctx { stack_depth = pos,
                             environment = (x, a) : environment ctx }
   where pos = stack_depth ctx + size
@@ -55,7 +56,7 @@ allocate ctx x size = ctx { stack_depth = pos,
 
 -- Construct a (non-zero) number of local variables. The variables are assumed
 -- to start at local 1.
-initialize :: AST.RawType -> Integer -> Generator Code
+initialize :: AST.RawType -> Int32 -> Generator Code
 initialize t size = do
   case t of
     -- Don't initialize VARs.
@@ -215,7 +216,7 @@ gen_expr e =
               else
                 -- Need to descend a few static levels. Use non-local.
                 Raw ([COMMENT x, LDL (stack_depth ctx)] ++
-                     replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
+                     replicate (fromIntegral $ sl_diff - 1) (LDNL 0) ++
                      [LDNL (1 - off)])
   where desc = COMMENT (prettyPrint e)
 
@@ -248,7 +249,7 @@ gen_addr e =
               else
                 -- Need to descend a few static levels. Use non-local.
                 Raw ([COMMENT x, LDL (stack_depth ctx)] ++
-                     replicate (fromInteger $ sl_diff - 1) (LDNL 0) ++
+                     replicate (fromIntegral $ sl_diff - 1) (LDNL 0) ++
                      [LDNLP (1 - off)])
     Any -> (promise { depth_required = 1 }, code)
       where code ctx = return $ Raw [LDLP 0]
@@ -567,7 +568,7 @@ gen_par rp =
               end <- label "END_PAR"
               return $ Code [desc,
                              -- Set up the synchronisation monitor.
-                             Raw [AJW (-2), LDC (toInteger $ length ps), STL 2,
+                             Raw [AJW (-2), LDC (fromIntegral $ length ps), STL 2,
                                   LDA end, STL 1],
                              Code setup_code, Code subproc_code, Label end,
                              -- Note that the AJW increases the Wptr by 1
@@ -726,7 +727,7 @@ gen_proc p =
   where desc = comment (prettyPrint p)
 
 -- Run a code generator and output the generated code.
-assemble :: Context -> Process -> Handle -> IO ()
+assemble :: Context -> Process -> Handle -> IO StackDepth
 assemble ctx process output = do
   let (pp, gp) = gen_proc process
   let text = run_generator (do
@@ -745,3 +746,4 @@ assemble ctx process output = do
         showCode $ Code [comment1, comment2, comment3, Raw [AJW mem_size], code,
                          Raw [STOPP]])
   hPutStr output text
+  return (depth_required pp)
