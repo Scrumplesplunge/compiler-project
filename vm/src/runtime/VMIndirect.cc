@@ -49,14 +49,7 @@ DEFINE_INDIRECT(DISC) {
     return;
   }
 
-  bool is_ready = false;
-  if (isExternalChannelReader(C)) {
-    ChannelReader& chan = channelReader(C);
-    chan.markDisabled();
-    is_ready = chan.is_ready();
-  } else {
-    is_ready = (read(C) != makeWdesc(Wptr));
-  }
+  bool is_ready = (read(C) != makeWdesc(Wptr));
 
   // A channel guard is detectably ready if the value stored in the channel does
   // not match the current workspace descriptor.
@@ -100,14 +93,7 @@ DEFINE_INDIRECT(ENBC) {
   // Skip processing if the guard is false.
   if (!A) return;
 
-  bool is_ready = false;
-  if (isExternalChannelReader(B)) {
-    ChannelReader& chan = channelReader(B);
-    chan.markEnabled(makeWdesc(Wptr));
-    is_ready = chan.is_ready();
-  } else {
-    is_ready = (read(B) != makeWdesc(Wptr));
-  }
+  bool is_ready = (read(B) != makeWdesc(Wptr));
 
   if (read(B) == NotProcess) {
     // No process waiting on channel B.
@@ -145,37 +131,25 @@ DEFINE_INDIRECT(GT) {
 
 // Input message.
 DEFINE_INDIRECT(IN) {
-  if (isExternalChannelReader(B)) {
-    ChannelReader& chan = channelReader(B);
-    if (chan.is_ready()) {
-      // Perform the read. The channel will wake up the other end automatically.
-      chan.read(C, A, this);
-    } else {
-      // Writer is not waiting. Wait for the writer.
-      chan.readWait(makeWdesc(Wptr));
-      deschedule();
-    }
+  int32_t chan_value = read(B);
+  if (chan_value == NotProcess) {
+    // No process is currently waiting on this channel. Initiate
+    // communication by putting this process id in the channel.
+    write(B, makeWdesc(Wptr));
+    write(Wptr - 12, C);
+    deschedule();
   } else {
-    int32_t chan_value = read(B);
-    if (chan_value == NotProcess) {
-      // No process is currently waiting on this channel. Initiate
-      // communication by putting this process id in the channel.
-      write(B, makeWdesc(Wptr));
-      write(Wptr - 12, C);
-      deschedule();
-    } else {
-      // A process is waiting. The communication can proceed.
-      int32_t source = read((chan_value & ~0x3) - 12);
+    // A process is waiting. The communication can proceed.
+    int32_t source = read((chan_value & ~0x3) - 12);
 
-      for (int i = 0; i < A; i++)
-        writeByte(C + i, readByte(source + i));
+    for (int i = 0; i < A; i++)
+      writeByte(C + i, readByte(source + i));
 
-      // Reschedule the other thread.
-      schedule(chan_value);
+    // Reschedule the other thread.
+    schedule(chan_value);
 
-      // Reset the channel.
-      write(B, NotProcess);
-    }
+    // Reset the channel.
+    write(B, NotProcess);
   }
 }
 
@@ -226,47 +200,34 @@ DEFINE_INDIRECT(OR) {
 
 // Output message.
 DEFINE_INDIRECT(OUT) {
-  if (isExternalChannelWriter(B)) {
-    ChannelWriter& chan = channelWriter(B);
-    if (chan.is_ready()) {
-      // Channel operation can occur immediately. Channel will automatically
-      // wake up the other end.
-      chan.write(*this, C, A);
-    } else {
-      // Channel is not ready. Wait for the reader.
-      chan.writeWait(makeWdesc(Wptr));
-      deschedule();
-    }
+  int32_t chan_value = read(B);
+  if (chan_value == NotProcess) {
+    // No process is currently waiting on this channel. Initiate
+    // communication by putting this process id in the channel.
+    write(B, makeWdesc(Wptr));
+    write(Wptr - 12, C);
+    deschedule();
   } else {
-    int32_t chan_value = read(B);
-    if (chan_value == NotProcess) {
-      // No process is currently waiting on this channel. Initiate
-      // communication by putting this process id in the channel.
+    int32_t dest_address = (chan_value & ~0x3) - 12;
+    int32_t dest = read(dest_address);
+
+    if (dest == Waiting) {
+      // A process is waiting via an ALT. Initiate the communication and
+      // reschedule the process.
       write(B, makeWdesc(Wptr));
+      write(dest_address, Ready);
       write(Wptr - 12, C);
+      schedule(chan_value);
       deschedule();
     } else {
-      int32_t dest_address = (chan_value & ~0x3) - 12;
-      int32_t dest = read(dest_address);
+      // A process is waiting directly. The communication can proceed.
+      for (int i = 0; i < A; i++)
+        writeByte(dest + i, readByte(C + i));
+      // Reschedule the other thread.
+      schedule(chan_value);
 
-      if (dest == Waiting) {
-        // A process is waiting via an ALT. Initiate the communication and
-        // reschedule the process.
-        write(B, makeWdesc(Wptr));
-        write(dest_address, Ready);
-        write(Wptr - 12, C);
-        schedule(chan_value);
-        deschedule();
-      } else {
-        // A process is waiting directly. The communication can proceed.
-        for (int i = 0; i < A; i++)
-          writeByte(dest + i, readByte(C + i));
-        // Reschedule the other thread.
-        schedule(chan_value);
-
-        // Reset the channel.
-        write(B, NotProcess);
-      }
+      // Reset the channel.
+      write(B, NotProcess);
     }
   }
 }
@@ -292,13 +253,7 @@ DEFINE_INDIRECT(REM) {
 
 // Reset channel.
 DEFINE_INDIRECT(RESETCH) {
-  if (isExternalChannelReader(A)) {
-    channelReader(A).reset();
-  } else if (isExternalChannelWriter(A)) {
-    channelWriter(A).reset();
-  } else {
-    write(A, NotProcess);
-  }
+  write(A, NotProcess);
 }
 
 // Reverse.

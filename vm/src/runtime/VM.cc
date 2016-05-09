@@ -247,34 +247,6 @@ void VM::performIndirect(Indirect op) {
   }
 }
 
-bool VM::isExternalChannelReader(int32_t address) {
-  return channel_readers_.count(address) == 1;
-}
-
-bool VM::isExternalChannelWriter(int32_t address) {
-  return channel_writers_.count(address) == 1;
-}
-
-ChannelReader& VM::channelReader(int32_t address) {
-  auto i = channel_readers_.find(address);
-  if (i == channel_readers_.end()) {
-    throw runtime_error(
-        "Address " + addressString(address) +
-        " is not associated with an external channel (reader).");
-  }
-  return *i->second;
-}
-
-ChannelWriter& VM::channelWriter(int32_t address) {
-  auto i = channel_writers_.find(address);
-  if (i == channel_writers_.end()) {
-    throw runtime_error(
-        "Address " + addressString(address) +
-        " is not associated with an external channel (writer).");
-  }
-  return *i->second;
-}
-
 void VM::deschedule() {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   resumeNext();
@@ -295,6 +267,7 @@ void VM::schedule() {
 }
 
 void VM::resumeNext() {
+  next_yield_ = op_count_ + time_slice_;
   int32_t next_Wdesc;
   if (FptrReg != NotProcess) {
     next_Wdesc = dequeueProcess();
@@ -310,7 +283,6 @@ void VM::resumeNext() {
 void VM::yield() {
   // Yield only if the process has been running for long enough.
   if (op_count_ >= next_yield_) {
-    next_yield_ = op_count_ + time_slice_;
     schedule();
     resumeNext();
   }

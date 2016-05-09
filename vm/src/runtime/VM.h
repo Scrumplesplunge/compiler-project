@@ -85,24 +85,11 @@ class VM {
   void performDirect(Direct op, int32_t argument);
   void performIndirect(Indirect op);
 
-  void setError();              // Set the error bit and (potentially) halt.
-
-  // Return true if the address given is associated with an external channel.
-  bool isExternalChannelReader(int32_t address);
-  bool isExternalChannelWriter(int32_t address);
-
-  // Returns a reference to the external channel which is associated with the
-  // given address, or throws an exception if no such channel exists. Note that
-  // since channels are simplex, the type of the channel must match the expected
-  // type, or an exception will be thrown.
-  ChannelReader& channelReader(int32_t address);
-  ChannelWriter& channelWriter(int32_t address);
-
   void deschedule();            // Remove the running process from the process
                                 // queue.
   void schedule(int32_t desc);  // Schedule the specified process.
   void schedule();              // Schedule the running process (ie. pause it).
-  void resumeNext();           // Resume the next process.
+  void resumeNext();            // Resume the next process.
   void yield();                 // schedule(); resumeNext();
   void stop();                  // End current process and resume the next.
 
@@ -145,18 +132,6 @@ class VM {
   DECLARE_INDIRECT(PRINTDEC); DECLARE_INDIRECT(PRINTHEX);
   DECLARE_INDIRECT(PRINTR);
 
-  // Unit operations. These are all executed via FPENTRY, and are thus
-  // unimplemented.
-  DECLARE_UNIT(FPUSQRTFIRST); DECLARE_UNIT(FPUSQRTSTEP);
-  DECLARE_UNIT(FPUSQRTLAST);  DECLARE_UNIT(FPURP);
-  DECLARE_UNIT(FPURM);
-
-  // END OPERATIONS
-
-  // Map from internal addresses to external channels.
-  std::unordered_map<int32_t, std::unique_ptr<ChannelReader>> channel_readers_;
-  std::unordered_map<int32_t, std::unique_ptr<ChannelWriter>> channel_writers_;
-  
   // (Read-only) code.
   const char* bytecode_;
   int32_t bytecode_size_;
