@@ -5,6 +5,7 @@
 #include "config.h"
 #include "ProcessTree.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -22,7 +23,9 @@ class ProcessServerHandle {
       ProcessMaster& master, worker_id id, Socket&& socket, std::string data,
       std::string bytecode);
 
-  void startInstance(instance_id id, InstanceDescriptor&& descriptor);
+  void startInstance(instance_id id, InstanceDescriptor descriptor);
+  void instanceStarted(instance_id id, instance_id parent_id,
+                       int32_t parent_workspace_descriptor);
 
   void serve();
 
@@ -56,16 +59,14 @@ class ProcessMaster {
   void onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
 
-  void startInstance(instance_id parent_id, InstanceDescriptor&& descriptor);
+  const std::string job_name_;
+  const std::string job_description_;
 
-  std::string job_name_;
-  std::string job_description_;
-
-  std::string bytecode_;
-  MetaData metadata_;
+  const std::string bytecode_;
+  const MetaData metadata_;
 
   ProcessTree process_tree_;
 
-  worker_id next_worker_to_use_ = 0;
+  std::atomic<worker_id> next_worker_to_use_{0};
   std::vector<std::unique_ptr<ProcessServerHandle>> workers_;
 };

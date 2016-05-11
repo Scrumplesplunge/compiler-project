@@ -44,11 +44,13 @@ DEFINE_MESSAGE(REQUEST_INSTANCE);
 
 READER(REQUEST_INSTANCE) {
   message->parent_id = readVarUint();
+  message->parent_workspace_descriptor = readInt32();
   read(&message->descriptor);
 }
 
 WRITER(REQUEST_INSTANCE) {
   writeVarUint(message.parent_id);
+  writeInt32(message.parent_workspace_descriptor);
   write(message.descriptor);
 }
 
@@ -64,6 +66,22 @@ READER(START_INSTANCE) {
 WRITER(START_INSTANCE) {
   writeVarUint(message.id);
   write(message.descriptor);
+}
+
+// INSTANCE_STARTED
+
+DEFINE_MESSAGE(INSTANCE_STARTED);
+
+READER(INSTANCE_STARTED) {
+  message->id = readVarUint();
+  message->parent_id = readVarUint();
+  message->parent_workspace_descriptor = readInt32();
+}
+
+WRITER(INSTANCE_STARTED) {
+  writeVarUint(message.id);
+  writeVarUint(message.parent_id);
+  writeInt32(message.parent_workspace_descriptor);
 }
 
 // INSTANCE_EXITED

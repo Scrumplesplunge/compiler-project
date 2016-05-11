@@ -26,7 +26,10 @@ DEFINE_INDIRECT(ALTEND) {
 // Alt wait.
 DEFINE_INDIRECT(ALTWT) {
   write(Wptr, NoneSelected);  // Indicate that no branch yet selected.
-  if (read(Wptr - 12) != Ready) deschedule();
+  if (read(Wptr - 12) != Ready) {
+    unique_lock<mutex> lock(queue_mu_);
+    deschedule(lock);
+  }
 }
 
 // Bitwise and.
@@ -119,7 +122,9 @@ DEFINE_INDIRECT(ENDP) {
   } else {
     // Release control.
     write(A + 4, read(A + 4) - 1);
-    stop();
+    
+    unique_lock<mutex> lock(queue_mu_);
+    stop(lock);
   }
 }
 
@@ -137,7 +142,9 @@ DEFINE_INDIRECT(IN) {
     // communication by putting this process id in the channel.
     write(B, makeWdesc(Wptr));
     write(Wptr - 12, C);
-    deschedule();
+
+    unique_lock<mutex> lock(queue_mu_);
+    deschedule(lock);
   } else {
     // A process is waiting. The communication can proceed.
     int32_t source = read((chan_value & ~0x3) - 12);
@@ -146,7 +153,10 @@ DEFINE_INDIRECT(IN) {
       writeByte(C + i, readByte(source + i));
 
     // Reschedule the other thread.
-    schedule(chan_value);
+    {
+      unique_lock<mutex> lock(queue_mu_);
+      schedule(chan_value, lock);
+    }
 
     // Reset the channel.
     write(B, NotProcess);
@@ -170,7 +180,9 @@ DEFINE_INDIRECT(LEND) {
     write(B + 4, read(B + 4) - 1);  // Decrement iteration count.
     Iptr -= A;
   }
-  yield();
+
+  unique_lock<mutex> lock(queue_mu_);
+  yield(lock);
 }
 
 // Minimum integer.
@@ -206,7 +218,9 @@ DEFINE_INDIRECT(OUT) {
     // communication by putting this process id in the channel.
     write(B, makeWdesc(Wptr));
     write(Wptr - 12, C);
-    deschedule();
+
+    unique_lock<mutex> lock(queue_mu_);
+    deschedule(lock);
   } else {
     int32_t dest_address = (chan_value & ~0x3) - 12;
     int32_t dest = read(dest_address);
@@ -217,14 +231,19 @@ DEFINE_INDIRECT(OUT) {
       write(B, makeWdesc(Wptr));
       write(dest_address, Ready);
       write(Wptr - 12, C);
-      schedule(chan_value);
-      deschedule();
+
+      unique_lock<mutex> lock(queue_mu_);
+      schedule(chan_value, lock);
+      deschedule(lock);
     } else {
       // A process is waiting directly. The communication can proceed.
       for (int i = 0; i < A; i++)
         writeByte(dest + i, readByte(C + i));
       // Reschedule the other thread.
-      schedule(chan_value);
+      {
+        unique_lock<mutex> lock(queue_mu_);
+        schedule(chan_value, lock);
+      }
 
       // Reset the channel.
       write(B, NotProcess);
@@ -289,14 +308,17 @@ DEFINE_INDIRECT(SHR) {
 
 // Start process.
 DEFINE_INDIRECT(STARTP) {
-  schedule();
+  unique_lock<mutex> lock(queue_mu_);
+  schedule(lock);
+
   Wptr = A;
   Iptr += B;
 }
 
 // Stop process.
 DEFINE_INDIRECT(STOPP) {
-  stop();
+  unique_lock<mutex> lock(queue_mu_);
+  stop(lock);
 }
 
 // Subtract.
@@ -325,7 +347,7 @@ DEFINE_INDIRECT(XOR) {
 // Print a byte to the console.
 DEFINE_INDIRECT(PUTC) {
   char c = static_cast<char>(A);
-  putc(c, stdout);
+  cout << c << flush;
   A = B;
   B = C;
 }
@@ -334,13 +356,13 @@ DEFINE_INDIRECT(PUTC) {
 DEFINE_INDIRECT(PUTS) {
   for (int i = 0; i < A; i++) {
     char c = static_cast<char>(readByte(B + i));
-    putc(c, stdout);
+    cout << c << flush;
   }
 }
 
 // Print a word to the console (decimal).
 DEFINE_INDIRECT(PRINTDEC) {
-  printf("%d", A);
+  cout << A << flush;
   A = B;
   B = C;
 }

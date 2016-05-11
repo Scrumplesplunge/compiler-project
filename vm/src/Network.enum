@@ -15,6 +15,10 @@ REQUEST_INSTANCE
 # instance with.
 START_INSTANCE
 
+# Sent to the worker that sent the corresponding REQUEST_INSTANCE to inform it
+# of the newly started instance.
+INSTANCE_STARTED
+
 # Sent to the master when an instance exits. Forwarded to the worker which hosts
 # the parent instance, if applicable.
 INSTANCE_EXITED

@@ -168,11 +168,14 @@ FPREV           (164)  # +FPU | floating point reverse top of stack
 # ???           (165)  # -??- | Unused code.
 FPLDNLADDDB     (166)  # +FPU | floating point load non-local and add double
 # ???           (167)  # -??- | Unused code.
-FPLDNLMULDB     (168)  # +FPU | floating point load non-local and multiply double
+FPLDNLMULDB     (168)  # +FPU | load non-local and multiply double
 # ???           (169)  # -??- | Unused code.
-FPLDNLADDSN     (170)  # +FPU | floating point load non-local and add single
-FPENTRY         (171)  # +FPU | floating point unit entry
-FPLDNLMULSN     (172)  # +FPU | floating point load non-local and multiply single
+FPLDNLADDSN     (170)  # +FPU | load non-local and add single
+FPENTRY         (171)  # +FPU | unit entry
+FPLDNLMULSN     (172)  # +FPU | load non-local and multiply single
+
+STARTI          (256)  # DIST | Start a new remote instance.
+JOINI           (257)  # DIST | Wait for an instance to end.
 
 PUTC            (901)  # META | Print a byte to the console.
 PUTS            (902)  # META | Print A bytes pointed to by B to the console.

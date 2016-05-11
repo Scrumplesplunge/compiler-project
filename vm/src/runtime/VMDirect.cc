@@ -48,7 +48,9 @@ DEFINE_DIRECT(EQC) {
 DEFINE_DIRECT(J) {
   Iptr += Oreg;
   Oreg = 0;
-  yield();
+
+  unique_lock<mutex> lock(queue_mu_);
+  yield(lock);
 }
 
 // Load constant.

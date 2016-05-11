@@ -48,6 +48,7 @@ template <> void BinaryWriter::write(const InstanceDescriptor& descriptor);
 
 DECLARE_MESSAGE(REQUEST_INSTANCE) {
   instance_id parent_id;
+  int32_t parent_workspace_descriptor;
 
   InstanceDescriptor descriptor;
 };
@@ -56,6 +57,11 @@ DECLARE_MESSAGE(START_INSTANCE) {
   instance_id id;
 
   InstanceDescriptor descriptor;
+};
+
+DECLARE_MESSAGE(INSTANCE_STARTED) {
+  instance_id id, parent_id;
+  int32_t parent_workspace_descriptor;
 };
 
 DECLARE_MESSAGE(INSTANCE_EXITED) {

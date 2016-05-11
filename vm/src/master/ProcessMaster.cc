@@ -37,15 +37,26 @@ ProcessServerHandle::ProcessServerHandle(
 }
 
 void ProcessServerHandle::startInstance(
-    instance_id id, InstanceDescriptor&& descriptor) {
+    instance_id id, InstanceDescriptor descriptor) {
   MESSAGE(START_INSTANCE) message;
-  message.descriptor = move(descriptor);
+  message.descriptor = descriptor;
   message.id = id;
+  send(message);
+}
+
+void ProcessServerHandle::instanceStarted(instance_id id, instance_id parent_id,
+                                          int32_t parent_workspace_descriptor) {
+  MESSAGE(INSTANCE_STARTED) message;
+  message.id = id;
+  message.parent_id = parent_id;
+  message.parent_workspace_descriptor = parent_workspace_descriptor;
   send(message);
 }
 
 void ProcessServerHandle::serve() {
   try {
+    if (options::verbose)
+      cerr << "Serving " << messenger_.hostPort() << "\n";
     messenger_.serve();
   } catch (const read_error& error) {
     if (options::verbose) {
@@ -95,7 +106,7 @@ void ProcessMaster::serve() {
   // Start it on the last worker.
   worker_id root_worker = workers_.size() - 1;
   instance_id id = process_tree_.createRootInstance(root_worker);
-  workers_[root_worker]->startInstance(id, move(descriptor));
+  workers_[root_worker]->startInstance(id, descriptor);
 
   if (options::verbose) {
     cerr << "Spawning root process on " << workers_[root_worker]->hostPort()
@@ -129,7 +140,25 @@ void ProcessMaster::serve() {
 
 void ProcessMaster::onRequestInstance(
     MESSAGE(REQUEST_INSTANCE)&& message) {
-  startInstance(message.parent_id, move(message.descriptor));
+  if (options::verbose)
+    cerr << "Instance requested.\n";
+  // TODO: Decide more sensibly about where to start the next process.
+  worker_id worker = (next_worker_to_use_++) % workers_.size();;
+
+  // Generate an instance ID.
+  instance_id id = process_tree_.createInstance(message.parent_id, worker);
+
+  // Send the start message.
+  if (options::verbose)
+    cerr << "Spawning instance on worker " << worker << "..\n";
+  workers_[worker]->startInstance(id, message.descriptor);
+  
+  // Send the instance ID to the parent.
+  if (options::verbose)
+    cerr << "Notifying parent..\n";
+  worker_id parent_worker = process_tree_.info(message.parent_id).location;
+  workers_[parent_worker]->instanceStarted(
+      id, message.parent_id, message.parent_workspace_descriptor);
 }
 
 void ProcessMaster::onInstanceExited(
@@ -141,17 +170,4 @@ void ProcessMaster::onInstanceExited(
   // If the instance had a parent, inform the corresponding worker.
   if (info.id != info.parent_id)
     workers_[info.location]->send(move(message));
-}
-
-void ProcessMaster::startInstance(
-    instance_id parent_id, InstanceDescriptor&& descriptor) {
-  // TODO: Decide more sensibly about where to start the next process.
-  worker_id worker = next_worker_to_use_;
-  next_worker_to_use_ = (next_worker_to_use_ + 1) % workers_.size();
-
-  // Generate an instance ID.
-  instance_id id = process_tree_.createInstance(parent_id, worker);
-
-  // Send the start message.
-  workers_[worker]->startInstance(id, move(descriptor));
 }
