@@ -14,3 +14,7 @@ REQUEST_INSTANCE
 # REQUEST_INSTANCE, but also contains an instance ID to associate the new
 # instance with.
 START_INSTANCE
+
+# Sent to the master when an instance exits. Forwarded to the worker which hosts
+# the parent instance, if applicable.
+INSTANCE_EXITED

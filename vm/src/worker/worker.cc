@@ -32,10 +32,10 @@ int main(int argc, char* args[]) {
     cerr << "Creating server socket..\n";
   Socket server;
   server.bind(options::host, options::port);
-  if (options::verbose)
-    cerr << "Listening for incoming connections..\n";
   server.listen();
 
+  if (options::verbose)
+    cerr << "Serving on " << server.hostPort() << ".\n";
   while (true) {
     Socket socket = server.accept();
     string hostport = socket.hostPort();

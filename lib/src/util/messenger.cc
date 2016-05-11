@@ -14,6 +14,11 @@ void Messenger::serve() {
   while (true) unlockedPoll(reader_lock);
 }
 
+void Messenger::close() {
+  socket_.closeInput();
+  socket_.closeOutput();
+}
+
 void Messenger::writeHeader(
     const MessageHeader& header, unique_lock<mutex>& writer_lock) {
   writer_.writeVarUint(header.type);

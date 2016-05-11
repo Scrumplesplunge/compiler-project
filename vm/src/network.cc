@@ -8,15 +8,36 @@
 DEFINE_MESSAGE(START_PROCESS_SERVER);
 
 READER(START_PROCESS_SERVER) {
-  message->data = move(readString());
+  message->name = readString();
+  message->description = readString();
+  message->data = readString();
   message->data_start = readInt32();
-  message->bytecode = move(readString());
+  message->bytecode = readString();
 }
 
 WRITER(START_PROCESS_SERVER) {
+  writeString(message.name);
+  writeString(message.description);
   writeString(message.data);
   writeInt32(message.data_start);
   writeString(message.bytecode);
+}
+
+// InstanceDescriptor
+
+template <>
+void BinaryReader::read(InstanceDescriptor* descriptor) {
+  // Workspace pointer is likely to be very negative.
+  descriptor->workspace_pointer = readInt32();
+  descriptor->instruction_pointer = readVarInt();
+  descriptor->space_needed = readVarUint();
+}
+
+template <>
+void BinaryWriter::write(const InstanceDescriptor& descriptor) {
+  writeInt32(descriptor.workspace_pointer);
+  writeVarInt(descriptor.instruction_pointer);
+  writeVarUint(descriptor.space_needed);
 }
 
 // REQUEST_INSTANCE
@@ -24,16 +45,13 @@ WRITER(START_PROCESS_SERVER) {
 DEFINE_MESSAGE(REQUEST_INSTANCE);
 
 READER(REQUEST_INSTANCE) {
-  // Workspace pointer is likely to be very negative.
-  message->workspace_pointer = readInt32();
-  message->instruction_pointer = readVarInt();
-  message->space_needed = readVarUint();
+  message->parent_id = readVarUint();
+  read(&message->descriptor);
 }
 
 WRITER(REQUEST_INSTANCE) {
-  writeInt32(message.workspace_pointer);
-  writeVarInt(message.instruction_pointer);
-  writeVarUint(message.space_needed);
+  writeVarUint(message.parent_id);
+  write(message.descriptor);
 }
 
 // START_INSTANCE
@@ -41,11 +59,23 @@ WRITER(REQUEST_INSTANCE) {
 DEFINE_MESSAGE(START_INSTANCE);
 
 READER(START_INSTANCE) {
-  read(&message->request);
-  message->instance_id = readVarUint();
+  message->id = readVarUint();
+  read(&message->descriptor);
 }
 
 WRITER(START_INSTANCE) {
-  write(message.request);
-  writeVarUint(message.instance_id);
+  writeVarUint(message.id);
+  write(message.descriptor);
+}
+
+// INSTANCE_EXITED
+
+DEFINE_MESSAGE(INSTANCE_EXITED);
+
+READER(INSTANCE_EXITED) {
+  message->id = readVarUint();
+}
+
+WRITER(INSTANCE_EXITED) {
+  writeVarUint(message.id);
 }

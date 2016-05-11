@@ -61,6 +61,11 @@ class Messenger {
   // Repeatedly handle messages until the socket closes.
   void serve();
 
+  // Close the connection.
+  void close();
+
+  std::string hostPort() { return socket_.hostPort(); }
+
  private:
   void writeHeader(const MessageHeader& header,
                    std::unique_lock<std::mutex>& writer_lock);

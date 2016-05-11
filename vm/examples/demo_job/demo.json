@@ -1,4 +1,6 @@
 {
+  "name" : "Hello World",
+  "description" : "An example job to show that the system works.",
   "bytecode_file" : "code.bin",
   "metadata_file" : "metadata.json",
   "workers" : [

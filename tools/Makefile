@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++11
+CXXFLAGS = -std=c++14
 
 all: bin/enum bin/enum_test
 
