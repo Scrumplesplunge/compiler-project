@@ -41,11 +41,10 @@ void ProcessServer::onStartProcessServer(
   }
 
   // Convert the data blob into an int32 array.
-  data_start_ = message.data_start;
   string data(move(message.data));
-  data_end_ = data_start_ + data.length();
+  data_end_ = VM::MostNeg + data.length();
   data_.reset(new int32_t[(data.length() + 3) / 4]);
-  memcpy(data_.get(), data.c_str(), data.length());
+  VM::encodeStatic(data, data_.get());
   
   bytecode_ = move(message.bytecode);
   is_ready_ = true;
@@ -58,20 +57,14 @@ void ProcessServer::onStartInstance(
          << "Instance ID : " << message.id << "\n"
          << "Workspace   : " << message.descriptor.workspace_pointer << "\n"
          << "Instruction : " << message.descriptor.instruction_pointer << "\n"
-         << "Size        : " << message.descriptor.space_needed << "\n";
+         << "Size        : " << message.descriptor.bytes_needed << "\n";
   }
   thread([this, message] {
     // Create the VM instance.
     if (options::verbose)
       cerr << "Constructing instance..\n";
-    Instance instance(
-        message.descriptor.workspace_pointer,
-        4 * message.descriptor.space_needed,
-        bytecode_.c_str(), bytecode_.length(), data_start_, data_.get(),
-        data_end_);
-
-    instance.set_workspace_pointer(message.descriptor.workspace_pointer);
-    instance.set_instruction_pointer(message.descriptor.instruction_pointer);
+    Instance instance(message.descriptor, bytecode_.c_str(), bytecode_.length(),
+                      data_.get(), data_end_);
 
     // Run it.
     if (options::verbose)

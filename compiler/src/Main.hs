@@ -94,24 +94,27 @@ main = do
                       " warning(s).")
   else do
     -- Write assembler file.
-    let workspace_pointer = next_static_address state'
-    let static_size = workspace_pointer - memory_start options
+    let static_end = next_static_address state'
+    let static_size = static_end - memory_start options
 
     assembler_handle <- open (assembly_file options) WriteMode stdout
     max_depth <- assemble context proc assembler_handle
     hClose assembler_handle
+
+    -- Space for stack and process descheduling. Static data is not included.
+    let space_needed = 4 * (6 + max_depth)
 
     -- Write metadata file.
     let (static_data_start, static_data) = make_blob (static state')
     if static_data_start /= memory_start options then
       error "Compiler error: static data does not start at memory start."
     else do
+      -- Workspace descends. Initially place the workspace pointer at the top of
+      -- allocated memory.
       let metadata = MetaData.MetaData {
-            MetaData.memory_start = memory_start options,
-            MetaData.workspace_pointer = workspace_pointer,
-            MetaData.memory_size = 4 * (6 + max_depth) + static_size,
-            MetaData.assembly_file = assembly_file options,
-            MetaData.static_data = static_data}
+            MetaData.static_data = static_data,
+            MetaData.root_process_size = space_needed,
+            MetaData.assembly_file = assembly_file options}
       metadata_handle <- open (metadata_file options) WriteMode stdout
       hPutStr metadata_handle (MetaData.encode metadata)
       hClose metadata_handle

@@ -61,12 +61,12 @@ gen/%.o: gen/%.cc | gen/%.h
 # Dependency graph.
 dep/%.d: src/%.cc | ${GEN}
 	@mkdir -p dep/$(dir $*)
-	${CXX} ${CXXFLAGS} -M -MG -MF dep/$*.d $^
+	${CXX} ${CXXFLAGS} -MM -MF dep/$*.d $^ -MT obj/$*.o
 
 # Object files.
 obj/%.o: src/%.cc
 	@mkdir -p obj/$(dir $*)
-	${CXX} ${CXXFLAGS} -c $^ -o $@
+	${CXX} ${CXXFLAGS} -c $< -o $@
 
 bin:
 	mkdir bin

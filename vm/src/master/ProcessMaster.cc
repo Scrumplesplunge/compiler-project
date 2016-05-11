@@ -18,8 +18,7 @@ using namespace std::placeholders;
 
 ProcessServerHandle::ProcessServerHandle(
     const string& job_name, const string& job_description, ProcessMaster& master,
-    worker_id id, Socket&& socket, int32_t data_start, string data,
-    string bytecode)
+    worker_id id, Socket&& socket, string data, string bytecode)
     : id_(id), master_(master), messenger_(move(socket)) {
   if (options::verbose)
     cerr << "Configuring messenger channel..\n";
@@ -32,7 +31,6 @@ ProcessServerHandle::ProcessServerHandle(
   MESSAGE(START_PROCESS_SERVER) message;
   message.name = job_name;
   message.description = job_description;
-  message.data_start = data_start;
   message.data = move(data);
   message.bytecode = move(bytecode);
   send(message);
@@ -83,18 +81,16 @@ ProcessMaster::ProcessMaster(const JobConfig& config)
     socket.connect(address.host, address.port);
     workers_.push_back(make_unique<ProcessServerHandle>(
         job_name_, job_description_, *this, workers_.size(), move(socket),
-        metadata_.memory_start, metadata_.static_data, bytecode_));
+        metadata_.static_data, bytecode_));
   }
 }
 
 void ProcessMaster::serve() {
   // Set up the first instance.
   InstanceDescriptor descriptor;
-  descriptor.workspace_pointer = metadata_.workspace_pointer;
+  descriptor.workspace_pointer = VM::TopWptr;
   descriptor.instruction_pointer = 0;
-  descriptor.space_needed = 
-      metadata_.memory_start - metadata_.workspace_pointer +
-      metadata_.memory_size;
+  descriptor.bytes_needed = metadata_.root_process_size;
 
   // Start it on the last worker.
   worker_id root_worker = workers_.size() - 1;

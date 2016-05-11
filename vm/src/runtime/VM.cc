@@ -16,12 +16,25 @@ const int32_t VM::MostNeg         = 0x80000000;
 const int32_t VM::NoneSelected    = 0xFFFFFFFF;
 const int32_t VM::NotProcess      = 0x80000000;
 const int32_t VM::Ready           = 0x80000003;
+const int32_t VM::TopWptr         = 0x7FFFFFF8;
 const int32_t VM::True            = 0x00000001;
 const int32_t VM::Waiting         = 0x80000002;
 
-VM::VM(int32_t memory_start, int memory_size,
-       const char* bytecode, int bytecode_size)
-    : bytecode_(bytecode), bytecode_size_(bytecode_size),
+void VM::encodeStatic(const string& static_bytes, int32_t* static_words) {
+  int32_t n = static_bytes.length();
+  for (int32_t j = 0; j < n; j += 4) {
+    uint32_t accumulator = 0;
+    for (int32_t i = 0; i < 4 && i + j < n; i++)
+      accumulator |= static_cast<uint32_t>(static_bytes[i + j]) << (8 * i);
+    static_words[j / 4] = static_cast<int32_t>(accumulator);
+  }
+}
+
+VM::VM(int32_t memory_start, int32_t memory_size,
+       const int32_t* static_data, int32_t static_size,
+       const char* bytecode, int32_t bytecode_size)
+    : static_data_(static_data), static_end_(VM::MostNeg + static_size),
+      bytecode_(bytecode), bytecode_size_(bytecode_size),
       memory_(new int32_t[(memory_size + 3) / 4]), memory_start_(memory_start),
       memory_size_(memory_size), memory_end_(memory_start + memory_size) {
   Wptr = memory_start;
@@ -105,13 +118,23 @@ int32_t& VM::operator[](int32_t address) {
   
   // These type conversions are necessary: We want a logical right-shift
   // (which requires an unsigned argument).
-  address = static_cast<int32_t>(static_cast<uint32_t>(address) >> 2);
+  address = static_cast<int32_t>(static_cast<uint32_t>(address) / 4);
   return memory_[address];
 }
 
 int32_t VM::read(int32_t address) {
-  if (__builtin_expect((address < memory_start_), 0))
-    return readBeforeStart(address);
+  if (__builtin_expect((address < static_end_), 0)) {
+    // Access to static data.
+    int32_t index =
+        static_cast<int32_t>(static_cast<uint32_t>(address - MostNeg) / 4);
+    return static_data_[index];
+  }
+
+  if (__builtin_expect((address >= memory_end_), 0)) {
+    // Access to memory after end bound. Pass to external handler.
+    return readAfterEnd(address);
+  }
+
   int32_t value = (*this)[address];
   return value;
 }
@@ -138,9 +161,9 @@ void VM::writeByte(int32_t address, int8_t value) {
   write(address, (word & mask) | (value << shift));
 }
 
-int32_t VM::readBeforeStart(int32_t address) {
-  throw runtime_error("Address " + addressString(address) + " < " +
-                      addressString(memory_start_));
+int32_t VM::readAfterEnd(int32_t address) {
+  throw runtime_error("Address " + addressString(address) + " >= " +
+                      addressString(memory_end_));
 }
 
 int8_t VM::fetch() {

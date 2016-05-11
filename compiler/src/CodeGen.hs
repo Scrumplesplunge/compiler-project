@@ -734,16 +734,11 @@ assemble ctx process output = do
         code <- gp ctx
         let static_size = stack_depth ctx
         let stack_size = depth_required pp
-        let mem_size = static_size + stack_size + 5
         let comment1 =
               comment ("Static data size: " ++ show static_size ++ " word(s)")
         let comment2 =
               comment ("Stack space required: " ++ show stack_size ++
                        " word(s)")
-        let comment3 =
-              comment (show static_size ++ " + " ++ show stack_size ++
-                       " + 5 = " ++ show mem_size)
-        showCode $ Code [comment1, comment2, comment3, Raw [AJW mem_size], code,
-                         Raw [STOPP]])
+        showCode $ Code [comment1, comment2, code, Raw [STOPP]])
   hPutStr output text
   return (depth_required pp)

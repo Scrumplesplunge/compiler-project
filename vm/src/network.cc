@@ -11,7 +11,6 @@ READER(START_PROCESS_SERVER) {
   message->name = readString();
   message->description = readString();
   message->data = readString();
-  message->data_start = readInt32();
   message->bytecode = readString();
 }
 
@@ -19,7 +18,6 @@ WRITER(START_PROCESS_SERVER) {
   writeString(message.name);
   writeString(message.description);
   writeString(message.data);
-  writeInt32(message.data_start);
   writeString(message.bytecode);
 }
 
@@ -30,14 +28,14 @@ void BinaryReader::read(InstanceDescriptor* descriptor) {
   // Workspace pointer is likely to be very negative.
   descriptor->workspace_pointer = readInt32();
   descriptor->instruction_pointer = readVarInt();
-  descriptor->space_needed = readVarUint();
+  descriptor->bytes_needed = readVarUint();
 }
 
 template <>
 void BinaryWriter::write(const InstanceDescriptor& descriptor) {
   writeInt32(descriptor.workspace_pointer);
   writeVarInt(descriptor.instruction_pointer);
-  writeVarUint(descriptor.space_needed);
+  writeVarUint(descriptor.bytes_needed);
 }
 
 // REQUEST_INSTANCE

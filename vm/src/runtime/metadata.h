@@ -3,9 +3,9 @@
 #include <string>
 
 struct MetaData {
-  int32_t memory_start, workspace_pointer, memory_size;
-  std::string assembly_file;
   std::string static_data;
+  int32_t root_process_size;
+  std::string assembly_file;
 };
 
 MetaData loadMetaData(std::string metadata_file);

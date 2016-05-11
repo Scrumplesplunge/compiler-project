@@ -29,19 +29,6 @@ MetaData loadMetaData(string metadata_file) {
 
   MetaData out;
 
-  // Load the basic fields.
-  checkMemberType(metadata, "memory_start", JSON::Type::INT);
-  out.memory_start = metadata["memory_start"].asInt32();
-
-  checkMemberType(metadata, "workspace_pointer", JSON::Type::INT);
-  out.workspace_pointer = metadata["workspace_pointer"].asInt32();
-
-  checkMemberType(metadata, "memory_size", JSON::Type::INT);
-  out.memory_size = metadata["memory_size"].asInt32();
-
-  checkMemberType(metadata, "assembly_file", JSON::Type::STRING);
-  out.assembly_file = metadata["assembly_file"].asString();
-
   // Load and convert the static data.
   checkMemberType(metadata, "static_data", JSON::Type::ARRAY);
   JSON::Array& static_data = metadata["static_data"].asArray();
@@ -56,6 +43,13 @@ MetaData loadMetaData(string metadata_file) {
     }
     out.static_data.push_back(static_cast<char>(value));
   }
+
+  // Load the basic fields.
+  checkMemberType(metadata, "root_process_size", JSON::Type::INT);
+  out.root_process_size = metadata["root_process_size"].asInt32();
+
+  checkMemberType(metadata, "assembly_file", JSON::Type::STRING);
+  out.assembly_file = metadata["assembly_file"].asString();
 
   return out;
 }

@@ -19,8 +19,8 @@ class ProcessServerHandle {
  public:
   ProcessServerHandle(
       const std::string& job_name, const std::string& job_description,
-      ProcessMaster& master, worker_id id, Socket&& socket, int32_t data_start,
-      std::string data, std::string bytecode);
+      ProcessMaster& master, worker_id id, Socket&& socket, std::string data,
+      std::string bytecode);
 
   void startInstance(instance_id id, InstanceDescriptor&& descriptor);
 

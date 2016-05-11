@@ -44,14 +44,19 @@ class VM {
       NoneSelected,     // Value representing no branch selected.
       NotProcess,       // Value representing no process.
       Ready,            // Ready state of alternative.
+      TopWptr,          // Highest workspace pointer.
       True,             // Truth values.
       Waiting;          // Waiting state of alternative.
+
+  static void encodeStatic(
+      const std::string& static_bytes, int32_t* static_words);
 
   // Construct a VM with the given block of memory available as RAM. Note that
   // memory_size should be in *bytes*, and that the memory will be loaded such
   // that index 0 is at address MemStart.
-  VM(int32_t memory_start, int memory_size,
-     const char* bytecode, int bytecode_size);
+  VM(int32_t memory_start, int32_t memory_size,
+     const int32_t* static_data, int32_t static_size,
+     const char* bytecode, int32_t bytecode_size);
   virtual ~VM() = default;
 
   // Run the virtual machine until all processes stop.
@@ -88,7 +93,7 @@ class VM {
 
  protected:
   // Handler used when a read has an address smaller than memory_start_.
-  virtual int32_t readBeforeStart(int32_t address);
+  virtual int32_t readAfterEnd(int32_t address);
 
  private:
   int8_t fetch();  // Fetch a single instruction for execution.
@@ -141,6 +146,10 @@ class VM {
   DECLARE_INDIRECT(PUTC);     DECLARE_INDIRECT(PUTS);
   DECLARE_INDIRECT(PRINTDEC); DECLARE_INDIRECT(PRINTHEX);
   DECLARE_INDIRECT(PRINTR);
+
+  // (Read-only) data.
+  const int32_t* static_data_;
+  int32_t static_end_;
 
   // (Read-only) code.
   const char* bytecode_;

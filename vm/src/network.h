@@ -34,14 +34,13 @@ DECLARE_MESSAGE(START_PROCESS_SERVER) {
   std::string description;
 
   std::string data;
-  int32_t data_start;
   std::string bytecode;
 };
 
 struct InstanceDescriptor {
   int32_t workspace_pointer;
   int32_t instruction_pointer;
-  uint32_t space_needed;
+  uint32_t bytes_needed;
 };
 
 template <> void BinaryReader::read(InstanceDescriptor* descriptor);
