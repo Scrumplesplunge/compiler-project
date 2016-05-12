@@ -144,8 +144,8 @@ int8_t VM::readByte(int32_t address) {
   // Extract the byte. The least significant byte has the lowest address.
   // These type conversions are necessary: We want a logical right-shift (which
   // requires an unsigned argument).
-  return
-      static_cast<int8_t>(static_cast<uint32_t>(word) >> (8 * (address % 4)));
+  int shift = 8 * static_cast<int>(static_cast<uint32_t>(address) % 4);
+  return static_cast<int8_t>(static_cast<uint32_t>(word) >> shift);
 }
 
 void VM::write(int32_t address, int32_t value) {
@@ -156,7 +156,7 @@ void VM::writeByte(int32_t address, int8_t value) {
   // Read the current word value, substitute the appropriate byte with the new
   // value, and write back to memory.
   int32_t word = read(address);
-  int shift = 8 * (address % 4);
+  int shift = 8 * static_cast<int>(static_cast<uint32_t>(address) % 4);
   int32_t mask = ~(0xFF << shift);
   write(address, (word & mask) | (value << shift));
 }
