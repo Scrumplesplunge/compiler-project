@@ -1,8 +1,36 @@
 #include "messenger.h"
 
+#include "atomic_output.h"
+
 #include <sstream>
 
 using namespace std;
+
+struct MessageHeader {
+  MessageTypeID type;
+  uint64_t length;
+};
+
+template <>
+void BinaryReader::read(MessageHeader* header) {
+  header->type = readVarUint();
+  header->length = readVarUint();
+}
+
+template <>
+void BinaryWriter::write(const MessageHeader& header) {
+  writeVarUint(header.type);
+  writeVarUint(header.length);
+}
+
+
+Messenger::Messenger(Socket&& socket)
+    : socket_(std::move(socket)), reader_(socket_), writer_(socket_) {
+  socket_.set_nagle(false);
+}
+
+Messenger::Messenger(Messenger&& other)
+    : socket_(std::move(other.socket_)), reader_(socket_), writer_(socket_) {}
 
 void Messenger::poll() {
   unique_lock<mutex> reader_lock(reader_mutex_);
@@ -19,24 +47,21 @@ void Messenger::close() {
   socket_.closeOutput();
 }
 
-void Messenger::writeHeader(
-    const MessageHeader& header, unique_lock<mutex>& writer_lock) {
-  writer_.writeVarUint(header.type);
-  writer_.writeVarUint(header.length);
-}
-
-MessageHeader Messenger::readHeader(unique_lock<mutex>& reader_lock) {
-  MessageHeader out;
-  out.type = reader_.readVarUint();
-  out.length = reader_.readVarUint();
-  return out;
-}
-
 void Messenger::sendBytes(MessageTypeID type, const string& bytes) {
-  MessageHeader header{type, bytes.length()};
+  // Construct the message.
+  string message;
+  {
+    ostringstream builder;
+    StandardOutputStream output(builder);
+    BinaryWriter writer(output);
+    writer_.write(MessageHeader{type, bytes.length()});
+    writer_.writeBytes(bytes.c_str(), bytes.length());
+    message = builder.str();
+  }
+
+  // Send it.
   unique_lock<mutex> writer_lock(writer_mutex_);
-  writeHeader(header, writer_lock);
-  writer_.writeBytes(bytes.c_str(), bytes.length());
+  writer_.writeBytes(message.c_str(), message.length());
 }
 
 void Messenger::on(MessageTypeID type, MessageHandlerBase handler) {
@@ -50,7 +75,10 @@ void Messenger::on(MessageTypeID type, MessageHandlerBase handler) {
 void Messenger::unlockedPoll(unique_lock<mutex>& reader_lock) {
   BinaryReader reader(socket_);
 
-  MessageHeader header = readHeader(reader_lock);
+  verr << "Waiting for message..\n";
+  MessageHeader header;
+  reader_.read(&header);
+  verr << "INCOMING: MESSAGE<" << header.type << ">\n";
   if (handlers_.count(header.type) == 0) {
     cerr << "Warning: Not handling message with type " << header.type << ".\n";
     // Unrecognised ID. Discard the message.

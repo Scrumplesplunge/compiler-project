@@ -22,3 +22,7 @@ INSTANCE_STARTED
 # Sent to the master when an instance exits. Forwarded to the worker which hosts
 # the parent instance, if applicable.
 INSTANCE_EXITED
+
+# Establish the latency in a connection.
+PING
+PONG

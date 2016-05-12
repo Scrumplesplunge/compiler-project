@@ -7,8 +7,11 @@
 #include <mutex>
 #include <stdint.h>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <util/args.h>
+#include <util/atomic_output.h>
 #include <util/messenger.h>
 #include <util/socket.h>
 
@@ -34,6 +37,8 @@ class ProcessServer {
 
   template <typename T>
   void send(const T& message) {
+    verr << "OUTGOING: " << ::toString(message.type) << "\n";
+
     messenger_.send(message.type, message);
   }
 
@@ -42,8 +47,11 @@ class ProcessServer {
   void onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
 
+  void onPing(MESSAGE(PING)&& message);
+
   std::mutex instance_mu_;
   std::unordered_map<instance_id, std::unique_ptr<Instance>> instances_;
+  std::unordered_map<instance_id, std::thread> instance_threads_;
 
   bool is_ready_;
 

@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <string>
 #include <util/args.h>
+#include <util/atomic_output.h>
 #include <util/binary.h>
 
 using namespace std::chrono;
@@ -40,8 +41,7 @@ int main(int argc, char* args[]) {
   }
 
   // Open the bytecode file and load the contents.
-  if (options::verbose)
-    cerr << "Loading bytecode..\n";
+  verr << "Loading bytecode..\n";
   ifstream bytecode_file(options::bytecode_file, ios::binary);
   if (!bytecode_file) {
     cerr << "Failed to open bytecode file for reading.\n";
@@ -49,33 +49,27 @@ int main(int argc, char* args[]) {
   }
   string bytecode = string(istreambuf_iterator<char>(bytecode_file),
                            istreambuf_iterator<char>());
-  if (options::verbose)
-    cerr << "Bytecode size: " << bytecode.length() << "\n";
+  verr << "Bytecode size: " << bytecode.length() << "\n";
 
   // Load the metadata.
-  if (options::verbose)
-    cerr << "Loading metadata..\n";
+  verr << "Loading metadata..\n";
   MetaData metadata = loadMetaData(options::metadata_file);
-  if (options::verbose)
-    cerr << "Memory required: " << metadata.root_process_size << "\n";
+  verr << "Memory required: " << metadata.root_process_size << "\n";
 
-  if (options::verbose)
-    cerr << "Converting static data..\n";
+  verr << "Converting static data..\n";
   unique_ptr<int32_t[]> static_data(
       new int32_t[(3 + metadata.static_data.length()) / 4]);
   VM::encodeStatic(metadata.static_data, static_data.get());
 
   // Initialize the virtual machine.
-  if (options::verbose)
-    cerr << "Creating virtual machine instance..\n";
+  verr << "Creating virtual machine instance..\n";
   VM vm(VM::TopWptr - metadata.root_process_size + 4,
         metadata.root_process_size, static_data.get(),
         metadata.static_data.length(), bytecode.c_str(), bytecode.length());
 
   vm.set_workspace_pointer(VM::TopWptr);
 
-  if (options::verbose)
-    cerr << "Starting VM..\n\n";
+  verr << "Starting VM..\n\n";
 
   high_resolution_clock::time_point start = high_resolution_clock::now();
   if (options::debug || options::step) {
@@ -93,7 +87,7 @@ int main(int argc, char* args[]) {
     vm.run();
   }
   high_resolution_clock::time_point end = high_resolution_clock::now();
-  if (options::verbose) cerr << "Done.\n";
+  verr << "Done.\n";
 
   if (options::summary) {
     cerr << "Total time   : "

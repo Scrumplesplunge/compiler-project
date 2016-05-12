@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <util/args.h>
+#include <util/atomic_output.h>
 #include <util/messenger.h>
 #include <util/socket.h>
 #include <vector>
@@ -26,12 +27,11 @@ int main(int argc, char* args[]) {
   args::process(&argc, &args);
 
   // Open the configuration file.
-  if (options::verbose)
-    cerr << "Parsing job file..\n";
+  verr << "Parsing job file..\n";
   JobConfig config = loadConfig(options::job_file);
 
   if (options::verbose) {
-    cerr << "Bytecode file : " << config.bytecode_file << "\n"
+    verr << "Bytecode file : " << config.bytecode_file << "\n"
          << "Data file     : " << config.metadata_file << "\n"
          << "Workers       : ";
 
@@ -43,19 +43,16 @@ int main(int argc, char* args[]) {
     }
   }
 
-  if (options::verbose)
-    cerr << "Initializing Process Master..\n";
+  verr << "Initializing Process Master..\n";
   ProcessMaster master(config);
 
-  if (options::verbose)
-    cerr << "Starting..\n";
+  verr << "Starting..\n";
 
   high_resolution_clock::time_point start = high_resolution_clock::now();
   master.serve();
   high_resolution_clock::time_point end = high_resolution_clock::now();
 
-  if (options::verbose)
-    cerr << "Done.\n";
+  verr << "Done.\n";
 
   if (options::summary) {
     cerr << "Total time   : "

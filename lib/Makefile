@@ -6,7 +6,7 @@ CXXFLAGS = -std=c++14 -Igen -I../lib -Ofast -s -flto -Wall -Wl,--gc-sections  \
 
 all: bin/socket_demo bin/messenger_demo bin/pipe_demo
 
-ARGS = $(addprefix obj/util/, args table text)
+ARGS = $(addprefix obj/util/, args table text atomic_output)
 BINARY = $(addprefix obj/util/, stream binary)
 
 SOCKET_DEMO_LIBS = obj/util/socket ${ARGS} ${BINARY}

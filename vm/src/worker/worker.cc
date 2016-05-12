@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <util/args.h>
+#include <util/atomic_output.h>
 #include <util/messenger.h>
 #include <util/socket.h>
 
@@ -17,33 +18,27 @@ OPTION(int, port, 17994,
        "Port to bind the worker server to.");
 
 void serve(Socket socket) {
-  if (options::verbose)
-    cerr << "Constructing Process Server instance..\n";
+  verr << "Constructing Process Server instance..\n";
   ProcessServer server(move(socket));
-  if (options::verbose)
-    cerr << "Serving..\n";
+  verr << "Serving..\n";
   server.serve();
 }
 
 int main(int argc, char* args[]) {
   args::process(&argc, &args);
 
-  if (options::verbose)
-    cerr << "Creating server socket..\n";
+  verr << "Creating server socket..\n";
   Socket server;
   server.bind(options::host, options::port);
   server.listen();
 
-  if (options::verbose)
-    cerr << "Serving on " << server.hostPort() << ".\n";
+  verr << "Serving on " << server.hostPort() << ".\n";
   while (true) {
     Socket socket = server.accept();
     string hostport = socket.hostPort();
-    if (options::verbose)
-      cerr << "Accepted connection from " << hostport << ".\n";
+    verr << "Accepted connection from " << hostport << ".\n";
     serve(move(socket));
-    if (options::verbose)
-      cerr << "Stopped serving " << hostport << ".\n";
+    verr << "Stopped serving " << hostport << ".\n";
   }
 }
 

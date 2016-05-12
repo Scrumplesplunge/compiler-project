@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <stdexcept>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 using namespace std;
@@ -114,6 +115,14 @@ void Socket::shutdown() {
     ::shutdown(socket_, SHUT_RDWR);
     close(socket_);
   }
+}
+
+void Socket::set_nagle(bool enabled) {
+  int value = enabled ? 0 : 1;
+  int result = setsockopt(
+      socket_, IPPROTO_TCP, TCP_NODELAY, &value, sizeof(value));
+  if (result < 0) throw_error("Failed to set/unset TCP_NODELAY.");
+  nagle_ = enabled;
 }
 
 bool Socket::get(char& c) {

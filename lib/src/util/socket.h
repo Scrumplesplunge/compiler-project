@@ -3,6 +3,7 @@
 #include "stream.h"
 
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <stdexcept>
 #include <string>
 #include <sys/socket.h>
@@ -43,6 +44,9 @@ class Socket : public InputStream, public OutputStream {
   int queue_size() const { return queue_size_; }
   void set_queue_size(int queue_size) { queue_size_ = queue_size; }
 
+  bool nagle() const { return nagle_; }
+  void set_nagle(bool enabled);
+
   // Status information.
   std::string host() const { return host_; }
   int port() const { return port_; }
@@ -70,4 +74,5 @@ class Socket : public InputStream, public OutputStream {
 
   // Configuration.
   int queue_size_ = 8;
+  bool nagle_ = true;  // True if Nagle's Algorithm is enabled.
 };

@@ -3,29 +3,30 @@
 #include "../util.h"
 #include "../runtime/VM.h"
 
+#include <chrono>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <thread>
-#include <util/args.h>
 #include <util/binary.h>
 #include <util/stream.h>
-#include <util/socket.h>
 #include <vector>
 
 using namespace std;
+using namespace std::chrono;
 using namespace std::placeholders;
 
 ProcessServerHandle::ProcessServerHandle(
     const string& job_name, const string& job_description, ProcessMaster& master,
     worker_id id, Socket&& socket, string data, string bytecode)
     : id_(id), master_(master), messenger_(move(socket)) {
-  if (options::verbose)
-    cerr << "Configuring messenger channel..\n";
+  verr << "Configuring messenger channel..\n";
   messenger_.ON(REQUEST_INSTANCE,
                 bind(&ProcessServerHandle::onRequestInstance, this, _1));
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessServerHandle::onInstanceExited, this, _1));
+
+  messenger_.ON(PONG, bind(&ProcessServerHandle::onPong, this, _1));
 
   // Send the handshake message.
   MESSAGE(START_PROCESS_SERVER) message;
@@ -55,14 +56,11 @@ void ProcessServerHandle::instanceStarted(instance_id id, instance_id parent_id,
 
 void ProcessServerHandle::serve() {
   try {
-    if (options::verbose)
-      cerr << "Serving " << messenger_.hostPort() << "\n";
+    verr << "Serving " << messenger_.hostPort() << "\n";
     messenger_.serve();
   } catch (const read_error& error) {
-    if (options::verbose) {
-      cerr << "Connection to " << messenger_.hostPort()
-           << " severed. Shutting down.\n";
-    }
+    verr << "Connection to " << messenger_.hostPort()
+         << " severed. Shutting down.\n";
   }
 }
 
@@ -70,14 +68,43 @@ void ProcessServerHandle::close() {
   messenger_.close();
 }
 
+int64_t ProcessServerHandle::latency() {
+  unique_lock<mutex> lock(latency_mu_);
+
+  // Wait for other pings to finish.
+  while (ping_active_) on_latency_complete_.wait(lock);
+  ping_active_ = true;
+  pong_back_ = false;
+
+  // Perform the ping.
+  high_resolution_clock::time_point start = high_resolution_clock::now();
+  send(MESSAGE(PING)());
+  while (!pong_back_) on_pong_.wait(lock);
+  high_resolution_clock::time_point end = high_resolution_clock::now();
+
+  // Wake up waiting calls.
+  on_latency_complete_.notify_all();
+
+  return duration_cast<nanoseconds>(end - start).count();
+}
+
 void ProcessServerHandle::onRequestInstance(
     MESSAGE(REQUEST_INSTANCE)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
   master_.onRequestInstance(move(message));
 }
 
-void ProcessServerHandle::onInstanceExited(
-    MESSAGE(INSTANCE_EXITED)&& message) {
+void ProcessServerHandle::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
   master_.onInstanceExited(move(message));
+}
+
+void ProcessServerHandle::onPong(MESSAGE(PONG)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
+  unique_lock<mutex> lock(latency_mu_);
+
+  pong_back_ = true;
+  on_pong_.notify_all();
 }
 
 ProcessMaster::ProcessMaster(const JobConfig& config)
@@ -86,8 +113,7 @@ ProcessMaster::ProcessMaster(const JobConfig& config)
       metadata_(loadMetaData(config.metadata_file)) {
   // Connect to all the workers.
   for (const WorkerAddress& address : config.workers) {
-    if (options::verbose)
-      cerr << "Connecting to " << address.host << ":" << address.port << "..\n";
+    verr << "Connecting to " << address.host << ":" << address.port << "..\n";
     Socket socket;
     socket.connect(address.host, address.port);
     workers_.push_back(make_unique<ProcessServerHandle>(
@@ -108,40 +134,39 @@ void ProcessMaster::serve() {
   instance_id id = process_tree_.createRootInstance(root_worker);
   workers_[root_worker]->startInstance(id, descriptor);
 
-  if (options::verbose) {
-    cerr << "Spawning root process on " << workers_[root_worker]->hostPort()
-         << "..\n";
-  }
+  verr << "Spawning root process on " << workers_[root_worker]->hostPort()
+       << "..\n";
 
   vector<thread> messenger_tasks;
 
   // Start serving the worker messages.
-  if (options::verbose)
-    cerr << "Starting messenger threads..\n";
+  verr << "Starting messenger threads..\n";
   for (auto& worker : workers_) {
     messenger_tasks.push_back(
         thread(&ProcessServerHandle::serve, worker.get()));
+
+    if (options::verbose) {
+      int64_t latency = workers_.back()->latency();
+      verr << "Latency for " << worker->hostPort() << ": "
+           << formatDuration(latency) << "\n";
+    }
   }
 
   // Wait for the root process to finish.
-  if (options::verbose)
-    cerr << "Waiting for root process to terminate..\n";
+  verr << "Waiting for root process to terminate..\n";
   process_tree_.join(id);
 
   // Close each worker connection and wait for the server for that connection to
   // exit.
-  if (options::verbose)
-    cerr << "Root process exited. Closing connections..\n";
+  verr << "Root process exited. Closing connections..\n";
   for (int i = 0, n = workers_.size(); i < n; i++) {
     workers_[i]->close();
     messenger_tasks[i].join();
   }
 }
 
-void ProcessMaster::onRequestInstance(
-    MESSAGE(REQUEST_INSTANCE)&& message) {
-  if (options::verbose)
-    cerr << "Instance requested.\n";
+void ProcessMaster::onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message) {
+  verr << "Instance requested.\n";
   // TODO: Decide more sensibly about where to start the next process.
   worker_id worker = (next_worker_to_use_++) % workers_.size();;
 
@@ -149,20 +174,17 @@ void ProcessMaster::onRequestInstance(
   instance_id id = process_tree_.createInstance(message.parent_id, worker);
 
   // Send the start message.
-  if (options::verbose)
-    cerr << "Spawning instance on worker " << worker << "..\n";
+  verr << "Spawning instance on worker " << worker << "..\n";
   workers_[worker]->startInstance(id, message.descriptor);
   
   // Send the instance ID to the parent.
-  if (options::verbose)
-    cerr << "Notifying parent..\n";
+  verr << "Notifying parent..\n";
   worker_id parent_worker = process_tree_.info(message.parent_id).location;
   workers_[parent_worker]->instanceStarted(
       id, message.parent_id, message.parent_workspace_descriptor);
 }
 
-void ProcessMaster::onInstanceExited(
-    MESSAGE(INSTANCE_EXITED)&& message) {
+void ProcessMaster::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
   // Look up the parent instance ID.
   InstanceInfo info = process_tree_.info(message.id);
   process_tree_.endInstance(message.id);

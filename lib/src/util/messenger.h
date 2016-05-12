@@ -16,11 +16,6 @@
 // All message type classes should be representable as this type.
 typedef uint64_t MessageTypeID;
 
-struct MessageHeader {
-  MessageTypeID type;
-  uint64_t length;
-};
-
 // Base handler for incoming messages.
 typedef std::function<void()> MessageHandlerBase;
 
@@ -31,10 +26,9 @@ using MessageHandler = std::function<void(M&&)>;
 // Base class for all messengers.
 class Messenger {
  public:
-  Messenger(Socket socket)
-      : socket_(std::move(socket)), reader_(socket_), writer_(socket_) {}
-  Messenger(Messenger&& other)
-      : socket_(std::move(other.socket_)), reader_(socket_), writer_(socket_) {}
+  Messenger(Socket&& socket);
+  Messenger(Messenger&& other);
+
   virtual ~Messenger() = default;
 
   template <typename T>
@@ -67,10 +61,6 @@ class Messenger {
   std::string hostPort() { return socket_.hostPort(); }
 
  private:
-  void writeHeader(const MessageHeader& header,
-                   std::unique_lock<std::mutex>& writer_lock);
-  MessageHeader readHeader(std::unique_lock<std::mutex>& reader_lock);
-
   void sendBytes(MessageTypeID type, const std::string& bytes);
 
   void on(MessageTypeID type, MessageHandlerBase handler);

@@ -12,7 +12,7 @@ OBJECTS = $(patsubst src/%.cc, obj/%.o, ${SOURCES})
 DEPENDS = $(patsubst src/%.cc, dep/%.d, ${SOURCES})
 GEN = $(patsubst src/%.enum, gen/%.o, $(shell find src -name '*.enum'))
 
-ARGS = $(addprefix ../lib/obj/util/, args.o table.o text.o)
+ARGS = $(addprefix ../lib/obj/util/, args.o table.o text.o atomic_output.o)
 BINARY = $(addprefix ../lib/obj/util/, binary.o stream.o)
 JSON = ../lib/obj/util/json.o
 NETWORK = gen/Network.o obj/network.o ${BINARY}  \

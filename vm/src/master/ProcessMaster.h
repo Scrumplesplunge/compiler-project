@@ -10,6 +10,8 @@
 #include <memory>
 #include <mutex>
 #include <stdint.h>
+#include <util/args.h>
+#include <util/atomic_output.h>
 #include <util/messenger.h>
 #include <util/socket.h>
 #include <vector>
@@ -31,6 +33,10 @@ class ProcessServerHandle {
 
   void close();
 
+  // Perform a ping and return the latency. This is synchronous. The value
+  // returned is the latency in nanoseconds.
+  int64_t latency();
+
   std::string hostPort() { return messenger_.hostPort(); }
 
  private:
@@ -39,12 +45,23 @@ class ProcessServerHandle {
   void onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
 
+  void onPong(MESSAGE(PONG)&& message);
+
   template <typename T>
-  void send(const T& message) { messenger_.send(message.type, message); }
+  void send(const T& message) {
+    verr << "OUTGOING: " << ::toString(message.type) << "\n";
+    messenger_.send(message.type, message);
+    verr << "SENT    : " << ::toString(message.type) << "\n";
+  }
 
   worker_id id_;
   ProcessMaster& master_;
   Messenger messenger_;
+
+  std::mutex latency_mu_;
+  std::condition_variable on_pong_, on_latency_complete_;
+  bool ping_active_ = false;
+  bool pong_back_ = false;
 };
 
 class ProcessMaster {

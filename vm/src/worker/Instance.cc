@@ -2,6 +2,8 @@
 
 #include "ProcessServer.h"
 
+#include <util/atomic_output.h>
+
 using namespace std;
 
 Instance::Instance(
@@ -62,10 +64,12 @@ void Instance::startInstance() {
   // Send the request.
   server_.requestInstance(descriptor, id_, makeWdesc(Wptr));
 
+  verr << "Descheduling process " << Wptr << "\n";
   {
     unique_lock<mutex> lock(queue_mu_);
     deschedule(lock);
   }
+  verr << "Next process: " << Wptr << "\n";
 }
 
 void Instance::joinInstance() {

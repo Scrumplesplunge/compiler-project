@@ -4,16 +4,14 @@
 
 #include <functional>
 #include <string.h>
-#include <thread>
-#include <util/args.h>
+#include <util/atomic_output.h>
 
 using namespace std;
 using namespace std::placeholders;
 
 ProcessServer::ProcessServer(Socket&& socket)
     : messenger_(move(socket)) {
-  if (options::verbose)
-    cerr << "Configuring messenger channel..\n";
+  verr << "Configuring messenger channel..\n";
   messenger_.ON(START_PROCESS_SERVER,
                 bind(&ProcessServer::onStartProcessServer, this, _1));
   messenger_.ON(START_INSTANCE,
@@ -22,14 +20,15 @@ ProcessServer::ProcessServer(Socket&& socket)
                 bind(&ProcessServer::onInstanceStarted, this, _1));
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessServer::onInstanceExited, this, _1));
+
+  messenger_.ON(PING, bind(&ProcessServer::onPing, this, _1));
 }
 
 void ProcessServer::serve() {
   try {
     messenger_.serve();
   } catch (...) {
-    if (options::verbose)
-      cerr << "Messenger closed. Shutting down.\n";
+    verr << "Messenger closed. Shutting down.\n";
   }
 }
 
@@ -53,14 +52,15 @@ void ProcessServer::notifyExited(instance_id id) {
   // Clean up the instance.
   unique_lock<mutex> lock(instance_mu_);
   instances_.erase(id);
+  instance_threads_.at(id).detach();
+  instance_threads_.erase(id);
 }
 
 void ProcessServer::joinInstance(
     instance_id join_id, instance_id waiter_id, int32_t workspace_descriptor) {
   unique_lock<mutex> lock(exit_mu_);
   if (unjoined_exits_.count(join_id) > 0) {
-    if (options::verbose)
-      cerr << "Instance " << join_id << " has already terminated.\n";
+    verr << "Instance " << join_id << " has already terminated.\n";
     // Instance has already exited.
     unjoined_exits_.erase(join_id);
 
@@ -68,8 +68,7 @@ void ProcessServer::joinInstance(
     Instance& instance = *instances_.at(waiter_id);
     instance.wake(workspace_descriptor);
   } else {
-    if (options::verbose)
-      cerr << "Waiting for instance " << join_id << " to terminate..\n";
+    verr << "Waiting for instance " << join_id << " to terminate..\n";
     // Instance has not exited yet.
     on_exited_[join_id] = WaitingProcess{waiter_id, workspace_descriptor};
   }
@@ -77,14 +76,11 @@ void ProcessServer::joinInstance(
 
 void ProcessServer::onStartProcessServer(
     MESSAGE(START_PROCESS_SERVER)&& message) {
-  if (options::verbose) {
-    cerr << "==========\n"
-         << "Job Name       : " << message.name << "\n"
-         << "Description    : " << message.description << "\n"
-         << "Data Blob Size : " << message.data.length() << "\n"
-         << "Bytecode Size  : " << message.bytecode.length() << "\n"
-         << "==========\n";
-  }
+  verr << "INCOMING: " << ::toString(message.type) << "\n"
+       << "Job Name       : " << message.name << "\n"
+       << "Description    : " << message.description << "\n"
+       << "Data Blob Size : " << message.data.length() << "\n"
+       << "Bytecode Size  : " << message.bytecode.length() << "\n";
 
   // Convert the data blob into an int32 array.
   string data(move(message.data));
@@ -96,15 +92,12 @@ void ProcessServer::onStartProcessServer(
   is_ready_ = true;
 }
 
-void ProcessServer::onStartInstance(
-    MESSAGE(START_INSTANCE)&& message) {
-  if (options::verbose) {
-    cerr << ::toString(message.type) << " received.\n"
-         << "Instance ID : " << message.id << "\n"
-         << "Workspace   : " << message.descriptor.workspace_pointer << "\n"
-         << "Instruction : " << message.descriptor.instruction_pointer << "\n"
-         << "Size        : " << message.descriptor.bytes_needed << "\n";
-  }
+void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n"
+       << "Instance ID : " << message.id << "\n"
+       << "Workspace   : " << message.descriptor.workspace_pointer << "\n"
+       << "Instruction : " << message.descriptor.instruction_pointer << "\n"
+       << "Size        : " << message.descriptor.bytes_needed << "\n";
 
   unique_lock<mutex> lock(instance_mu_);
   instances_.emplace(message.id, make_unique<Instance>(
@@ -113,20 +106,20 @@ void ProcessServer::onStartInstance(
 
   Instance* instance = instances_.at(message.id).get();
 
-  thread([this, instance] {
+  instance_threads_.emplace(message.id, thread([this, instance] {
     // Create the VM instance.
-    if (options::verbose)
-      cerr << "Constructing instance..\n";
+    verr << "Constructing instance..\n";
 
     // Run it.
-    if (options::verbose)
-      cerr << "Running..\n";
+    verr << "Running..\n";
     instance->run();
     notifyExited(instance->id());
-  }).detach();
+  }));
 }
 
 void ProcessServer::onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
+
   unique_lock<mutex> lock(instance_mu_);
 
   // Write back the instance handle and wake up the process.
@@ -138,10 +131,11 @@ void ProcessServer::onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message) {
 }
 
 void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
+
   unique_lock<mutex> lock(exit_mu_);
   if (on_exited_.count(message.id) > 0) {
-    if (options::verbose)
-      cerr << "Instance " << message.id << " has terminated. Waking waiter.\n";
+    verr << "Instance " << message.id << " has terminated. Waking waiter.\n";
     // A process is waiting. Reschedule it.
     WaitingProcess& process = on_exited_.at(message.id);
 
@@ -150,9 +144,14 @@ void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
 
     on_exited_.erase(message.id);
   } else {
-    if (options::verbose)
-      cerr << "Instance " << message.id << " has terminated, no waiter.\n";
+    verr << "Instance " << message.id << " has terminated, no waiter.\n";
     // No process is waiting. Remember that this one has exited.
     unjoined_exits_.insert(message.id);
   }
+}
+
+void ProcessServer::onPing(MESSAGE(PING)&& message) {
+  verr << "INCOMING: " << ::toString(message.type) << "\n";
+
+  send(MESSAGE(PONG)());
 }
