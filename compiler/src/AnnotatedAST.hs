@@ -118,8 +118,7 @@ data Process = Alt Alternative
              | Input Expression Expression
              | Output Expression Expression
              | Par (Replicable Process)
-             | PriorityAlt Alternative
-             | PriorityPar (Replicable Process)
+             | DistPar (Replicable Process)
              | Seq (Replicable Process)
              | Skip
              | Stop
@@ -156,8 +155,7 @@ instance Pretty Process where
   prettyPrint (Output a b) =
     prettyPrint a ++ " ! " ++ prettyPrint b
   prettyPrint (Par rp) = prettyRep "PAR" rp
-  prettyPrint (PriorityAlt (Alternative ra)) = prettyRep "PRI ALT" ra
-  prettyPrint (PriorityPar rp) = prettyRep "PRI PAR" rp
+  prettyPrint (DistPar rp) = prettyRep "DIST PAR" rp
   prettyPrint (Seq rp) = prettyRep "SEQ" rp
   prettyPrint Skip = "SKIP"
   prettyPrint Stop = "STOP"

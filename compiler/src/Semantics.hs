@@ -96,8 +96,7 @@ check_process (L p loc) =
     AST.Input l r -> check_input l r
     AST.Output l r -> check_output l r
     AST.Par rep -> check_par rep >>= return . Par
-    AST.PriorityAlt a -> check_alt (L a loc) >>= return . PriorityAlt
-    AST.PriorityPar p -> check_pripar p >>= return . PriorityPar
+    AST.DistPar p -> check_dist_par p >>= return . DistPar
     AST.Seq rep -> check_seq rep >>= return . Seq
     AST.Skip -> return Skip
     AST.Stop -> return Stop
@@ -270,11 +269,9 @@ check_par :: AST.Replicable (L AST.Process)
           -> SemanticAnalyser (Replicable Process)
 check_par par = check_replicable True check_process par
 
-check_pripar :: AST.Replicable (L AST.Process)
+check_dist_par :: AST.Replicable (L AST.Process)
              -> SemanticAnalyser (Replicable Process)
-check_pripar par =
-  -- TODO: Verify that the limit on the number of priority par's is not broken.
-  check_par par
+check_dist_par par = check_replicable True check_process par
 
 check_seq :: AST.Replicable (L AST.Process)
           -> SemanticAnalyser (Replicable Process)

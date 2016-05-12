@@ -640,6 +640,45 @@ gen_par rp =
           let code = Code [Label proc, cp, Raw [LDLP (woff + 1), ENDP]]
           return (proc, code)
 
+-- Generate code for a distributed parallel block.
+gen_dist_par :: Replicable Process -> CodeGenerator
+gen_dist_par rp =
+  case rp of
+    Basic ps -> (promise { depth_required = d }, code)
+            -- Run the smallest process locally. This ensures that each instance
+            -- is as shallow as possible.
+      where ((pp, gp) : pgs) =
+              sortBy (comparing (depth_required . fst)) $ map gen_proc ps
+            gen_subproc (handle, (pp, gp)) ctx = do
+              -- Generate code to spawn a process in a new instance.
+              proc <- label "RPC"
+              next <- label "NEXT"
+              cp <- gp ctx
+              let code = Code [comment ("Call " ++ proc ++ " remotely."),
+                               Raw [LDLP handle, LDC (6 + depth_required pp),
+                                    STARTI proc, J next],
+                               Label proc, cp, Raw [STOPP], Label next]
+              return code
+            sgs = map gen_subproc (zip [1..] pgs)
+            d = fromIntegral (length pgs) + depth_required pp
+            code ctx = do
+              -- Allocate handles.
+              let ctx' = allocate ctx "$" (fromIntegral (length pgs))
+              -- Generate the code for each remote subprocess.
+              scs <- sequence (map ($ ctx') sgs)
+              cp <- gp ctx'
+              return $ Code [desc, Raw [AJW (fromIntegral (-length pgs))],
+                             comment "Spawn remote instances.", Code scs,
+                             comment "Run local process.", cp,
+                             comment "Wait for remote instances.",
+                             Code (map (\i -> Raw [LDL i, JOINI])
+                                       [1..fromIntegral (length pgs)]),
+                             Raw [AJW (fromIntegral (length pgs))]]
+    Replicated (Range i a b) p -> (promise { depth_required = d }, code)
+      where d = d
+            code = code
+  where desc = comment $ prettyPrint (DistPar rp)
+
 -- Generate code for a sequence.
 gen_seq :: Replicable Process -> CodeGenerator
 gen_seq rp =
@@ -704,6 +743,7 @@ gen_proc p =
     Output a b -> combine (Code [desc, Raw [OUTWORD]]) conserve_order
                           (gen_addr a) (gen_expr b)
     Par p -> gen_par p
+    DistPar p -> gen_dist_par p
     Seq a -> gen_seq a
     Skip -> (promise, \ctx -> return $ comment "SKIP")
     Stop -> (promise, \ctx -> return $ Raw [STOPP])

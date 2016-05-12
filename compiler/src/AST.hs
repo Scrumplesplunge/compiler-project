@@ -27,8 +27,7 @@ data Process = Alt Alternative
              | Input (L Expression) (L Expression)
              | Output (L Expression) (L Expression)
              | Par (Replicable (L Process))
-             | PriorityAlt (Alternative)
-             | PriorityPar (Replicable (L Process))
+             | DistPar (Replicable (L Process))
              | Seq (Replicable (L Process))
              | Skip
              | Stop

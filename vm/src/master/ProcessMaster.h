@@ -49,9 +49,7 @@ class ProcessServerHandle {
 
   template <typename T>
   void send(const T& message) {
-    verr << "OUTGOING: " << ::toString(message.type) << "\n";
     messenger_.send(message.type, message);
-    verr << "SENT    : " << ::toString(message.type) << "\n";
   }
 
   worker_id id_;

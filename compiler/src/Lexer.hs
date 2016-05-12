@@ -6,17 +6,17 @@ import Tokens
 
 -- Tokenization.
 data Keyword =
-      AFTER | ALT   | AND    | ANY  | AT    | BYTE | CHAN
-    | CONST | DEF   | FALSE  | FOR  | IF    | NOT  | OR
-    | PAR   | PLACE | PLACED | PRI  | PROC  | SEQ  | SKIP
-    | STOP  | TABLE | TIME   | TRUE | VALUE | VAR  | WHILE
+      AFTER | ALT   | AND   | ANY    | AT    | BYTE | CHAN
+    | CONST | DEF   | DIST  | FALSE  | FOR   | IF   | NOT
+    | OR    | PAR   | PLACE | PLACED | PROC  | SEQ  | SKIP
+    | STOP  | TABLE | TIME  | TRUE   | VALUE | VAR  | WHILE
   deriving (Eq, Show)
 
 keywords = [
-      AFTER,  ALT,    AND,     ANY,   AT,     BYTE,  CHAN,
-      CONST,  DEF,    FALSE,   FOR,   IF,     NOT,   OR,
-      PAR,    PLACE,  PLACED,  PRI,   PROC,   SEQ,   SKIP,
-      STOP,   TABLE,  TIME,    TRUE,  VALUE,  VAR,   WHILE]
+      AFTER,  ALT,    AND,     ANY,    AT,     BYTE,  CHAN,
+      CONST,  DEF,    DIST,    FALSE,  FOR,    IF,    NOT,
+      OR,     PAR,    PLACE,   PLACED, PROC,   SEQ,   SKIP,
+      STOP,   TABLE,  TIME,    TRUE,   VALUE,  VAR,   WHILE]
 
 data Symbol = ADD           -- '+'
             | AMPERSAND     -- '&'

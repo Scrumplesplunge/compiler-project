@@ -105,16 +105,15 @@ main = do
     let space_needed = 4 * (6 + max_depth)
 
     -- Write metadata file.
-    let (static_data_start, static_data) = make_blob (static state')
-    if static_data_start /= memory_start options then
-      error "Compiler error: static data does not start at memory start."
-    else do
-      -- Workspace descends. Initially place the workspace pointer at the top of
-      -- allocated memory.
-      let metadata = MetaData.MetaData {
-            MetaData.static_data = static_data,
-            MetaData.root_process_size = space_needed,
-            MetaData.assembly_file = assembly_file options}
-      metadata_handle <- open (metadata_file options) WriteMode stdout
-      hPutStr metadata_handle (MetaData.encode metadata)
-      hClose metadata_handle
+    
+    let static_data = make_blob (static state')
+    
+    -- Workspace descends. Initially place the workspace pointer at the top of
+    -- allocated memory.
+    let metadata = MetaData.MetaData {
+          MetaData.static_data = static_data,
+          MetaData.root_process_size = space_needed,
+          MetaData.assembly_file = assembly_file options}
+    metadata_handle <- open (metadata_file options) WriteMode stdout
+    hPutStr metadata_handle (MetaData.encode metadata)
+    hClose metadata_handle

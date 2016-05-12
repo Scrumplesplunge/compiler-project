@@ -56,11 +56,12 @@ encode_located' (location, value) = do
   putLazyByteString value
 
 -- Construct a binary blob which stores all the provided static data.
-make_blob :: [(Int32, Static)] -> (Int32, [Word8])
-make_blob bs = (location, BL.unpack value)
+make_blob :: [(Int32, Static)] -> [Word8]
+make_blob bs =
+  if length xs == 0 then
+    []
+  else if length xs == 1 then
+    (BL.unpack . snd . head) xs
+  else
+    error "Static data should be contiguous."
   where xs = compact (encode_all bs)
-        (location, value) =
-          if length xs == 1 then
-            head xs
-          else
-            error "Static data should be contiguous."

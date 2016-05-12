@@ -87,11 +87,10 @@ replicator = name +++ symbol Lexer.COMP_EQ +++ symbol Lexer.OPEN_SQUARE +++
 
 process :: Parser Token (L Process)
 process = action
-      ||| keyword Lexer.PRI +++ alternative                                     >>> fmap PriorityAlt . snd
       ||| alternative                                                           >>> fmap Alt
       ||| definitions
       ||| conditional                                                           >>> fmap If
-      ||| keyword Lexer.PRI +++ parallel                                        >>> fmap PriorityPar . snd
+      ||| keyword Lexer.DIST +++ parallel                                       >>> fmap DistPar . snd
       ||| parallel                                                              >>> fmap Par
       ||| sequence                                                              >>> fmap Seq
       ||| repetition

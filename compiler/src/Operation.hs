@@ -30,6 +30,7 @@ data Operation =
     | GT                -- B = pop(); A = pop(); push(A > B);
     | IN Int32          -- Read x bytes from chan A to loc B. Pop both.
     | J Label           -- Iptr = x;
+    | JOINI             -- Wait for process with handle A.
     | LB                -- push((byte) Mem[pop()]);
     | LDO Label Label   -- Load the offset from the second label to the first.
     | LDA Label         -- Load the (non-relative) address of a label.
@@ -53,7 +54,8 @@ data Operation =
     | SB                -- B = pop(); A = pop(); (byte) Mem[A] = B;
     | SHL               -- B = pop(); A = pop(); push(A << B);
     | SHR               -- B = pop(); A = pop(); push(A >> B);  // 0-filled.
-    | STARTP Label      -- Start process x with workspace y.
+    | STARTI Label      -- Mem[B] = handle for process x of size A.
+    | STARTP Label      -- Start process x with workspace A.
     | STL Int32         -- Mem[Wptr + 4 * x] = A;
     | STNL Int32        -- Mem[A + 4 * x] = B;
     | STOPP             -- Stop and dequeue the current process.
@@ -98,6 +100,7 @@ def (EQC x)      = return ["eqc " ++ show x]
 def GT           = return ["gt"]
 def (IN x)       = return ["ldc " ++ show x, "in"]
 def (J x)        = return ["j " ++ x]
+def JOINI        = return ["joini"]
 def LB           = return ["lb"]
 def (LDO a b)    = return ["ldc " ++ a ++ " - " ++ b]
 def (LDA x)      = relative x ["ldpi"]
@@ -121,7 +124,8 @@ def RUNP         = return ["runp"]
 def SB           = return ["sb"]
 def SHL          = return ["shl"]
 def SHR          = return ["shr"]
-def (STARTP i) = relative i ["rev", "startp"]
+def (STARTI i)   = relative i ["ldpi"] >>= (return . (++["starti"]))
+def (STARTP i)   = relative i ["rev", "startp"]
 def (STL x)      = return ["stl " ++ show x]
 def (STNL x)     = return ["stnl " ++ show x]
 def STOPP        = return ["stopp"]

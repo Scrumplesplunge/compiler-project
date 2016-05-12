@@ -1,0 +1,14 @@
+DEF message = "Hello, World!" :
+
+-- Built in.
+PROC putc(VALUE c) =
+  SKIP
+:
+
+-- Run the two processes on separate instances.
+DIST PAR
+  SEQ i = [0 FOR 7]
+    putc(message[BYTE i])  -- "Hello, "
+  SEQ i = [7 FOR 6]
+    putc(message[BYTE i])  -- "World!"
+

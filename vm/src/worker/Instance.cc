@@ -49,11 +49,11 @@ void Instance::startInstance() {
   // Create the instance descriptor.
   InstanceDescriptor descriptor;
   descriptor.workspace_pointer = Wptr;
-  descriptor.instruction_pointer = C;
+  descriptor.instruction_pointer = A;
   descriptor.bytes_needed = 4 * B;
 
   // Save the handle address into Wptr[0].
-  write(Wptr, A);
+  write(Wptr, C);
 
   // Deschedule this process.
   {
