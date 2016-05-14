@@ -6,9 +6,6 @@ PROC putc(VALUE c) =
 :
 
 -- Run the two processes on separate instances.
-DIST PAR
-  SEQ i = [0 FOR 7]
-    putc(message[BYTE i])  -- "Hello, "
-  SEQ i = [7 FOR 6]
-    putc(message[BYTE i])  -- "World!"
+DIST PAR i = [0 FOR 13]
+  putc(message[BYTE i])
 

@@ -235,6 +235,7 @@ void VM::performIndirect(Indirect op) {
     case OUTWORD: INDIRECT(OUTWORD); break;
     case REM:     INDIRECT(REM);     break;
     case RESETCH: INDIRECT(RESETCH); break;
+    case RET:     INDIRECT(RET);     break;
     case REV:     INDIRECT(REV);     break;
     case RUNP:    INDIRECT(RUNP);    break;
     case SB:      INDIRECT(SB);      break;

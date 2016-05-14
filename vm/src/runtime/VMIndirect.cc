@@ -275,6 +275,15 @@ DEFINE_INDIRECT(RESETCH) {
   write(A, NotProcess);
 }
 
+// Return from subroutine.
+DEFINE_INDIRECT(RET) {
+  Iptr = read(Wptr + 0);
+  A = read(Wptr + 4);
+  B = read(Wptr + 8);
+  C = read(Wptr + 12);
+  Wptr += 16;
+}
+
 // Reverse.
 DEFINE_INDIRECT(REV) {
   A ^= B;

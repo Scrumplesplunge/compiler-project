@@ -649,6 +649,8 @@ gen_dist_par rp =
             -- is as shallow as possible.
       where ((pp, gp) : pgs) =
               sortBy (comparing (depth_required . fst)) $ map gen_proc ps
+            sgs = map gen_subproc (zip [1..] pgs)
+            d = fromIntegral (length pgs) + depth_required pp
             gen_subproc (handle, (pp, gp)) ctx = do
               -- Generate code to spawn a process in a new instance.
               proc <- label "RPC"
@@ -659,8 +661,6 @@ gen_dist_par rp =
                                     STARTI proc, J next],
                                Label proc, cp, Raw [STOPP], Label next]
               return code
-            sgs = map gen_subproc (zip [1..] pgs)
-            d = fromIntegral (length pgs) + depth_required pp
             code ctx = do
               -- Allocate handles.
               let ctx' = allocate ctx "$" (fromIntegral (length pgs))
@@ -675,8 +675,77 @@ gen_dist_par rp =
                                        [1..fromIntegral (length pgs)]),
                              Raw [AJW (fromIntegral (length pgs))]]
     Replicated (Range i a b) p -> (promise { depth_required = d }, code)
-      where d = d
-            code = code
+      where (pa, ga) = gen_expr a
+            (pp, gp) = gen_proc p
+            n = case b of
+                  Value (Integer x) -> x
+                    -- Replicated PAR requires a compile-time constant size. If
+                    -- this was not ensured by the semantic analysis, something
+                    -- has gone wrong.
+                  _ -> error "This should never happen."
+            d = if n == 0 then
+                  0
+                else if n == 1 then
+                  -- i, a, and p.
+                  1 + max (depth_required pa) (depth_required pp)
+                else
+                  -- stored a, loop construct, handles, call construct, i, p.
+                  7 + n + depth_required pp
+            code ctx =
+              if n == 0 then
+                -- No components. This is an identity.
+                return $ Raw []
+              else if n == 1 then do
+                -- Only one process. Inline to a direct call of the process with
+                -- i defined accordingly.
+                let ctx' = allocate ctx i 1
+                ca <- ga ctx'
+                cp <- gp ctx'
+                return $ Code [Raw [AJW (-1)], ca, Raw [STL 1], cp, Raw [AJW 1]]
+              else do
+                -- Allocate handles.
+                let num_handles = n - 1
+                let space_required = 3 + num_handles
+                let ctx' = allocate ctx "$" space_required
+                setup_loop <- label "SETUP_LOOP"
+                setup_loop_end <- label "SETUP_LOOP_END"
+                shutdown_loop <- label "SHUTDOWN_LOOP"
+                shutdown_loop_end <- label "SHUTDOWN_LOOP_END"
+                remote_stub <- label "REMOTE_STUB"
+                proc <- label "PROC"
+
+                -- Generate the code.
+                ca <- ga ctx'
+
+                let ctx'' = allocate ctx' i 5
+                cp <- gp ctx''
+                return $ Code [desc, Raw [AJW (-space_required)],
+                               comment "Set up the loop.", ca,
+                               Raw [DUP, STL 3, ADC 1, STL 1, LDC num_handles,
+                                    STL 2],
+                               Label setup_loop,
+                               comment ("Spawn remote process " ++ i ++ "."),
+                               Raw [COMMENT ("Spawn instance " ++ i ++ "."),
+                                    LDL 2, LDLP 2, WSUB,
+                                    LDC (6 + 5 + depth_required pp),
+                                    STARTI remote_stub, LDLP 1,
+                                    COMMENT ("Send " ++ i ++ "."),
+                                    LDLP 3, LDC 2, OUTWORD,
+                                    LDLP 1, LEND setup_loop setup_loop_end],
+                               Label remote_stub,
+                               Raw [AJW (-1), LDLP 1, IN 4, CALL proc, STOPP],
+                               Label proc,
+                               cp, Raw [RET],
+                               Label setup_loop_end,
+                               comment ("Run the local process."),
+                               Raw [AJW (-1), LDL 4, STL 1, CALL proc, AJW 1],
+                               comment "Wait for instances to finish.",
+                               Raw [LDC 1, STL 1, LDC num_handles, STL 2],
+                               Label shutdown_loop,
+                               Raw [COMMENT ("Wait for instance " ++ i ++ "."),
+                                    LDL 1, LDLP 2, WSUB, LDNLP 0, JOINI, LDLP 1,
+                                    LEND shutdown_loop shutdown_loop_end],
+                               Label shutdown_loop_end]
   where desc = comment $ prettyPrint (DistPar rp)
 
 -- Generate code for a sequence.
