@@ -8,6 +8,7 @@
 #include <functional>
 #include <iostream>
 #include <thread>
+#include <util/atomic_output.h>
 #include <util/binary.h>
 #include <util/stream.h>
 #include <vector>
@@ -129,7 +130,8 @@ void ProcessMaster::serve() {
 
   // Start it on the last worker.
   worker_id root_worker = workers_.size() - 1;
-  instance_id id = process_tree_.createRootInstance(root_worker);
+  instance_id id = process_tree_.createRootInstance(
+      InstanceInfo(root_worker, descriptor));
   workers_[root_worker]->startInstance(id, descriptor);
 
   verr << "Spawning root process on " << workers_[root_worker]->hostPort()
@@ -168,7 +170,8 @@ void ProcessMaster::onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message) {
   worker_id worker = (next_worker_to_use_++) % workers_.size();;
 
   // Generate an instance ID.
-  instance_id id = process_tree_.createInstance(message.parent_id, worker);
+  instance_id id = process_tree_.createInstance(
+      InstanceInfo(worker, message.descriptor));
 
   // Send the start message.
   verr << "Spawning instance " << id << " with parent " << message.parent_id

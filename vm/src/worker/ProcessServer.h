@@ -2,6 +2,7 @@
 
 #include "../network.h"
 #include "Instance.h"
+#include "PartialProcessTree.h"
 
 #include <memory>
 #include <mutex>
@@ -47,9 +48,13 @@ class ProcessServer {
 
   void onPing(MESSAGE(PING)&& message);
 
-  std::mutex instance_mu_;
+  worker_id id_;
+
+  std::mutex instance_mu_;  // Guards instances_ and instance_threads_.
   std::unordered_map<instance_id, std::unique_ptr<Instance>> instances_;
   std::unordered_map<instance_id, std::thread> instance_threads_;
+
+  PartialProcessTree process_tree_;
 
   bool is_ready_;
 
@@ -65,7 +70,7 @@ class ProcessServer {
 
   // At most one process can wait for another to exit, and this should be its
   // parent.
-  std::mutex exit_mu_;
+  std::mutex exit_mu_;  // Guards unjoined_exits_ and on_exited_.
   std::unordered_set<instance_id> unjoined_exits_;
   std::unordered_map<instance_id, WaitingProcess> on_exited_;
 

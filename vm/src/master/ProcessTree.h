@@ -3,45 +3,32 @@
 #include "../network.h"
 
 #include <condition_variable>
-#include <list>
-#include <memory>
 #include <mutex>
-#include <stdint.h>
 #include <unordered_map>
-#include <util/binary.h>
-
-struct InstanceInfo {
-  instance_id id, parent_id;
-  worker_id location;
-};
-
-struct Ancestry {
-  // Ancestors should be sorted such that the first element is a root node, and
-  // every subsequent entry is a direct child of the previous, the last entry
-  // being the subject of the ancestry. This means that if the subject is a root
-  // node, it will be the only entry.
-  //
-  // Note that since instance IDs only increase, and sub-instances must be
-  // created after parent instances, this is ordered by increasing instance IDs.
-  std::list<InstanceInfo> ancestors;
-};
-
-template <> void BinaryReader::read(Ancestry* ancestry);
-template <> void BinaryWriter::write(const Ancestry& ancestry);
 
 class ProcessTree {
  public:
-  instance_id createRootInstance(worker_id location);
-  instance_id createInstance(instance_id parent, worker_id location);
+  // Create a new root instance. The InstanceInfo can leave id and parent_id
+  // undefined. They will both be set to the value which is returned.
+  instance_id createRootInstance(InstanceInfo info);
+
+  // Create a new child instance. The InstanceInfo can leave id undefined. It
+  // will be set to the value which is returned.
+  instance_id createInstance(InstanceInfo info);
 
   // Check whether an instance is still alive (assuming that it ever was).
   bool is_active(instance_id id);
 
   // Look up the information for a particular instance.
-  const InstanceInfo& info(instance_id id);
+  InstanceInfo info(instance_id id);
 
-  // Look up the ancestry for a process.
-  Ancestry ancestors(instance_id id);
+  // Follow the ancestry for the given instance until one is found which is
+  // running on the given worker. This is used for sharing the process tree. The
+  // result is an ancestry which contains all parents between the given instance
+  // and the first parent which is hosted on the specified worker (neither of
+  // which is included). If no such parent exists, then the ancestry will lead
+  // all the way up to the root instance.
+  Ancestry link(instance_id id, worker_id worker);
 
   // End the instance specified by the given ID. If the instance still has
   // active children, this will throw an exception.
@@ -53,7 +40,7 @@ class ProcessTree {
 
  private:
   struct InstanceInfoNode {
-    InstanceInfoNode(InstanceInfo&& base)
+    InstanceInfoNode(InstanceInfo base)
         : info(base) {}
 
     int num_children = 0;

@@ -46,6 +46,9 @@ void ProcessServer::requestInstance(
 }
 
 void ProcessServer::notifyExited(instance_id id) {
+  // Remove the instance from the process tree.
+  process_tree_.removeLocalInstance(id);
+
   // Send the exit notification.
   MESSAGE(INSTANCE_EXITED) exit_message;
   exit_message.id = id;
@@ -83,6 +86,8 @@ void ProcessServer::onStartProcessServer(
        << "Bytecode Size  : " << message.bytecode.length() << "\n"
        << "==========\n";
 
+  id_ = message.id;
+
   // Convert the data blob into an int32 array.
   string data(move(message.data));
   data_end_ = VM::MostNeg + data.length();
@@ -103,6 +108,9 @@ void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
   instances_.emplace(message.id, make_unique<Instance>(
       *this, message.id, message.descriptor, bytecode_.c_str(),
       bytecode_.length(), data_.get(), data_end_));
+
+  // Add it to the process tree.
+  process_tree_.addLocalInstance(InstanceInfo(id_, message.descriptor));
 
   // Run it.
   Instance* instance = instances_.at(message.id).get();

@@ -20,15 +20,21 @@ NETWORK = gen/Network.o obj/network.o ${BINARY}  \
 OPERATIONS = $(addprefix gen/, Direct.o Indirect.o Unit.o)
 VM = $(addprefix obj/runtime/, VM.o VMDirect.o VMIndirect.o)
 
-AS_DEPS     = obj/assembler/operations.o ${ARGS} ${OPERATIONS}
-DAS_DEPS    = obj/util.o obj/assembler/operations.o ${ARGS} ${OPERATIONS}
-VM_DEPS     = obj/util.o obj/runtime/metadata.o ${ARGS} ${BINARY}  \
-							${JSON} ${OPERATIONS} ${VM}
-MASTER_DEPS = obj/util.o obj/runtime/metadata.o  \
-							$(addprefix obj/master/, config.o ProcessMaster.o ProcessTree.o)  \
-							${ARGS} ${JSON} ${BINARY} ${NETWORK} ${VM} ${OPERATIONS}
-WORKER_DEPS = obj/util.o $(addprefix obj/worker/, Instance.o ProcessServer.o)  \
-							${ARGS} ${JSON} ${BINARY} ${NETWORK} ${OPERATIONS} ${VM}
+AS_DEPS =  \
+  obj/assembler/operations.o ${ARGS} ${OPERATIONS}
+DAS_DEPS =  \
+  obj/util.o obj/assembler/operations.o ${ARGS} ${OPERATIONS}
+VM_DEPS =  \
+  obj/util.o obj/runtime/metadata.o  \
+  ${ARGS} ${BINARY} ${JSON} ${OPERATIONS} ${VM}
+MASTER_DEPS =  \
+  obj/util.o obj/runtime/metadata.o  \
+  $(addprefix obj/master/, config.o ProcessTree.o ProcessMaster.o)  \
+  ${ARGS} ${JSON} ${BINARY} ${NETWORK} ${VM} ${OPERATIONS}
+WORKER_DEPS =  \
+  obj/util.o  \
+  $(addprefix obj/worker/, Instance.o PartialProcessTree.o ProcessServer.o)  \
+  ${ARGS} ${JSON} ${BINARY} ${NETWORK} ${OPERATIONS} ${VM}
 
 bin/as: obj/assembler/as.o ${AS_DEPS} | bin
 	${CXX} ${CXXFLAGS} $^ -o $@

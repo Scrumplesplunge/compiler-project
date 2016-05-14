@@ -2,71 +2,31 @@
 
 using namespace std;
 
-template <>
-void BinaryReader::read(Ancestry* ancestry) {
-  ancestry->ancestors.clear();
-
-  uint64_t num_entries = readVarUint();
-
-  bool first = true;
-  InstanceInfo temp;
-  instance_id previous;
-  for (uint64_t i = 0; i < num_entries; i++) {
-    if (first) {
-      // Read the (non delta-encoded) instance ID.
-      temp.parent_id = previous = readVarUint();
-      first = false;
-    } else {
-      temp.parent_id = previous;
-      previous += readVarUint();
-    }
-    temp.id = previous;
-    // Read the worker ID.
-    temp.location = readVarUint();
-
-    ancestry->ancestors.push_back(temp);
-  }
-}
-
-template <>
-void BinaryWriter::write(const Ancestry& ancestry) {
-  writeVarUint(ancestry.ancestors.size());
-
-  instance_id previous = 0;
-  for (const InstanceInfo& instance : ancestry.ancestors) {
-    if (instance.id < previous)
-      throw logic_error("Instance ID values are not increasing.");
-    // Delta-encode the instance ID.
-    writeVarUint(instance.id - previous);
-    previous = instance.id;
-
-    // Write the worker ID.
-    writeVarUint(instance.location);
-  }
-}
-
-instance_id ProcessTree::createRootInstance(worker_id location) {
+instance_id ProcessTree::createRootInstance(InstanceInfo info) {
   unique_lock<mutex> lock(mu_);
 
   // Root nodes are their own parent.
-  instance_id id = next_id_++;
-  auto instance = make_shared<InstanceInfoNode>(InstanceInfo{id, id, location});
+  instance_id id = info.id = info.parent_id = next_id_++;
+
+  auto instance = make_shared<InstanceInfoNode>(info);
   instances_.emplace(id, instance);
   return id;
 }
 
-instance_id ProcessTree::createInstance(
-    instance_id parent_id, worker_id location) {
+instance_id ProcessTree::createInstance(InstanceInfo info) {
   unique_lock<mutex> lock(mu_);
 
   // Find the parent instance.
-  auto i = instances_.find(parent_id);
+  auto i = instances_.find(info.parent_id);
   if (i == instances_.end())
     throw logic_error("Tried to create orphan instance.");
+
+  // Increment the child count.
   i->second->num_children++;
-  instance_id id = next_id_++;
-  auto instance =
-      make_shared<InstanceInfoNode>(InstanceInfo{id, parent_id, location});
+
+  // Create the InstanceInfoNode.
+  instance_id id = info.id = next_id_++;
+  auto instance = make_shared<InstanceInfoNode>(info);
   instances_.emplace(id, instance);
   return id;
 }
@@ -77,7 +37,7 @@ bool ProcessTree::is_active(instance_id id) {
   return instances_.count(id) > 0;
 }
 
-const InstanceInfo& ProcessTree::info(instance_id id) {
+InstanceInfo ProcessTree::info(instance_id id) {
   unique_lock<mutex> lock(mu_);
 
   // Find the instance.
@@ -88,24 +48,27 @@ const InstanceInfo& ProcessTree::info(instance_id id) {
   return i->second->info;
 }
 
-Ancestry ProcessTree::ancestors(instance_id id) {
+Ancestry ProcessTree::link(instance_id id, worker_id worker) {
   unique_lock<mutex> lock(mu_);
 
   Ancestry out;
+
   // Find the instance.
   auto i = instances_.find(id);
-  
-  do {
+  if (i == instances_.end())
+    throw logic_error("Instance is orphaned or does not exist.");
+  InstanceInfo* info = &i->second->info;
+
+  // Until either a root node is reached, or until the worker is discovered in
+  // the ancestry if the instance, keep appending parents.
+  while (info->id != info->parent_id &&
+         info->location != worker) {
+    i = instances_.find(info->parent_id);
     if (i == instances_.end())
       throw logic_error("Instance is orphaned or does not exist.");
-    InstanceInfoNode& node = *i->second;
-
-    // Add the node to the list.
-    out.ancestors.push_front(node.info);
-
-    // Move to the parent.
-    id = node.info.parent_id;
-  } while (i->second->info.id != i->second->info.parent_id);
+    info = &i->second->info;
+    out.contents.push_front(*info);
+  }
 
   return out;
 }
