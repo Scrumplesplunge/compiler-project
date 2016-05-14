@@ -60,6 +60,28 @@ struct Ancestry {
 template <> void BinaryReader::read(Ancestry* ancestry);
 template <> void BinaryWriter::write(const Ancestry& ancestry);
 
+// Uniquely identifies a channel.
+struct Channel {
+  bool operator==(const Channel& other) const {
+    return owner == other.owner && address == other.address;
+  }
+
+  instance_id owner;
+  int32_t address;
+};
+
+template <> void BinaryReader::read(Channel* channel);
+template <> void BinaryWriter::write(const Channel& channel);
+
+// Base class for channel events.
+struct ChannelEvent {
+  Channel channel;
+  instance_id actor;
+};
+
+template <> void BinaryReader::read(ChannelEvent* channel);
+template <> void BinaryWriter::write(const ChannelEvent& channel);
+
 #define READER(name)  \
   template <> void BinaryReader::read(name##_Message* message)
 #define WRITER(name)  \
@@ -112,6 +134,17 @@ DECLARE_MESSAGE(INSTANCE_STARTED) {
 DECLARE_MESSAGE(INSTANCE_EXITED) {
   instance_id id;
 };
+
+DECLARE_MESSAGE(CHANNEL_IN), public ChannelEvent {};
+
+DECLARE_MESSAGE(CHANNEL_OUT), public ChannelEvent {
+  std::string data;
+};
+
+DECLARE_MESSAGE(CHANNEL_OUT_DONE), public ChannelEvent {};
+DECLARE_MESSAGE(CHANNEL_ENABLE), public ChannelEvent {};
+DECLARE_MESSAGE(CHANNEL_DISABLE), public ChannelEvent {};
+DECLARE_MESSAGE(CHANNEL_RESET), public ChannelEvent {};
 
 DECLARE_MESSAGE(PING) {};
 DECLARE_MESSAGE(PONG) {};

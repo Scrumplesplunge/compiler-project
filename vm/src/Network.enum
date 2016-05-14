@@ -23,6 +23,14 @@ INSTANCE_STARTED
 # the parent instance, if applicable.
 INSTANCE_EXITED
 
+# Channel messages.
+CHANNEL_IN
+CHANNEL_OUT
+CHANNEL_OUT_DONE
+CHANNEL_ENABLE
+CHANNEL_DISABLE
+CHANNEL_RESET
+
 # Establish the latency in a connection.
 PING
 PONG

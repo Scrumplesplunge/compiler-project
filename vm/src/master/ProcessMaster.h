@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <stdint.h>
+#include <unordered_map>
 #include <util/args.h>
 #include <util/atomic_output.h>
 #include <util/messenger.h>
@@ -42,9 +43,6 @@ class ProcessServerHandle {
  private:
   friend class ProcessMaster;
 
-  void onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message);
-  void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
-
   void onPong(MESSAGE(PONG)&& message);
 
   template <typename T>
@@ -73,15 +71,57 @@ class ProcessMaster {
 
   void onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
+  void onChannelInput(MESSAGE(CHANNEL_IN)&& message);
+  void onChannelOutput(MESSAGE(CHANNEL_OUT)&& message);
+  void onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message);
+  void onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message);
+  void onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message);
+  void onChannelReset(MESSAGE(CHANNEL_RESET)&& message);
 
+  struct WaitingReader {
+    instance_id id;
+  };
+
+  struct WaitingWriter {
+    instance_id id;
+    std::string data;
+  };
+
+  void forwardOutput(Channel channel, const WaitingReader& reader,
+                     const WaitingWriter& writer);
+
+  void outputDone(Channel channel, instance_id writer);
+
+  void resolveChannelMessage(Channel channel, const WaitingReader& reader,
+                             const WaitingWriter& writer);
+
+  // Job info.
   const std::string job_name_;
   const std::string job_description_;
 
+  // Program info.
   const std::string bytecode_;
   const MetaData metadata_;
 
+  struct ChannelHasher {
+    size_t operator()(const Channel& channel) const;
+  };
+
+  std::mutex channel_mu_;  // Guards active_channels_ and channel_writers_.
+
+  // Enabled channels.
+  std::unordered_map<Channel, WaitingReader, ChannelHasher> enabled_channels_;
+
+  // Waiting readers.
+  std::unordered_map<Channel, WaitingReader, ChannelHasher> channel_readers_;
+
+  // Waiting writers.
+  std::unordered_map<Channel, WaitingWriter, ChannelHasher> channel_writers_;
+
+  // Running instances.
   ProcessTree process_tree_;
 
+  // Running workers.
   std::atomic<worker_id> next_worker_to_use_{0};
   std::vector<std::unique_ptr<ProcessServerHandle>> workers_;
 };

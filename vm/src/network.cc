@@ -109,6 +109,34 @@ void BinaryWriter::write(const Ancestry& ancestry) {
   }
 }
 
+// Channel
+
+template <>
+void BinaryReader::read(Channel* channel) {
+  channel->owner = readVarUint();
+  channel->address = readInt32();
+};
+
+template <>
+void BinaryWriter::write(const Channel& channel) {
+  writeVarUint(channel.owner);
+  writeInt32(channel.address);
+}
+
+// ChannelEvent
+
+template <>
+void BinaryReader::read(ChannelEvent* event) {
+  read(&event->channel);
+  event->actor = readVarUint();
+}
+
+template <>
+void BinaryWriter::write(const ChannelEvent& event) {
+  write(event.channel);
+  writeVarUint(event.actor);
+}
+
 #define DEFINE_MESSAGE(name)  \
   template <> Network MessageNameChecker<name>::type = name
 
@@ -191,6 +219,55 @@ READER(INSTANCE_EXITED) {
 WRITER(INSTANCE_EXITED) {
   writeVarUint(message.id);
 }
+
+// CHANNEL_IN
+
+DEFINE_MESSAGE(CHANNEL_IN);
+
+READER(CHANNEL_IN) { read<ChannelEvent>(message); }
+WRITER(CHANNEL_IN) { write<ChannelEvent>(message); }
+
+// CHANNEL_OUT
+
+DEFINE_MESSAGE(CHANNEL_OUT);
+
+READER(CHANNEL_OUT) {
+  read<ChannelEvent>(message);
+  message->data = readString();
+}
+
+WRITER(CHANNEL_OUT) {
+  write<ChannelEvent>(message);
+  writeString(message.data);
+}
+
+// CHANNEL_OUT_DONE
+
+DEFINE_MESSAGE(CHANNEL_OUT_DONE);
+
+READER(CHANNEL_OUT_DONE) { read<ChannelEvent>(message); }
+WRITER(CHANNEL_OUT_DONE) { write<ChannelEvent>(message); }
+
+// CHANNEL_ENABLE
+
+DEFINE_MESSAGE(CHANNEL_ENABLE);
+
+READER(CHANNEL_ENABLE) { read<ChannelEvent>(message); }
+WRITER(CHANNEL_ENABLE) { write<ChannelEvent>(message); }
+
+// CHANNEL_DISABLE
+
+DEFINE_MESSAGE(CHANNEL_DISABLE);
+
+READER(CHANNEL_DISABLE) { read<ChannelEvent>(message); }
+WRITER(CHANNEL_DISABLE) { write<ChannelEvent>(message); }
+
+// CHANNEL_RESET
+
+DEFINE_MESSAGE(CHANNEL_RESET);
+
+READER(CHANNEL_RESET) { read<ChannelEvent>(message); }
+WRITER(CHANNEL_RESET) { write<ChannelEvent>(message); }
 
 // PING
 
