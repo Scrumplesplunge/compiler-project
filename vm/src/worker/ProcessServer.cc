@@ -22,6 +22,19 @@ ProcessServer::ProcessServer(Socket&& socket)
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessServer::onInstanceExited, this, _1));
 
+  messenger_.ON(CHANNEL_IN,
+                bind(&ProcessServer::onChannelInput, this, _1));
+  messenger_.ON(CHANNEL_OUT,
+                bind(&ProcessServer::onChannelOutput, this, _1));
+  messenger_.ON(CHANNEL_OUT_DONE,
+                bind(&ProcessServer::onChannelOutputDone, this, _1));
+  messenger_.ON(CHANNEL_ENABLE,
+                bind(&ProcessServer::onChannelEnable, this, _1));
+  messenger_.ON(CHANNEL_DISABLE,
+                bind(&ProcessServer::onChannelDisable, this, _1));
+  messenger_.ON(CHANNEL_RESET,
+                bind(&ProcessServer::onChannelReset, this, _1));
+
   messenger_.ON(PING, bind(&ProcessServer::onPing, this, _1));
 }
 
@@ -147,6 +160,30 @@ void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
     // No process is waiting. Remember that this one has exited.
     unjoined_exits_.insert(message.id);
   }
+}
+
+void ProcessServer::onChannelInput(MESSAGE(CHANNEL_IN)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+}
+
+void ProcessServer::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+}
+
+void ProcessServer::onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+}
+
+void ProcessServer::onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+}
+
+void ProcessServer::onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+}
+
+void ProcessServer::onChannelReset(MESSAGE(CHANNEL_RESET)&& message) {
+  verr << ::toString(message.type) << " received.\n";
 }
 
 void ProcessServer::onPing(MESSAGE(PING)&& message) {

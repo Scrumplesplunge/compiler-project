@@ -4,8 +4,6 @@
 #include "../runtime/VM.h"
 
 #include <condition_variable>
-#include <mutex>
-#include <unordered_map>
 
 class ProcessServer;
 

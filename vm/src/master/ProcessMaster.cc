@@ -201,89 +201,114 @@ void ProcessMaster::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
 }
 
 void ProcessMaster::onChannelInput(MESSAGE(CHANNEL_IN)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   WaitingReader reader;
   reader.id = message.actor;
 
-  if (channel_writers_.count(message.channel) > 0) {
+  if (channels_.writers.count(message.channel) > 0) {
     // Writer has already acted, so the transaction can be resolved immediately.
-    WaitingWriter writer = move(channel_writers_.at(message.channel));
-    channel_writers_.erase(message.channel);
+    WaitingWriter writer = move(channels_.writers.at(message.channel));
+    channels_.writers.erase(message.channel);
 
     resolveChannelMessage(message.channel, move(reader), move(writer));
   } else {
     // Writer has not yet acted. Save the reader in the reader map.
-    channel_readers_.emplace(message.channel, reader);
+    channels_.readers.emplace(message.channel, reader);
   }
 }
 
 void ProcessMaster::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   WaitingWriter writer;
   writer.id = message.actor;
   writer.data = message.data;
 
-  if (channel_readers_.count(message.channel) > 0) {
+  if (channels_.readers.count(message.channel) > 0) {
     // Reader is already waiting, so the transaction can be resolved
     // immediately.
-    WaitingReader reader = move(channel_readers_.at(message.channel));
-    channel_readers_.erase(message.channel);
+    WaitingReader reader = move(channels_.readers.at(message.channel));
+    channels_.readers.erase(message.channel);
 
     resolveChannelMessage(message.channel, move(reader), move(writer));
-  } else if (enabled_channels_.count(message.channel) > 0) {
+  } else if (channels_.enabled.count(message.channel) > 0) {
     // Reader is enabled. Forward the output message.
-    WaitingReader reader = enabled_channels_.at(message.channel);
-    channel_readers_.erase(message.channel);
+    WaitingReader reader = channels_.enabled.at(message.channel);
+    channels_.enabled.erase(message.channel);
 
     forwardOutput(message.channel, reader, writer);
   } else {
     // Reader is not waiting. Store the output message.
-    channel_writers_.emplace(message.channel, writer);
+    channels_.writers.emplace(message.channel, writer);
   }
 }
 
 void ProcessMaster::onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   worker_id writer_worker = process_tree_.info(message.actor).location;
-  workers_[writer_worker]->send(message);
+  if (owner_worker != writer_worker)
+    workers_[writer_worker]->send(message);
 }
 
 void ProcessMaster::onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   WaitingReader reader;
   reader.id = message.actor;
 
-  if (channel_writers_.count(message.channel) > 0) {
+  if (channels_.writers.count(message.channel) > 0) {
     // Writer has already acted. Forward the output.
-    WaitingWriter writer = channel_writers_.at(message.channel);
+    WaitingWriter writer = channels_.writers.at(message.channel);
     forwardOutput(message.channel, reader, writer);
   } else {
     // Writer has not yet acted. Save in the enabled map.
-    enabled_channels_.emplace(message.channel, reader);
+    channels_.enabled.emplace(message.channel, reader);
   }
 }
 
 void ProcessMaster::onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   // Writer has not yet acted. Save in the enabled map. Nothing else is
   // necessary: if a write had happened prior to the enable, it would have been
   // passed to the process server for handling at that time. Likewise if one had
   // happened between the enable and now.
-  enabled_channels_.erase(message.channel);
+  channels_.enabled.erase(message.channel);
 }
 
 void ProcessMaster::onChannelReset(MESSAGE(CHANNEL_RESET)&& message) {
-  unique_lock<mutex> lock(channel_mu_);
+  unique_lock<mutex> lock(channels_.mutex);
+
+  // Forward the message to the owning worker.
+  worker_id owner_worker = process_tree_.info(message.channel.owner).location;
+  workers_[owner_worker]->send(message);
 
   // Clear any fields related to this channel.
-  enabled_channels_.erase(message.channel);
-  channel_readers_.erase(message.channel);
-  channel_writers_.erase(message.channel);
+  channels_.enabled.erase(message.channel);
+  channels_.readers.erase(message.channel);
+  channels_.writers.erase(message.channel);
 }
 
 void ProcessMaster::forwardOutput(
@@ -312,8 +337,4 @@ void ProcessMaster::resolveChannelMessage(
     Channel channel, const WaitingReader& reader, const WaitingWriter& writer) {
   forwardOutput(channel, reader, writer);
   outputDone(channel, writer.id);
-}
-
-size_t ProcessMaster::ChannelHasher::operator()(const Channel& channel) const {
-  return channel.owner ^ channel.address;
 }

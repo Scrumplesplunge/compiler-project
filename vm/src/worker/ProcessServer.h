@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../channel_info.h"
 #include "../network.h"
 #include "Instance.h"
 #include "PartialProcessTree.h"
@@ -46,6 +47,13 @@ class ProcessServer {
   void onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
 
+  void onChannelInput(MESSAGE(CHANNEL_IN)&& message);
+  void onChannelOutput(MESSAGE(CHANNEL_OUT)&& message);
+  void onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message);
+  void onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message);
+  void onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message);
+  void onChannelReset(MESSAGE(CHANNEL_RESET)&& message);
+
   void onPing(MESSAGE(PING)&& message);
 
   worker_id id_;
@@ -73,6 +81,9 @@ class ProcessServer {
   std::mutex exit_mu_;  // Guards unjoined_exits_ and on_exited_.
   std::unordered_set<instance_id> unjoined_exits_;
   std::unordered_map<instance_id, WaitingProcess> on_exited_;
+
+  // Info about active channels.
+  ChannelInfo channels_;
 
   Messenger messenger_;
 };
