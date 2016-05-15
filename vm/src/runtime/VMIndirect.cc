@@ -293,10 +293,18 @@ void VM::channel_DISC() {
 
   // A channel guard is detectably ready if the value stored in the channel does
   // not match the current workspace descriptor.
-  if (read(Wptr) == NoneSelected && is_ready) {
-    write(Wptr, A);
-    A = True;
+  if (is_ready) {
+    if (read(Wptr) == NoneSelected) {
+      // Channel is the first ready guard.
+      write(Wptr, A);
+      A = True;
+    } else {
+      // Another guard was ready before this one.
+      A = False;
+    }
   } else {
+    // The channel is not ready. Restore it to its default value.
+    write(C, NotProcess);
     A = False;
   }
 }
@@ -308,13 +316,12 @@ void VM::channel_ENBC() {
 
   bool is_ready = (read(B) != makeWdesc(Wptr));
 
-  if (read(B) == NotProcess) {
-    // No process waiting on channel B.
-    write(B, makeWdesc(Wptr));
-  } else if (is_ready) {
+  if (is_ready) {
     // Another process is waiting on channel B.
     write(Wptr - 12, Ready);
-    B = C;
+  } else {
+    // No process waiting on channel B.
+    write(B, makeWdesc(Wptr));
   }
 }
 
