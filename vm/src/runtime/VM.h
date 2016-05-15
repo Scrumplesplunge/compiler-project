@@ -8,27 +8,6 @@
 #include <stdint.h>
 #include <unordered_map>
 
-#define DECLARE_DIRECT(name)   void perform_##name()
-#define DECLARE_INDIRECT(name) void perform_##name()
-#define DECLARE_UNIT(name)     void perform_##name()
-
-#define DEFINE_DIRECT(name)   void VM::perform_##name()
-#define DEFINE_INDIRECT(name) void VM::perform_##name()
-#define DEFINE_UNIT(name)     void VM::perform_##name()
-
-#define DIRECT(name)   perform_##name()
-#define INDIRECT(name) perform_##name()
-#define UNIT(name)     perform_##name()
-
-#define UNIMPLEMENTED(description) {                                  \
-  throw std::runtime_error(                                           \
-      "Unimplemented operation: " + std::string(description));        \
-}
-#define UNIMPLEMENTED_FP {  \
-  throw std::runtime_error(  \
-      "No floating point support is provided.");  \
-}
-
 // COMPILE OPTIONS:
 // DISABLE_BOUND_CHECKS - If defined, bound checks for the instruction memory
 //                        and program memory will not be performed. This
@@ -132,32 +111,34 @@ class VM {
   int32_t dequeueProcess(std::unique_lock<std::mutex>& lock);
 
   // Direct operations.
-  DECLARE_DIRECT(ADC);  DECLARE_DIRECT(AJW);   DECLARE_DIRECT(CALL);
-  DECLARE_DIRECT(CJ);   DECLARE_DIRECT(EQC);   DECLARE_DIRECT(J);
-  DECLARE_DIRECT(LDC);  DECLARE_DIRECT(LDL);   DECLARE_DIRECT(LDLP);
-  DECLARE_DIRECT(LDNL); DECLARE_DIRECT(LDNLP); DECLARE_DIRECT(NFIX);
-  DECLARE_DIRECT(OPR);  DECLARE_DIRECT(PFIX);  DECLARE_DIRECT(STL);
-  DECLARE_DIRECT(STNL);
+  #define DIRECT(type) void direct_##type()
+  DIRECT(ADC);   DIRECT(AJW);   DIRECT(CALL);  DIRECT(CJ);
+  DIRECT(EQC);   DIRECT(J);     DIRECT(LDC);   DIRECT(LDL);
+  DIRECT(LDLP);  DIRECT(LDNL);  DIRECT(LDNLP); DIRECT(NFIX);
+  DIRECT(OPR);   DIRECT(PFIX);  DIRECT(STL);   DIRECT(STNL);
+  #undef DIRECT
 
-  // Utilised operations. These are the ones which the compiler generates.
-  DECLARE_INDIRECT(ADD);   DECLARE_INDIRECT(ALT);     DECLARE_INDIRECT(ALTEND);
-  DECLARE_INDIRECT(ALTWT); DECLARE_INDIRECT(AND);     DECLARE_INDIRECT(DIFF);
-  DECLARE_INDIRECT(DISC);  DECLARE_INDIRECT(DISS);    DECLARE_INDIRECT(DIV);
-  DECLARE_INDIRECT(DUP);   DECLARE_INDIRECT(ENBC);    DECLARE_INDIRECT(ENBS);
-  DECLARE_INDIRECT(ENDP);  DECLARE_INDIRECT(GT);      DECLARE_INDIRECT(IN);
-  DECLARE_INDIRECT(LB);    DECLARE_INDIRECT(LDPI);    DECLARE_INDIRECT(LEND);
-  DECLARE_INDIRECT(MINT);  DECLARE_INDIRECT(MUL);     DECLARE_INDIRECT(NOT);
-  DECLARE_INDIRECT(OR);    DECLARE_INDIRECT(OUT);     DECLARE_INDIRECT(OUTWORD);
-  DECLARE_INDIRECT(REM);   DECLARE_INDIRECT(RESETCH); DECLARE_INDIRECT(RET);
-  DECLARE_INDIRECT(REV);   DECLARE_INDIRECT(RUNP);    DECLARE_INDIRECT(SB);
-  DECLARE_INDIRECT(SHL);   DECLARE_INDIRECT(SHR);     DECLARE_INDIRECT(STARTP);
-  DECLARE_INDIRECT(STOPP); DECLARE_INDIRECT(SUB);     DECLARE_INDIRECT(WSUB);
-  DECLARE_INDIRECT(XOR);
+  // Indirect operations.
+  #define INDIRECT(type) void indirect_##type();
+  // Standard operations.
+  INDIRECT(ADD);    INDIRECT(ALT);  INDIRECT(ALTEND);   INDIRECT(ALTWT); 
+  INDIRECT(AND);    INDIRECT(DIFF); INDIRECT(DISS);     INDIRECT(DIV);
+  INDIRECT(DUP);    INDIRECT(ENBS); INDIRECT(ENDP);     INDIRECT(GT);
+  INDIRECT(LB);     INDIRECT(LDPI); INDIRECT(LEND);     INDIRECT(MINT);
+  INDIRECT(MUL);    INDIRECT(NOT);  INDIRECT(OR);       INDIRECT(OUTWORD);
+  INDIRECT(REM);    INDIRECT(RET);  INDIRECT(REV);      INDIRECT(RUNP);
+  INDIRECT(SB);     INDIRECT(SHL);  INDIRECT(SHR);      INDIRECT(STARTP);
+  INDIRECT(STOPP);  INDIRECT(SUB);  INDIRECT(WSUB);     INDIRECT(XOR);
 
-  // Meta operations. These are intended for debugging only.
-  DECLARE_INDIRECT(PUTC);     DECLARE_INDIRECT(PUTS);
-  DECLARE_INDIRECT(PRINTDEC); DECLARE_INDIRECT(PRINTHEX);
-  DECLARE_INDIRECT(PRINTR);
+  // Debugging operations.
+  INDIRECT(PUTC);   INDIRECT(PUTS); INDIRECT(PRINTDEC); INDIRECT(PRINTHEX);
+  INDIRECT(PRINTR);
+  #undef INDIRECT
+
+  // Channel operations are overridable.
+  #define CHANOP(type) virtual void channel_##type()
+  CHANOP(DISC); CHANOP(ENBC); CHANOP(IN); CHANOP(OUT); CHANOP(RESETCH);
+  #undef CHANOP
 
   // (Read-only) data.
   const int32_t* static_data_;

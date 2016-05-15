@@ -183,22 +183,12 @@ void VM::performDirect(Direct op, int32_t argument) {
   Oreg |= argument;
   switch (op) {
     // See VMDirect.cc
-    case ADC:   DIRECT(ADC);   break;
-    case AJW:   DIRECT(AJW);   break;
-    case CALL:  DIRECT(CALL);  break;
-    case CJ:    DIRECT(CJ);    break;
-    case EQC:   DIRECT(EQC);   break;
-    case J:     DIRECT(J);     break;
-    case LDC:   DIRECT(LDC);   break;
-    case LDL:   DIRECT(LDL);   break;
-    case LDLP:  DIRECT(LDLP);  break;
-    case LDNL:  DIRECT(LDNL);  break;
-    case LDNLP: DIRECT(LDNLP); break;
-    case NFIX:  DIRECT(NFIX);  break;
-    case OPR:   DIRECT(OPR);   break;
-    case PFIX:  DIRECT(PFIX);  break;
-    case STL:   DIRECT(STL);   break;
-    case STNL:  DIRECT(STNL);  break;
+    #define DIRECT(type) case type: direct_##type(); break
+    DIRECT(ADC);  DIRECT(AJW);  DIRECT(CALL);  DIRECT(CJ);
+    DIRECT(EQC);  DIRECT(J);    DIRECT(LDC);   DIRECT(LDL);
+    DIRECT(LDLP); DIRECT(LDNL); DIRECT(LDNLP); DIRECT(NFIX);
+    DIRECT(OPR);  DIRECT(PFIX); DIRECT(STL);   DIRECT(STNL);
+    #undef DIRECT
     default:
       // This should be unreachable.
       throw logic_error("Unrecognised direct instruction: " + ::toString(op) +
@@ -209,52 +199,26 @@ void VM::performDirect(Direct op, int32_t argument) {
 void VM::performIndirect(Indirect op) {
   switch (op) {
     // See VMIndirect.cc
-    case ADD:     INDIRECT(ADD);     break;
-    case ALT:     INDIRECT(ALT);     break;
-    case ALTEND:  INDIRECT(ALTEND);  break;
-    case ALTWT:   INDIRECT(ALTWT);   break;
-    case AND:     INDIRECT(AND);     break;
-    case DIFF:    INDIRECT(DIFF);    break;
-    case DISC:    INDIRECT(DISC);    break;
-    case DISS:    INDIRECT(DISS);    break;
-    case DIV:     INDIRECT(DIV);     break;
-    case DUP:     INDIRECT(DUP);     break;
-    case ENBC:    INDIRECT(ENBC);    break;
-    case ENBS:    INDIRECT(ENBS);    break;
-    case ENDP:    INDIRECT(ENDP);    break;
-    case GT:      INDIRECT(GT);      break;
-    case IN:      INDIRECT(IN);      break;
-    case LB:      INDIRECT(LB);      break;
-    case LDPI:    INDIRECT(LDPI);    break;
-    case LEND:    INDIRECT(LEND);    break;
-    case MINT:    INDIRECT(MINT);    break;
-    case MUL:     INDIRECT(MUL);     break;
-    case NOT:     INDIRECT(NOT);     break;
-    case OR:      INDIRECT(OR);      break;
-    case OUT:     INDIRECT(OUT);     break;
-    case OUTWORD: INDIRECT(OUTWORD); break;
-    case REM:     INDIRECT(REM);     break;
-    case RESETCH: INDIRECT(RESETCH); break;
-    case RET:     INDIRECT(RET);     break;
-    case REV:     INDIRECT(REV);     break;
-    case RUNP:    INDIRECT(RUNP);    break;
-    case SB:      INDIRECT(SB);      break;
-    case SHL:     INDIRECT(SHL);     break;
-    case SHR:     INDIRECT(SHR);     break;
-    case STARTP:  INDIRECT(STARTP);  break;
-    case STOPP:   INDIRECT(STOPP);   break;
-    case SUB:     INDIRECT(SUB);     break;
-    case WSUB:    INDIRECT(WSUB);    break;
-    case XOR:     INDIRECT(XOR);     break;
+    #define INDIRECT(type) case type: indirect_##type(); break
+    INDIRECT(ADD);   INDIRECT(ALT);  INDIRECT(ALTEND); INDIRECT(ALTWT);
+    INDIRECT(AND);   INDIRECT(DIFF); INDIRECT(DISS);   INDIRECT(DIV);
+    INDIRECT(DUP);   INDIRECT(ENBS); INDIRECT(ENDP);   INDIRECT(GT);
+    INDIRECT(LB);    INDIRECT(LDPI); INDIRECT(LEND);   INDIRECT(MINT);
+    INDIRECT(MUL);   INDIRECT(NOT);  INDIRECT(OR);     INDIRECT(OUTWORD);
+    INDIRECT(REM);   INDIRECT(RET);  INDIRECT(REV);    INDIRECT(RUNP);
+    INDIRECT(SB);    INDIRECT(SHL);  INDIRECT(SHR);    INDIRECT(STARTP);
+    INDIRECT(STOPP); INDIRECT(SUB);  INDIRECT(WSUB);   INDIRECT(XOR);
 
-    // META operations.
-    case PUTC:     INDIRECT(PUTC);     break;
-    case PUTS:     INDIRECT(PUTS);     break;
-    case PRINTDEC: INDIRECT(PRINTDEC); break;
-    case PRINTHEX: INDIRECT(PRINTHEX); break;
-    case PRINTR:   INDIRECT(PRINTR);   break;
+    // Debugging operations.
+    INDIRECT(PUTC); INDIRECT(PUTS); INDIRECT(PRINTDEC); INDIRECT(PRINTHEX);
+    INDIRECT(PRINTR);
+    #undef INDIRECT
 
+    #define CHANOP(type) case type: channel_##type(); break
+    CHANOP(DISC); CHANOP(ENBC); CHANOP(IN); CHANOP(OUT); CHANOP(RESETCH);
+    #undef CHANOP
     default:
+      // Additional instructions.
       runSpecialInstruction(op);
   }
 }

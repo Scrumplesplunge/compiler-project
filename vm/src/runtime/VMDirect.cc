@@ -3,20 +3,20 @@
 using namespace std;
 
 // Add constant.
-DEFINE_DIRECT(ADC) {
+void VM::direct_ADC() {
   A += Oreg;
   // TODO: Check for overflow.
   Oreg = 0;
 }
 
 // Adjust workspace.
-DEFINE_DIRECT(AJW) {
+void VM::direct_AJW() {
   Wptr += 4 * Oreg;
   Oreg = 0;
 }
 
 // Call subroutine.
-DEFINE_DIRECT(CALL) {
+void VM::direct_CALL() {
   Wptr -= 16;
   write(Wptr + 0, Iptr);
   write(Wptr + 4, A);
@@ -28,7 +28,7 @@ DEFINE_DIRECT(CALL) {
 }
 
 // Conditional jump.
-DEFINE_DIRECT(CJ) {
+void VM::direct_CJ() {
   if (A == 0) {
     Iptr += Oreg;
   } else {
@@ -39,13 +39,13 @@ DEFINE_DIRECT(CJ) {
 }
 
 // Equals constant.
-DEFINE_DIRECT(EQC) {
+void VM::direct_EQC() {
   A = (A == Oreg);
   Oreg = 0;
 }
 
 // Jump.
-DEFINE_DIRECT(J) {
+void VM::direct_J() {
   Iptr += Oreg;
   Oreg = 0;
 
@@ -54,7 +54,7 @@ DEFINE_DIRECT(J) {
 }
 
 // Load constant.
-DEFINE_DIRECT(LDC) {
+void VM::direct_LDC() {
   C = B;
   B = A;
   A = Oreg;
@@ -62,7 +62,7 @@ DEFINE_DIRECT(LDC) {
 }
 
 // Load local.
-DEFINE_DIRECT(LDL) {
+void VM::direct_LDL() {
   C = B;
   B = A;
   A = read(Wptr + 4 * Oreg);
@@ -70,7 +70,7 @@ DEFINE_DIRECT(LDL) {
 }
 
 // Load local pointer.
-DEFINE_DIRECT(LDLP) {
+void VM::direct_LDLP() {
   C = B;
   B = A;
   A = Wptr + 4 * Oreg;
@@ -78,35 +78,35 @@ DEFINE_DIRECT(LDLP) {
 }
 
 // Load non-local.
-DEFINE_DIRECT(LDNL) {
+void VM::direct_LDNL() {
   A = read(A + 4 * Oreg);
   Oreg = 0;
 }
 
 // Load non-local pointer.
-DEFINE_DIRECT(LDNLP) {
+void VM::direct_LDNLP() {
   A += 4 * Oreg;
   Oreg = 0;
 }
 
 // Negative prefix.
-DEFINE_DIRECT(NFIX) {
+void VM::direct_NFIX() {
   Oreg = (~Oreg) << 4;
 }
 
 // Operate.
-DEFINE_DIRECT(OPR) {
+void VM::direct_OPR() {
   performIndirect(static_cast<Indirect>(Oreg));
   Oreg = 0;
 }
 
 // Prefix.
-DEFINE_DIRECT(PFIX) {
+void VM::direct_PFIX() {
   Oreg <<= 4;
 }
 
 // Store local.
-DEFINE_DIRECT(STL) {
+void VM::direct_STL() {
   write(Wptr + 4 * Oreg, A);
   A = B;
   B = C;
@@ -114,7 +114,7 @@ DEFINE_DIRECT(STL) {
 }
 
 // Store non-local.
-DEFINE_DIRECT(STNL) {
+void VM::direct_STNL() {
   write(A + 4 * Oreg, B);
   A = C;
   Oreg = 0;
