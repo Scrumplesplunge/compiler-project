@@ -47,6 +47,12 @@ class ProcessServer {
   void onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
 
+  void resolveChannel(
+      Channel channel, WaitingReader reader, WaitingWriter writer);
+
+  void resolveEnabled(
+      Channel channel, WaitingReader reader, WaitingWriter writer);
+
   void onChannelInput(MESSAGE(CHANNEL_IN)&& message);
   void onChannelOutput(MESSAGE(CHANNEL_OUT)&& message);
   void onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message);
@@ -66,15 +72,10 @@ class ProcessServer {
 
   bool is_ready_;
 
-  int32_t data_start_, data_end_;
+  int32_t data_size_;
   std::unique_ptr<int32_t[]> data_;
 
   std::string bytecode_;
-
-  struct WaitingProcess {
-    instance_id id;
-    int32_t workspace_descriptor;
-  };
 
   // At most one process can wait for another to exit, and this should be its
   // parent.

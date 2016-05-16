@@ -24,21 +24,21 @@ ProcessServerHandle::ProcessServerHandle(
     : id_(id), master_(master), messenger_(move(socket)) {
   verr << "Configuring messenger channel..\n";
   messenger_.ON(REQUEST_INSTANCE,
-                bind(&ProcessMaster::onRequestInstance, &master_, _1));
+                bind(&ProcessMaster::onRequestInstance, &master_, id_, _1));
   messenger_.ON(INSTANCE_EXITED,
-                bind(&ProcessMaster::onInstanceExited, &master_, _1));
+                bind(&ProcessMaster::onInstanceExited, &master_, id_, _1));
   messenger_.ON(CHANNEL_IN,
-                bind(&ProcessMaster::onChannelInput, &master_, _1));
+                bind(&ProcessMaster::onChannelInput, &master_, id_, _1));
   messenger_.ON(CHANNEL_OUT,
-                bind(&ProcessMaster::onChannelOutput, &master_, _1));
+                bind(&ProcessMaster::onChannelOutput, &master_, id_, _1));
   messenger_.ON(CHANNEL_OUT_DONE,
-                bind(&ProcessMaster::onChannelOutputDone, &master_, _1));
+                bind(&ProcessMaster::onChannelOutputDone, &master_, id_, _1));
   messenger_.ON(CHANNEL_ENABLE,
-                bind(&ProcessMaster::onChannelEnable, &master_, _1));
+                bind(&ProcessMaster::onChannelEnable, &master_, id_, _1));
   messenger_.ON(CHANNEL_DISABLE,
-                bind(&ProcessMaster::onChannelDisable, &master_, _1));
+                bind(&ProcessMaster::onChannelDisable, &master_, id_, _1));
   messenger_.ON(CHANNEL_RESET,
-                bind(&ProcessMaster::onChannelReset, &master_, _1));
+                bind(&ProcessMaster::onChannelReset, &master_, id_, _1));
 
   messenger_.ON(PONG, bind(&ProcessServerHandle::onPong, this, _1));
 
@@ -52,8 +52,9 @@ ProcessServerHandle::ProcessServerHandle(
 }
 
 void ProcessServerHandle::startInstance(
-    instance_id id, InstanceDescriptor descriptor) {
+    instance_id id, InstanceDescriptor descriptor, Ancestry ancestry) {
   MESSAGE(START_INSTANCE) message;
+  message.ancestry = ancestry;
   message.descriptor = descriptor;
   message.id = id;
   send(message);
@@ -135,7 +136,8 @@ void ProcessMaster::serve() {
   worker_id root_worker = workers_.size() - 1;
   instance_id id = process_tree_.createRootInstance(
       InstanceInfo(root_worker, descriptor));
-  workers_[root_worker]->startInstance(id, descriptor);
+  workers_[root_worker]->startInstance(
+      id, descriptor, process_tree_.link(id, root_worker));
 
   verr << "Spawning root process on " << workers_[root_worker]->hostPort()
        << "..\n";
@@ -168,44 +170,54 @@ void ProcessMaster::serve() {
   }
 }
 
-void ProcessMaster::onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message) {
+void ProcessMaster::onRequestInstance(
+    worker_id worker, MESSAGE(REQUEST_INSTANCE)&& message) {
   // TODO: Decide more sensibly about where to start the next process.
-  worker_id worker = (next_worker_to_use_++) % workers_.size();;
+  worker_id new_worker = (next_worker_to_use_++) % workers_.size();;
 
   // Generate an instance ID.
-  instance_id id = process_tree_.createInstance(
-      InstanceInfo(worker, message.descriptor));
+  InstanceInfo info(new_worker, message.descriptor);
+  info.parent_id = message.parent_id;
+  instance_id id = process_tree_.createInstance(info);
 
   // Send the start message.
   verr << "Spawning instance " << id << " with parent " << message.parent_id
-       << " on worker " << worker << "..\n";
-  workers_[worker]->startInstance(id, message.descriptor);
+       << " on worker " << new_worker << "..\n";
+  workers_[new_worker]->startInstance(
+      id, message.descriptor, process_tree_.link(id, new_worker));
   
   // Send the instance ID to the parent.
-  worker_id parent_worker = process_tree_.info(message.parent_id).location;
-  workers_[parent_worker]->instanceStarted(
+  workers_[worker]->instanceStarted(
       id, message.parent_id, message.parent_workspace_descriptor);
 }
 
-void ProcessMaster::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
+void ProcessMaster::onInstanceExited(
+    worker_id worker, MESSAGE(INSTANCE_EXITED)&& message) {
   verr << "Instance " << message.id << " exited.\n";
   // Look up the parent instance ID.
   InstanceInfo info = process_tree_.info(message.id);
   process_tree_.endInstance(message.id);
   
   // If the instance had a parent, inform the corresponding worker.
-  if (info.id != info.parent_id) {
+  if (info.id == info.parent_id) {
+    verr << "Instance was a root.\n";
+  } else {
     InstanceInfo parent_info = process_tree_.info(info.parent_id);
+    verr << "Informing parent at " << parent_info.location << "..\n";;
     workers_[parent_info.location]->send(move(message));
   }
 }
 
-void ProcessMaster::onChannelInput(MESSAGE(CHANNEL_IN)&& message) {
+void ProcessMaster::onChannelInput(
+    worker_id worker, MESSAGE(CHANNEL_IN)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
   unique_lock<mutex> lock(channels_.mutex);
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker)
+    workers_[owner_worker]->send(message);
 
   WaitingReader reader;
   reader.id = message.actor;
@@ -215,19 +227,23 @@ void ProcessMaster::onChannelInput(MESSAGE(CHANNEL_IN)&& message) {
     WaitingWriter writer = move(channels_.writers.at(message.channel));
     channels_.writers.erase(message.channel);
 
-    resolveChannelMessage(message.channel, move(reader), move(writer));
+    forwardOutput(message.channel, reader, writer);
   } else {
     // Writer has not yet acted. Save the reader in the reader map.
     channels_.readers.emplace(message.channel, reader);
   }
 }
 
-void ProcessMaster::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
+void ProcessMaster::onChannelOutput(
+    worker_id worker, MESSAGE(CHANNEL_OUT)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
   unique_lock<mutex> lock(channels_.mutex);
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker)
+    workers_[owner_worker]->send(message);
 
   WaitingWriter writer;
   writer.id = message.actor;
@@ -239,7 +255,7 @@ void ProcessMaster::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
     WaitingReader reader = move(channels_.readers.at(message.channel));
     channels_.readers.erase(message.channel);
 
-    resolveChannelMessage(message.channel, move(reader), move(writer));
+    forwardOutput(message.channel, reader, writer);
   } else if (channels_.enabled.count(message.channel) > 0) {
     // Reader is enabled. Forward the output message.
     WaitingReader reader = channels_.enabled.at(message.channel);
@@ -252,24 +268,35 @@ void ProcessMaster::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
   }
 }
 
-void ProcessMaster::onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message) {
-  unique_lock<mutex> lock(channels_.mutex);
+void ProcessMaster::onChannelOutputDone(
+    worker_id worker, MESSAGE(CHANNEL_OUT_DONE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
+  {
+    unique_lock<mutex> lock(channels_.mutex);
+    channels_.enabled.erase(message.channel);
+    channels_.readers.erase(message.channel);
+    channels_.writers.erase(message.channel);
+  }
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker) workers_[owner_worker]->send(message);
 
-  worker_id writer_worker = process_tree_.info(message.actor).location;
-  if (owner_worker != writer_worker)
-    workers_[writer_worker]->send(message);
+  worker_id writer_worker = process_tree_.info(message.writer).location;
+  if (owner_worker != writer_worker) workers_[writer_worker]->send(message);
 }
 
-void ProcessMaster::onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
+void ProcessMaster::onChannelEnable(
+    worker_id worker, MESSAGE(CHANNEL_ENABLE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
   unique_lock<mutex> lock(channels_.mutex);
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker)
+    workers_[owner_worker]->send(message);
 
   WaitingReader reader;
   reader.id = message.actor;
@@ -284,12 +311,16 @@ void ProcessMaster::onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
   }
 }
 
-void ProcessMaster::onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
+void ProcessMaster::onChannelDisable(
+    worker_id worker, MESSAGE(CHANNEL_DISABLE)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
   unique_lock<mutex> lock(channels_.mutex);
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker)
+    workers_[owner_worker]->send(message);
 
   // Writer has not yet acted. Save in the enabled map. Nothing else is
   // necessary: if a write had happened prior to the enable, it would have been
@@ -298,12 +329,16 @@ void ProcessMaster::onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
   channels_.enabled.erase(message.channel);
 }
 
-void ProcessMaster::onChannelReset(MESSAGE(CHANNEL_RESET)&& message) {
+void ProcessMaster::onChannelReset(
+    worker_id worker, MESSAGE(CHANNEL_RESET)&& message) {
+  verr << ::toString(message.type) << " received.\n";
+
   unique_lock<mutex> lock(channels_.mutex);
 
   // Forward the message to the owning worker.
   worker_id owner_worker = process_tree_.info(message.channel.owner).location;
-  workers_[owner_worker]->send(message);
+  if (worker != owner_worker)
+    workers_[owner_worker]->send(message);
 
   // Clear any fields related to this channel.
   channels_.enabled.erase(message.channel);
@@ -322,19 +357,4 @@ void ProcessMaster::forwardOutput(
   response.data = move(writer.data);
 
   workers_[reader_worker]->send(response);
-}
-
-void ProcessMaster::outputDone(Channel channel, instance_id writer) {
-  worker_id writer_worker = process_tree_.info(writer).location;
-
-  // Wake up the writer.
-  MESSAGE(CHANNEL_OUT_DONE) done;
-  done.channel = channel;
-  workers_[writer_worker]->send(done);
-}
-
-void ProcessMaster::resolveChannelMessage(
-    Channel channel, const WaitingReader& reader, const WaitingWriter& writer) {
-  forwardOutput(channel, reader, writer);
-  outputDone(channel, writer.id);
 }

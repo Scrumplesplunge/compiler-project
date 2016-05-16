@@ -27,7 +27,8 @@ class ProcessServerHandle {
       ProcessMaster& master, worker_id id, Socket&& socket, std::string data,
       std::string bytecode);
 
-  void startInstance(instance_id id, InstanceDescriptor descriptor);
+  void startInstance(
+      instance_id id, InstanceDescriptor descriptor, Ancestry ancestry);
   void instanceStarted(instance_id id, instance_id parent_id,
                        int32_t parent_workspace_descriptor);
 
@@ -70,22 +71,18 @@ class ProcessMaster {
  private:
   friend class ProcessServerHandle;
 
-  void onRequestInstance(MESSAGE(REQUEST_INSTANCE)&& message);
-  void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
-  void onChannelInput(MESSAGE(CHANNEL_IN)&& message);
-  void onChannelOutput(MESSAGE(CHANNEL_OUT)&& message);
-  void onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message);
-  void onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message);
-  void onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message);
-  void onChannelReset(MESSAGE(CHANNEL_RESET)&& message);
+  void onRequestInstance(worker_id worker, MESSAGE(REQUEST_INSTANCE)&& message);
+  void onInstanceExited(worker_id worker, MESSAGE(INSTANCE_EXITED)&& message);
+  void onChannelInput(worker_id worker, MESSAGE(CHANNEL_IN)&& message);
+  void onChannelOutput(worker_id worker, MESSAGE(CHANNEL_OUT)&& message);
+  void onChannelOutputDone(
+      worker_id worker, MESSAGE(CHANNEL_OUT_DONE)&& message);
+  void onChannelEnable(worker_id worker, MESSAGE(CHANNEL_ENABLE)&& message);
+  void onChannelDisable(worker_id worker, MESSAGE(CHANNEL_DISABLE)&& message);
+  void onChannelReset(worker_id worker, MESSAGE(CHANNEL_RESET)&& message);
 
   void forwardOutput(Channel channel, const WaitingReader& reader,
                      const WaitingWriter& writer);
-
-  void outputDone(Channel channel, instance_id writer);
-
-  void resolveChannelMessage(Channel channel, const WaitingReader& reader,
-                             const WaitingWriter& writer);
 
   // Job info.
   const std::string job_name_;

@@ -705,7 +705,7 @@ gen_dist_par rp =
               else do
                 -- Allocate handles.
                 let num_handles = n - 1
-                let space_required = 3 + num_handles
+                let space_required = 4 + num_handles
                 let ctx' = allocate ctx "$" space_required
                 setup_loop <- label "SETUP_LOOP"
                 setup_loop_end <- label "SETUP_LOOP_END"
@@ -713,39 +713,51 @@ gen_dist_par rp =
                 shutdown_loop_end <- label "SHUTDOWN_LOOP_END"
                 remote_stub <- label "REMOTE_STUB"
                 proc <- label "PROC"
+                next <- label "NEXT"
 
                 -- Generate the code.
                 ca <- ga ctx'
 
-                let ctx'' = allocate ctx' i 5
-                cp <- gp ctx''
+                let ctx'' = allocate ctx' i 1
+                let ctx''' = allocate ctx'' "$call" 4
+                cp <- gp ctx'''
                 return $ Code [desc, Raw [AJW (-space_required)],
                                comment "Set up the loop.", ca,
-                               Raw [DUP, STL 3, ADC 1, STL 1, LDC num_handles,
-                                    STL 2],
+                               -- 1 -> channel, 2 -> i, 3 -> num iterations,
+                               -- 4 -> first i
+                               Raw [DUP, STL 4, ADC 1, STL 2, LDC num_handles,
+                                    STL 3, LDLP 1, RESETCH],
                                Label setup_loop,
                                comment ("Spawn remote process " ++ i ++ "."),
                                Raw [COMMENT ("Spawn instance " ++ i ++ "."),
-                                    LDL 2, LDLP 2, WSUB,
+                                    -- handle[count]
+                                    LDL 3, LDLP 4, WSUB,
+                                    -- Pause space, call, i, depth.
                                     LDC (6 + 5 + depth_required pp),
-                                    STARTI remote_stub, LDLP 1,
+                                    STARTI remote_stub,
                                     COMMENT ("Send " ++ i ++ "."),
-                                    LDLP 3, LDC 2, OUTWORD,
-                                    LDLP 1, LEND setup_loop setup_loop_end],
+                                    -- channel ! i
+                                    LDLP 1, LDL 2, OUTWORD,
+                                    LDLP 2, LEND setup_loop setup_loop_end],
+                               Label setup_loop_end,
+                               Raw [J next],
                                Label remote_stub,
-                               Raw [AJW (-1), LDLP 1, IN 4, CALL proc, STOPP],
+                               -- channel ? local i
+                               Raw [AJW (-1), LDLP 1, LDLP 2, IN 4, CALL proc,
+                                    STOPP],
                                Label proc,
                                cp, Raw [RET],
-                               Label setup_loop_end,
+                               Label next,
                                comment ("Run the local process."),
-                               Raw [AJW (-1), LDL 4, STL 1, CALL proc, AJW 1],
+                               Raw [AJW (-1), LDL 5, STL 1, CALL proc, AJW 1],
                                comment "Wait for instances to finish.",
                                Raw [LDC 1, STL 1, LDC num_handles, STL 2],
                                Label shutdown_loop,
                                Raw [COMMENT ("Wait for instance " ++ i ++ "."),
-                                    LDL 1, LDLP 2, WSUB, LDNLP 0, JOINI, LDLP 1,
+                                    LDL 1, LDLP 4, WSUB, LDNL 0, JOINI, LDLP 1,
                                     LEND shutdown_loop shutdown_loop_end],
-                               Label shutdown_loop_end]
+                               Label shutdown_loop_end,
+                               Raw [AJW space_required]]
   where desc = comment $ prettyPrint (DistPar rp)
 
 -- Generate code for a sequence.

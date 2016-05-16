@@ -52,6 +52,7 @@ Ancestry ProcessTree::link(instance_id id, worker_id worker) {
   unique_lock<mutex> lock(mu_);
 
   Ancestry out;
+  out.subject = id;
 
   // Find the instance.
   auto i = instances_.find(id);
@@ -61,14 +62,14 @@ Ancestry ProcessTree::link(instance_id id, worker_id worker) {
 
   // Until either a root node is reached, or until the worker is discovered in
   // the ancestry if the instance, keep appending parents.
-  while (info->id != info->parent_id &&
-         info->location != worker) {
+  do {
     i = instances_.find(info->parent_id);
     if (i == instances_.end())
       throw logic_error("Instance is orphaned or does not exist.");
     info = &i->second->info;
+
     out.contents.push_front(*info);
-  }
+  } while (info->id != info->parent_id && info->location != worker);
 
   return out;
 }

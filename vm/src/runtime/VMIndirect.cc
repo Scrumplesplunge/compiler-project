@@ -13,25 +13,6 @@ void VM::indirect_ADD() {
   // TODO: Check for overflow.
 }
 
-// Alt start.
-void VM::indirect_ALT() {
-  write(Wptr - 12, Enabling);
-}
-
-// Alt end.
-void VM::indirect_ALTEND() {
-  Iptr += read(Wptr);
-}
-
-// Alt wait.
-void VM::indirect_ALTWT() {
-  write(Wptr, NoneSelected);  // Indicate that no branch yet selected.
-  if (read(Wptr - 12) != Ready) {
-    unique_lock<mutex> lock(queue_mu_);
-    deschedule(lock);
-  }
-}
-
 // Bitwise and.
 void VM::indirect_AND() {
   A = A & B;
@@ -151,7 +132,7 @@ void VM::indirect_OUTWORD() {
   A = 4;
   C = Wptr;
 
-  channel_OUT();
+  indirect_OUT();
 }
 
 // Remainder.
@@ -166,10 +147,10 @@ void VM::indirect_REM() {
 
 // Return from subroutine.
 void VM::indirect_RET() {
-  Iptr = read(Wptr + 0);
-  A = read(Wptr + 4);
-  B = read(Wptr + 8);
-  C = read(Wptr + 12);
+  Iptr = read(Wptr + 4);
+  A = read(Wptr + 8);
+  B = read(Wptr + 12);
+  C = read(Wptr + 16);
   Wptr += 16;
 }
 
@@ -279,10 +260,29 @@ void VM::indirect_PRINTR() {
   A = C;
 }
 
-// (BASE) CHANNEL OPERATIONS:
+// VIRTUAL OPERATIONS.
+
+// Alt start.
+void VM::indirect_ALT() {
+  write(Wptr - 12, Enabling);
+}
+
+// Alt end.
+void VM::indirect_ALTEND() {
+  Iptr += read(Wptr);
+}
+
+// Alt wait.
+void VM::indirect_ALTWT() {
+  write(Wptr, NoneSelected);  // Indicate that no branch yet selected.
+  if (read(Wptr - 12) != Ready) {
+    unique_lock<mutex> lock(queue_mu_);
+    deschedule(lock);
+  }
+}
 
 // Disable channel.
-void VM::channel_DISC() {
+void VM::indirect_DISC() {
   // Skip processing if the guard condition is false.
   if (!B) {
     A = False;
@@ -310,7 +310,7 @@ void VM::channel_DISC() {
 }
 
 // Enable channel.
-void VM::channel_ENBC() {
+void VM::indirect_ENBC() {
   // Skip processing if the guard is false.
   if (!A) return;
 
@@ -326,7 +326,7 @@ void VM::channel_ENBC() {
 }
 
 // Input message.
-void VM::channel_IN() {
+void VM::indirect_IN() {
   int32_t chan_value = read(B);
   if (chan_value == NotProcess) {
     // No process is currently waiting on this channel. Initiate
@@ -355,7 +355,7 @@ void VM::channel_IN() {
 }
 
 // Output message.
-void VM::channel_OUT() {
+void VM::indirect_OUT() {
   int32_t chan_value = read(B);
   if (chan_value == NotProcess) {
     // No process is currently waiting on this channel. Initiate
@@ -396,6 +396,6 @@ void VM::channel_OUT() {
 }
 
 // Reset channel.
-void VM::channel_RESETCH() {
+void VM::indirect_RESETCH() {
   write(A, NotProcess);
 }

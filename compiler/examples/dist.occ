@@ -1,11 +1,19 @@
-DEF message = "Hello, World!" :
+DEF num.instances = 2 :
+DEF message = "I am process " :
+DEF message.length = 13 :
 
 -- Built in.
 PROC putc(VALUE c) =
   SKIP
 :
+PROC print.dec(VALUE i) =
+  SKIP
+:
 
 -- Run the two processes on separate instances.
-DIST PAR i = [0 FOR 13]
-  putc(message[BYTE i])
-
+DIST PAR i = [1 FOR num.instances]
+  SEQ
+    SEQ j = [0 FOR message.length]
+      putc(message[BYTE j])
+    print.dec(i)
+    putc('*N')

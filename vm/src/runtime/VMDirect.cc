@@ -18,10 +18,10 @@ void VM::direct_AJW() {
 // Call subroutine.
 void VM::direct_CALL() {
   Wptr -= 16;
-  write(Wptr + 0, Iptr);
-  write(Wptr + 4, A);
-  write(Wptr + 8, B);
-  write(Wptr + 12, C);
+  write(Wptr + 4,  Iptr);
+  write(Wptr + 8,  A);
+  write(Wptr + 12, B);
+  write(Wptr + 16, C);
   A = Iptr;
   Iptr += Oreg;
   Oreg = 0;

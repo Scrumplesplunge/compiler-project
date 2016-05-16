@@ -24,11 +24,23 @@ class Instance : public VM {
   void onEmptyProcessQueue(std::unique_lock<std::mutex>& lock) override;
 
   void wake(int32_t workspace_descriptor);
+  void altWake(Channel channel);
+  void channelInputDone(Channel channel, std::string&& data);
+  void channelOutputDone(Channel channel);
+
   void startInstance();
   void joinInstance();
 
+  #define VIRTUAL(type) void indirect_##type() override
+  VIRTUAL(ALT);  VIRTUAL(ALTEND); VIRTUAL(ALTWT); VIRTUAL(DISC);
+  VIRTUAL(ENBC); VIRTUAL(IN);     VIRTUAL(OUT);   VIRTUAL(RESETCH);
+  #undef VIRTUAL
+
  private:
   std::condition_variable on_wake_;
+
+  // These are protected by queue_mu_.
+  bool alt_sleep = false;
   int32_t waiting_processes_ = 0;
 
   instance_id id_;

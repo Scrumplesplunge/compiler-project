@@ -1,5 +1,7 @@
 #include "network.h"
 
+using namespace std;
+
 // InstanceDescriptor
 
 template <>
@@ -245,8 +247,15 @@ WRITER(CHANNEL_OUT) {
 
 DEFINE_MESSAGE(CHANNEL_OUT_DONE);
 
-READER(CHANNEL_OUT_DONE) { read<ChannelEvent>(message); }
-WRITER(CHANNEL_OUT_DONE) { write<ChannelEvent>(message); }
+READER(CHANNEL_OUT_DONE) {
+  read<ChannelEvent>(message);
+  message->writer = readVarUint();
+}
+
+WRITER(CHANNEL_OUT_DONE) {
+  write<ChannelEvent>(message);
+  writeVarUint(message.writer);
+}
 
 // CHANNEL_ENABLE
 

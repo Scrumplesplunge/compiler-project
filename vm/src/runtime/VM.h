@@ -121,7 +121,7 @@ class VM {
   // Indirect operations.
   #define INDIRECT(type) void indirect_##type();
   // Standard operations.
-  INDIRECT(ADD);    INDIRECT(ALT);  INDIRECT(ALTEND);   INDIRECT(ALTWT); 
+  INDIRECT(ADD);
   INDIRECT(AND);    INDIRECT(DIFF); INDIRECT(DISS);     INDIRECT(DIV);
   INDIRECT(DUP);    INDIRECT(ENBS); INDIRECT(ENDP);     INDIRECT(GT);
   INDIRECT(LB);     INDIRECT(LDPI); INDIRECT(LEND);     INDIRECT(MINT);
@@ -135,10 +135,11 @@ class VM {
   INDIRECT(PRINTR);
   #undef INDIRECT
 
-  // Channel operations are overridable.
-  #define CHANOP(type) virtual void channel_##type()
-  CHANOP(DISC); CHANOP(ENBC); CHANOP(IN); CHANOP(OUT); CHANOP(RESETCH);
-  #undef CHANOP
+  // Some indirect operations need to be overridable.
+  #define VIRTUAL(type) virtual void indirect_##type()
+  VIRTUAL(ALT);  VIRTUAL(ALTEND); VIRTUAL(ALTWT);  VIRTUAL(DISC);
+  VIRTUAL(ENBC); VIRTUAL(IN);     VIRTUAL(OUT);    VIRTUAL(RESETCH);
+  #undef VIRTUAL
 
   // (Read-only) data.
   const int32_t* static_data_;

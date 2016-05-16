@@ -16,18 +16,18 @@ class PartialProcessTree {
   // Access information stored in the tree.
   InstanceInfo info(instance_id id);
 
-  // Import the heirarchy specified by the given ancestry. These will be
-  // discarded as soon as they are no longer referenced by a local instance.
-  // It is expected that if there is an instance in the ancestry list, then the
-  // first is either a root instance or an instance running on this
-  // ProcessServer.
-  void import(const Ancestry& ancestry);
-
-  // Add a local instance. These will not be automatically discarded.
-  void addLocalInstance(InstanceInfo info);
+  // Add a local instance and import the heirarchy specified by the given
+  // ancestry. These will be discarded as soon as they are no longer referenced
+  // by a local instance.  It is expected that if there is an instance in the
+  // ancestry list, then the first is either a root instance or an instance
+  // running on this ProcessServer.
+  void addLocalInstance(InstanceInfo info, const Ancestry& ancestry);
 
   // Remove a local instance.
   void removeLocalInstance(instance_id id);
+
+  // Compute the owning instance of a channel.
+  Channel channel(instance_id actor, int32_t channel_address);
 
  private:
   struct InstanceInfoNode {

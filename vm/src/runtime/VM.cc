@@ -47,9 +47,9 @@ void VM::run() {
       #warning "Will not check that instruction pointer stays within code."
     #else
       if (Iptr < 0)
-        throw runtime_error("Error: Iptr outside code (negative).");
+        throw runtime_error("Error: Iptr outside code: " + to_string(Iptr));
       if (bytecode_size_ <= Iptr)
-        throw runtime_error("Error: Iptr outside code (positive).");
+        throw runtime_error("Error: Iptr outside code: " + to_string(Iptr));
     #endif
 
     int8_t code = fetch();
@@ -106,7 +106,7 @@ int32_t& VM::operator[](int32_t address) {
     if (address < memory_start_) {
       throw runtime_error(
           "Address " + addressString(address) + " < " +
-          addressString(memory_start_));
+          addressString(memory_start_) + "\n" + toString());
     } else if (address >= memory_end_) {
       throw runtime_error(
           "Address " + addressString(address) + " >= " +
@@ -200,22 +200,23 @@ void VM::performIndirect(Indirect op) {
   switch (op) {
     // See VMIndirect.cc
     #define INDIRECT(type) case type: indirect_##type(); break
-    INDIRECT(ADD);   INDIRECT(ALT);  INDIRECT(ALTEND); INDIRECT(ALTWT);
-    INDIRECT(AND);   INDIRECT(DIFF); INDIRECT(DISS);   INDIRECT(DIV);
-    INDIRECT(DUP);   INDIRECT(ENBS); INDIRECT(ENDP);   INDIRECT(GT);
-    INDIRECT(LB);    INDIRECT(LDPI); INDIRECT(LEND);   INDIRECT(MINT);
-    INDIRECT(MUL);   INDIRECT(NOT);  INDIRECT(OR);     INDIRECT(OUTWORD);
-    INDIRECT(REM);   INDIRECT(RET);  INDIRECT(REV);    INDIRECT(RUNP);
-    INDIRECT(SB);    INDIRECT(SHL);  INDIRECT(SHR);    INDIRECT(STARTP);
-    INDIRECT(STOPP); INDIRECT(SUB);  INDIRECT(WSUB);   INDIRECT(XOR);
+    INDIRECT(ADD);     INDIRECT(AND);   INDIRECT(DIFF); INDIRECT(DISS);
+    INDIRECT(DIV);     INDIRECT(DUP);   INDIRECT(ENBS); INDIRECT(ENDP);
+    INDIRECT(GT);      INDIRECT(LB);    INDIRECT(LDPI); INDIRECT(LEND);
+    INDIRECT(MINT);    INDIRECT(MUL);   INDIRECT(NOT);  INDIRECT(OR);
+    INDIRECT(OUTWORD); INDIRECT(REM);   INDIRECT(RET);  INDIRECT(REV);
+    INDIRECT(RUNP);    INDIRECT(SB);    INDIRECT(SHL);  INDIRECT(SHR);
+    INDIRECT(STARTP);  INDIRECT(STOPP); INDIRECT(SUB);  INDIRECT(WSUB);
+    INDIRECT(XOR);
 
     // Debugging operations.
     INDIRECT(PUTC); INDIRECT(PUTS); INDIRECT(PRINTDEC); INDIRECT(PRINTHEX);
     INDIRECT(PRINTR);
     #undef INDIRECT
 
-    #define CHANOP(type) case type: channel_##type(); break
-    CHANOP(DISC); CHANOP(ENBC); CHANOP(IN); CHANOP(OUT); CHANOP(RESETCH);
+    #define VIRTUAL(type) case type: indirect_##type(); break
+    VIRTUAL(ALT); VIRTUAL(ALTEND); VIRTUAL(ALTWT);
+    VIRTUAL(DISC); VIRTUAL(ENBC); VIRTUAL(IN); VIRTUAL(OUT); VIRTUAL(RESETCH);
     #undef CHANOP
     default:
       // Additional instructions.

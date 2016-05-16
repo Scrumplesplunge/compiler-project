@@ -13,9 +13,9 @@ typedef uint64_t worker_id;
 
 // Describes the initial configuration of an instance.
 struct InstanceDescriptor {
-  int32_t workspace_pointer;
-  int32_t instruction_pointer;
-  uint32_t bytes_needed;
+  int32_t workspace_pointer = 0;
+  int32_t instruction_pointer = 0;
+  uint32_t bytes_needed = 0;
 };
 
 template <> void BinaryReader::read(InstanceDescriptor* descriptor);
@@ -27,14 +27,14 @@ struct InstanceInfo {
   InstanceInfo(worker_id worker, const InstanceDescriptor& descriptor);
 
   // Tree information.
-  instance_id id, parent_id;
+  instance_id id = 0, parent_id = 0;
 
   // Location where this instance is hosted.
-  worker_id location;
+  worker_id location = 0;
 
   // Bounds of the memory associated with this instance. The start bound is
   // inclusive, and the end bound is exclusive.
-  int32_t memory_start, memory_end;
+  int32_t memory_start = 0, memory_end = 0;
 };
 
 template <> void BinaryReader::read(InstanceInfo* info);
@@ -48,7 +48,7 @@ void writeDelta(BinaryWriter* writer, const InstanceInfo& previous,
 // direct child of the one before it.
 struct Ancestry {
   // The instance whose ancestry this is.
-  instance_id subject;
+  instance_id subject = 0;
 
   // Ordered list of ancestors. Each element is a direct child of the previous
   // one, except for the first element. The instance identified by subject is
@@ -66,8 +66,8 @@ struct Channel {
     return owner == other.owner && address == other.address;
   }
 
-  instance_id owner;
-  int32_t address;
+  instance_id owner = 0;
+  int32_t address = 0;
 };
 
 template <> void BinaryReader::read(Channel* channel);
@@ -76,7 +76,7 @@ template <> void BinaryWriter::write(const Channel& channel);
 // Base class for channel events.
 struct ChannelEvent {
   Channel channel;
-  instance_id actor;
+  instance_id actor = 0;
 };
 
 template <> void BinaryReader::read(ChannelEvent* channel);
@@ -113,26 +113,26 @@ DECLARE_MESSAGE(START_PROCESS_SERVER) {
 };
 
 DECLARE_MESSAGE(REQUEST_INSTANCE) {
-  instance_id parent_id;
-  int32_t parent_workspace_descriptor;
+  instance_id parent_id = 0;
+  int32_t parent_workspace_descriptor = 0;
 
   InstanceDescriptor descriptor;
 };
 
 DECLARE_MESSAGE(START_INSTANCE) {
-  instance_id id;
+  instance_id id = 0;
 
   InstanceDescriptor descriptor;
   Ancestry ancestry;
 };
 
 DECLARE_MESSAGE(INSTANCE_STARTED) {
-  instance_id id, parent_id;
-  int32_t parent_workspace_descriptor;
+  instance_id id = 0, parent_id = 0;
+  int32_t parent_workspace_descriptor = 0;
 };
 
 DECLARE_MESSAGE(INSTANCE_EXITED) {
-  instance_id id;
+  instance_id id = 0;
 };
 
 DECLARE_MESSAGE(CHANNEL_IN), public ChannelEvent {};
@@ -141,7 +141,10 @@ DECLARE_MESSAGE(CHANNEL_OUT), public ChannelEvent {
   std::string data;
 };
 
-DECLARE_MESSAGE(CHANNEL_OUT_DONE), public ChannelEvent {};
+DECLARE_MESSAGE(CHANNEL_OUT_DONE), public ChannelEvent {
+  int32_t writer;
+};
+
 DECLARE_MESSAGE(CHANNEL_ENABLE), public ChannelEvent {};
 DECLARE_MESSAGE(CHANNEL_DISABLE), public ChannelEvent {};
 DECLARE_MESSAGE(CHANNEL_RESET), public ChannelEvent {};
