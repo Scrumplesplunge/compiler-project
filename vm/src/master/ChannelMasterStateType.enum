@@ -1,0 +1,12 @@
+# This is the enumeration of all possible states of a channel according to the
+# ChannelMaster.
+
+NORMAL  # Channel is not in use.
+
+ENABLED  # Channel is enabled by an alternative.
+READY  # Channel is enabled with a waiting writer.
+
+INPUT_WAIT  # Channel has a waiting reader.
+OUTPUT_WAIT  # Channel has a waiting writer.
+
+DONE_WAIT  # Channel has initiated the transaction and is waiting to complete.

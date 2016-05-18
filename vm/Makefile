@@ -29,6 +29,8 @@ VM_DEPS =  \
   ${ARGS} ${BINARY} ${JSON} ${OPERATIONS} ${VM}
 MASTER_DEPS =  \
   obj/util.o obj/runtime/metadata.o  \
+	$(addprefix gen/master/, ChannelMasterStateType.o)  \
+	$(addprefix obj/master/, ChannelMaster.o)  \
   $(addprefix obj/master/, config.o ProcessTree.o ProcessMaster.o)  \
   ${ARGS} ${JSON} ${BINARY} ${NETWORK} ${VM} ${OPERATIONS}
 WORKER_DEPS =  \

@@ -22,6 +22,19 @@ ProcessServer::ProcessServer(Socket&& socket)
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessServer::onInstanceExited, this, _1));
 
+  messenger_.ON(CHANNEL_INPUT,
+                bind(&ChannelServer::onInput, &channels_, _1));
+  messenger_.ON(CHANNEL_OUTPUT,
+                bind(&ChannelServer::onOutput, &channels_, _1));
+  messenger_.ON(CHANNEL_ENABLE,
+                bind(&ChannelServer::onEnable, &channels_, _1));
+  messenger_.ON(CHANNEL_DISABLE,
+                bind(&ChannelServer::onDisable, &channels_, _1));
+  messenger_.ON(CHANNEL_RESOLVED,
+                bind(&ChannelServer::onResolved, &channels_, _1));
+  messenger_.ON(CHANNEL_DONE,
+                bind(&ChannelServer::onDone, &channels_, _1));
+
   messenger_.ON(PING, bind(&ProcessServer::onPing, this, _1));
 }
 

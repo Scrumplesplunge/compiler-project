@@ -199,12 +199,13 @@ bool ChannelServer::disable(Channel channel) {
   }
 }
 
-void ChannelServer::remoteInput(Channel channel) {
+void ChannelServer::onInput(MESSAGE(CHANNEL_INPUT)&& message) {
   unique_lock<mutex> lock(mu_);
-  ChannelState& state = get(channel);
+  ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_INPUT on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
+  verr << ::toString(state.type) << " : REMOTE_INPUT on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -218,11 +219,11 @@ void ChannelServer::remoteInput(Channel channel) {
       state.type = DONE_WAIT;
       
       {
-        MESSAGE(CHANNEL_OUTPUT) message;
-        message.channel = channel;
-        message.data = state.writer.instance->exportBytes(
+        MESSAGE(CHANNEL_OUTPUT) forward;
+        forward.channel = message.channel;
+        forward.data = state.writer.instance->exportBytes(
             state.writer.source_address, state.writer.length);
-        server_.send(message);
+        server_.send(forward);
       }
 
       return;
@@ -231,35 +232,37 @@ void ChannelServer::remoteInput(Channel channel) {
   }
 }
 
-void ChannelServer::remoteOutput(Channel channel, std::string&& data) {
+void ChannelServer::onOutput(MESSAGE(CHANNEL_OUTPUT)&& message) {
   unique_lock<mutex> lock(mu_);
-  ChannelState& state = get(channel);
+  ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_OUTPUT on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
+  verr << ::toString(state.type) << " : REMOTE_OUTPUT on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
       // Remote output has arrived first.
       state.type = REMOTE_OUTPUT_WAIT;
-      state.writer = Writer(move(data));
+      state.writer = Writer(move(message.data));
 
       return;
     case LOCAL_INPUT_WAIT:
       // Reader is waiting.
       state.type = NORMAL;
 
-      if (static_cast<int32_t>(data.length()) != state.reader.length)
-        throw size_error(data.length(), state.reader.length);
+      if (static_cast<int32_t>(message.data.length()) != state.reader.length)
+        throw size_error(message.data.length(), state.reader.length);
 
       state.reader.instance->importBytes(
-          data.c_str(), state.reader.destination_address, state.reader.length);
+          message.data.c_str(), state.reader.destination_address,
+          state.reader.length);
       state.reader.instance->reschedule(state.reader.workspace_descriptor);
 
       {
-        MESSAGE(CHANNEL_DONE) message;
-        message.channel = channel;
-        server_.send(message);
+        MESSAGE(CHANNEL_DONE) done;
+        done.channel = message.channel;
+        server_.send(done);
       }
 
       return;
@@ -268,7 +271,7 @@ void ChannelServer::remoteOutput(Channel channel, std::string&& data) {
       state.type = LOCAL_READY;
       state.enabler.instance->altWake(state.enabler.workspace_descriptor);
 
-      state.writer = Writer(move(data));
+      state.writer = Writer(move(message.data));
 
       return;
     default:
@@ -276,12 +279,13 @@ void ChannelServer::remoteOutput(Channel channel, std::string&& data) {
   }
 }
 
-void ChannelServer::remoteEnable(Channel channel) {
+void ChannelServer::onEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
   unique_lock<mutex> lock(mu_);
-  ChannelState& state = get(channel);
+  ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_ENABLE on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
+  verr << ::toString(state.type) << " : REMOTE_ENABLE on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -295,11 +299,12 @@ void ChannelServer::remoteEnable(Channel channel) {
       state.enabler = Enabler();
 
       {
-        MESSAGE(CHANNEL_OUTPUT) message;
-        message.channel = channel;
-        message.data = state.writer.instance->exportBytes(
+        // Forward the output.
+        MESSAGE(CHANNEL_OUTPUT) forward;
+        forward.channel = message.channel;
+        forward.data = state.writer.instance->exportBytes(
             state.writer.source_address, state.writer.length);
-        server_.send(message);
+        server_.send(forward);
       }
 
       return;
@@ -308,12 +313,13 @@ void ChannelServer::remoteEnable(Channel channel) {
   }
 }
 
-void ChannelServer::remoteDisable(Channel channel) {
+void ChannelServer::onDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
   unique_lock<mutex> lock(mu_);
-  ChannelState& state = get(channel);
+  ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_DISABLE on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
+  verr << ::toString(state.type) << " : REMOTE_DISABLE on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case REMOTE_ENABLED:
@@ -329,6 +335,46 @@ void ChannelServer::remoteDisable(Channel channel) {
       return;
     default:
       throw unhandled_transition(state.type, REMOTE_DISABLE);
+  }
+}
+
+void ChannelServer::onResolved(MESSAGE(CHANNEL_RESOLVED)&& message) {
+  unique_lock<mutex> lock(mu_);
+  ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : RESOLVED on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
+
+  switch (state.type) {
+    case REMOTE_ENABLED:
+    case REMOTE_INPUT_WAIT:
+    case REMOTE_OUTPUT_WAIT:
+      // The communication has been resolved externally.
+      state.type = NORMAL;
+      return;
+    default:
+      throw unhandled_transition(state.type, RESOLVED);
+  }
+}
+
+void ChannelServer::onDone(MESSAGE(CHANNEL_DONE)&& message) {
+  unique_lock<mutex> lock(mu_);
+  ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : DONE on ("
+       << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
+
+  switch (state.type) {
+    case LOCAL_OUTPUT_WAIT:
+    case DONE_WAIT:
+      // Communication completed.
+      state.type = NORMAL;
+      state.writer.instance->reschedule(state.writer.workspace_descriptor);
+      return;
+    default:
+      throw unhandled_transition(state.type, DONE);
   }
 }
 

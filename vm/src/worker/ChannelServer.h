@@ -31,13 +31,13 @@ class ChannelServer {
   bool disable(Channel channel);
 
   // Called by ProcessServer for incoming messages.
-  void remoteInput(Channel channel);
-  void remoteOutput(Channel channel, std::string&& data);
-  void remoteEnable(Channel channel);
-  void remoteDisable(Channel channel);
+  void onInput(MESSAGE(CHANNEL_INPUT)&& message);
+  void onOutput(MESSAGE(CHANNEL_OUTPUT)&& message);
+  void onEnable(MESSAGE(CHANNEL_ENABLE)&& message);
+  void onDisable(MESSAGE(CHANNEL_DISABLE)&& message);
 
-  void onResolved(Channel channel);
-  void onDone(Channel channel);
+  void onResolved(MESSAGE(CHANNEL_RESOLVED)&& message);
+  void onDone(MESSAGE(CHANNEL_DONE)&& message);
 
  private:
   struct ChannelState;

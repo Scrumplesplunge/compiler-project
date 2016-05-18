@@ -28,6 +28,19 @@ ProcessServerHandle::ProcessServerHandle(
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessMaster::onInstanceExited, &master_, id_, _1));
 
+  messenger_.ON(CHANNEL_INPUT,
+                bind(&ChannelMaster::onInput, &master_.channels_, id_, _1));
+  messenger_.ON(CHANNEL_OUTPUT,
+                bind(&ChannelMaster::onOutput, &master_.channels_, id_, _1));
+  messenger_.ON(CHANNEL_ENABLE,
+                bind(&ChannelMaster::onEnable, &master_.channels_, id_, _1));
+  messenger_.ON(CHANNEL_DISABLE,
+                bind(&ChannelMaster::onDisable, &master_.channels_, id_, _1));
+  messenger_.ON(CHANNEL_RESOLVED,
+                bind(&ChannelMaster::onResolved, &master_.channels_, id_, _1));
+  messenger_.ON(CHANNEL_DONE,
+                bind(&ChannelMaster::onDone, &master_.channels_, id_, _1));
+
   messenger_.ON(PONG, bind(&ProcessServerHandle::onPong, this, _1));
 
   // Send the handshake message.
@@ -101,7 +114,8 @@ void ProcessServerHandle::onPong(MESSAGE(PONG)&& message) {
 ProcessMaster::ProcessMaster(const JobConfig& config)
     : job_name_(config.name), job_description_(config.description),
       bytecode_(getFileContents(config.bytecode_file)),
-      metadata_(loadMetaData(config.metadata_file)) {
+      metadata_(loadMetaData(config.metadata_file)),
+      channels_(*this) {
   // Connect to all the workers.
   for (const WorkerAddress& address : config.workers) {
     verr << "Connecting to " << address.host << ":" << address.port << "..\n";

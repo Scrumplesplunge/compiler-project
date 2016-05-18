@@ -25,7 +25,8 @@ echo "Constructing job file.."
   "bytecode_file" : "code.bin",
   "metadata_file" : "metadata.json",
   "workers" : [
-    {"host" : "localhost", "port" : 17994}
+    {"host" : "localhost", "port" : 17994},
+    {"host" : "localhost", "port" : 17995}
   ]
 }
 EOF

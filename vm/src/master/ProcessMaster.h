@@ -3,6 +3,7 @@
 #include "../network.h"
 #include "../runtime/metadata.h"
 #include "config.h"
+#include "ChannelMaster.h"
 #include "ProcessTree.h"
 
 #include <atomic>
@@ -41,15 +42,15 @@ class ProcessServerHandle {
 
   std::string hostPort() { return messenger_.hostPort(); }
 
- private:
-  friend class ProcessMaster;
-
-  void onPong(MESSAGE(PONG)&& message);
-
   template <typename T>
   void send(const T& message) {
     messenger_.send(message.type, message);
   }
+
+ private:
+  friend class ProcessMaster;
+
+  void onPong(MESSAGE(PONG)&& message);
 
   worker_id id_;
   ProcessMaster& master_;
@@ -68,6 +69,7 @@ class ProcessMaster {
   void serve();
 
  private:
+  friend class ChannelMaster;
   friend class ProcessServerHandle;
 
   void onRequestInstance(worker_id worker, MESSAGE(REQUEST_INSTANCE)&& message);
@@ -83,6 +85,9 @@ class ProcessMaster {
 
   // Running instances.
   ProcessTree process_tree_;
+
+  // Channel handling.
+  ChannelMaster channels_;
 
   // Running workers.
   std::atomic<worker_id> next_worker_to_use_{0};
