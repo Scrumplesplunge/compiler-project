@@ -75,12 +75,15 @@ void BinaryReader::readBytes(char buffer[], int64_t num_bytes) {
     throw read_error("Stream ended before block-read completed.");
 }
 
-string BinaryReader::readString() {
-  int64_t length = readVarUint();
-  unique_ptr<char[]> buffer(new char[length]);
-  if (input_.read(buffer.get(), length) != length)
+string BinaryReader::readBytes(int64_t num_bytes) {
+  unique_ptr<char[]> buffer(new char[num_bytes]);
+  if (input_.read(buffer.get(), num_bytes) != num_bytes)
     throw read_error("Stream ended before string read completed.");
-  return string(buffer.get(), length);
+  return string(buffer.get(), num_bytes);
+}
+
+string BinaryReader::readString() {
+  return readBytes(readVarUint());
 }
 
 template <> void BinaryReader::read(bool* value)     { *value = readBool(); }

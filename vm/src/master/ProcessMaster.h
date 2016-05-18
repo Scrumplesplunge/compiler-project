@@ -84,6 +84,7 @@ class ProcessMaster {
   const MetaData metadata_;
 
   // Running instances.
+  std::mutex process_mu_;
   ProcessTree process_tree_;
 
   // Channel handling.

@@ -44,6 +44,6 @@ class Instance : public VM {
   // These are protected by queue_mu_.
   int32_t waiting_processes_ = 0;
 
-  instance_id id_;
+  const instance_id id_;
   ProcessServer& server_;
 };

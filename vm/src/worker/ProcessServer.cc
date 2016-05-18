@@ -66,12 +66,11 @@ void ProcessServer::requestInstance(
 }
 
 void ProcessServer::notifyExited(instance_id id) {
-  verr << "Instance " << id << " exited.\n";
-
   // Remove the instance from the process tree.
   process_tree_.removeLocalInstance(id);
 
   // Send the exit notification.
+  verr << "OUTGOING: INSTANCE_EXITED(" << id << ").\n";
   MESSAGE(INSTANCE_EXITED) exit_message;
   exit_message.id = id;
   send(exit_message);
@@ -88,6 +87,8 @@ void ProcessServer::joinInstance(
   bool unjoined; 
   {
     unique_lock<mutex> exit_lock(exit_mu_);
+    verr << "Instance " << waiter_id << " joining instance " << join_id
+         << "..\n";
     unjoined = (unjoined_exits_.count(join_id) > 0);
     if (unjoined) {
       unjoined_exits_.erase(join_id);

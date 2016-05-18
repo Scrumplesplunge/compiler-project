@@ -1,5 +1,6 @@
 #include "ChannelMaster.h"
 
+#include "../util.h"
 #include "ProcessMaster.h"
 
 using namespace std;
@@ -15,6 +16,10 @@ void ChannelMaster::onInput(
     worker_id worker, MESSAGE(CHANNEL_INPUT)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -32,7 +37,7 @@ void ChannelMaster::onInput(
         // Forward the output.
         MESSAGE(CHANNEL_OUTPUT) forward;
         forward.channel = message.channel;
-        forward.data = move(state.writer.data);
+        forward.data = state.writer.data;
         master_.workers_[state.reader.worker]->send(forward);
       }
       {
@@ -52,6 +57,10 @@ void ChannelMaster::onOutput(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
+
   switch (state.type) {
     case NORMAL:
       // Writer arrived first.
@@ -64,7 +73,6 @@ void ChannelMaster::onOutput(
     case INPUT_WAIT:
       // Reader is already waiting. Forward the output.
       state.type = DONE_WAIT;
-      state.writer = Writer{worker, message.data};
       master_.workers_[state.reader.worker]->send(message);
       if (worker != state.owner_worker) {
         // Inform the owner.
@@ -72,6 +80,7 @@ void ChannelMaster::onOutput(
         resolve.channel = message.channel;
         master_.workers_[state.owner_worker]->send(resolve);
       }
+      state.writer = Writer{worker, move(message.data)};
       return;
     case ENABLED:
       // Reader is waiting in an ALT. Forward the output. The channel may not be
@@ -90,6 +99,10 @@ void ChannelMaster::onEnable(
     worker_id worker, MESSAGE(CHANNEL_ENABLE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -110,7 +123,7 @@ void ChannelMaster::onEnable(
         // Forward the output.
         MESSAGE(CHANNEL_OUTPUT) forward;
         forward.channel = message.channel;
-        forward.data = move(state.writer.data);
+        forward.data = state.writer.data;
         master_.workers_[worker]->send(forward);
       }
       {
@@ -129,6 +142,10 @@ void ChannelMaster::onDisable(
     worker_id worker, MESSAGE(CHANNEL_DISABLE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case ENABLED:
@@ -155,6 +172,10 @@ void ChannelMaster::onResolved(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
+
   switch (state.type) {
     case INPUT_WAIT:
     case OUTPUT_WAIT:
@@ -170,6 +191,10 @@ void ChannelMaster::onDone(
     worker_id worker, MESSAGE(CHANNEL_DONE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
+
+  verr << ::toString(state.type) << " : " << ::toString(message.type)
+       << " on (" << message.channel.owner << ", "
+       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case OUTPUT_WAIT:

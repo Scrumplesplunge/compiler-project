@@ -754,7 +754,7 @@ gen_dist_par rp =
                                Raw [LDC 1, STL 1, LDC num_handles, STL 2],
                                Label shutdown_loop,
                                Raw [COMMENT ("Wait for instance " ++ i ++ "."),
-                                    LDL 1, LDLP 4, WSUB, LDNL 0, JOINI, LDLP 1,
+                                    LDL 2, LDLP 4, WSUB, LDNL 0, JOINI, LDLP 1,
                                     LEND shutdown_loop shutdown_loop_end],
                                Label shutdown_loop_end,
                                Raw [AJW space_required]]

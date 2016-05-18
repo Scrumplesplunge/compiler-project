@@ -1,5 +1,4 @@
-DEF num.instances = 2 :
-DEF message = "I am process " :
+DEF message = "Hello, World!" :
 DEF message.length = 13 :
 
 -- Built in.
@@ -10,10 +9,22 @@ PROC print.dec(VALUE i) =
   SKIP
 :
 
--- Run the two processes on separate instances.
-DIST PAR i = [1 FOR num.instances]
+CHAN network[message.length] :
+
+-- Run the processes on separate
+-- instances.
+PAR
+  -- The "workers" each send a single
+  -- character.
+  DIST PAR i = [0 FOR message.length]
+    network[i] ! message[BYTE i]
+  -- The "controller" receives the
+  -- characters and displays them.
   SEQ
     SEQ j = [0 FOR message.length]
-      putc(message[BYTE j])
-    print.dec(i)
+      VAR temp :
+      SEQ
+        network[j] ? temp
+        putc(temp)
     putc('*N')
+

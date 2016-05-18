@@ -78,6 +78,8 @@ bool ChannelServer::input(
       {
         MESSAGE(CHANNEL_DONE) message;
         message.channel = channel;
+        verr << "OUTGOING: CHANNEL_DONE (" << channel.owner << ", "
+             << addressString(channel.address) << ")\n";
         server_.send(message);
       }
 
@@ -133,6 +135,22 @@ bool ChannelServer::output(
 
       // Communication is complete. No need to wait.
       return true;
+    case REMOTE_INPUT_WAIT:
+      // Write matched with remote reader.
+      state.type = DONE_WAIT;
+      state.writer =
+          Writer(instance, source_address, length, workspace_descriptor);
+
+      // Forward the message.
+      {
+        MESSAGE(CHANNEL_OUTPUT) forward;
+        forward.channel = channel;
+        forward.data = instance->exportBytes(source_address, length);
+        server_.send(forward);
+      }
+
+      // Need to wait for DONE.
+      return false;
     case LOCAL_ENABLED:
     case REMOTE_ENABLED:
       // Channel is now ready.
@@ -217,8 +235,10 @@ void ChannelServer::onInput(MESSAGE(CHANNEL_INPUT)&& message) {
     case LOCAL_OUTPUT_WAIT:
       // Writer is waiting. Forward the message.
       state.type = DONE_WAIT;
-      
-      {
+    
+      // If this is a remote channel, then the message has already been
+      // forwarded.
+      if (state.is_local) {
         MESSAGE(CHANNEL_OUTPUT) forward;
         forward.channel = message.channel;
         forward.data = state.writer.instance->exportBytes(
@@ -262,6 +282,8 @@ void ChannelServer::onOutput(MESSAGE(CHANNEL_OUTPUT)&& message) {
       {
         MESSAGE(CHANNEL_DONE) done;
         done.channel = message.channel;
+        verr << "OUTGOING: CHANNEL_DONE (" << message.channel.owner << ", "
+             << addressString(message.channel.address) << ")\n";
         server_.send(done);
       }
 

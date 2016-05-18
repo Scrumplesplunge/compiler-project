@@ -8,19 +8,16 @@ using namespace std;
 
 struct MessageHeader {
   MessageTypeID type;
-  uint64_t length;
 };
 
 template <>
 void BinaryReader::read(MessageHeader* header) {
   header->type = readVarUint();
-  header->length = readVarUint();
 }
 
 template <>
 void BinaryWriter::write(const MessageHeader& header) {
   writeVarUint(header.type);
-  writeVarUint(header.length);
 }
 
 
@@ -51,12 +48,29 @@ void Messenger::sendBytes(MessageTypeID type, const string& bytes) {
   // Construct the message.
   string message;
   {
-    ostringstream builder;
+    ostringstream builder(std::ios::binary);
     StandardOutputStream output(builder);
     BinaryWriter writer(output);
-    writer_.write(MessageHeader{type, bytes.length()});
-    writer_.writeBytes(bytes.c_str(), bytes.length());
+    writer.write(MessageHeader{type});
+    writer.writeString(bytes);
     message = builder.str();
+  }
+
+  if (options::verbose) {
+    const char hex[] = "0123456789abcdef";
+    bool first = true;
+    string readable_bytes;
+    for (char byte : bytes) {
+      if (first) {
+        first = false;
+      } else {
+        readable_bytes.push_back(' ');
+      }
+      readable_bytes.push_back(hex[static_cast<uint8_t>(byte) >> 4]);
+      readable_bytes.push_back(hex[byte & 0xF]);
+    }
+
+    verr << "SEND(" << type << "): " << readable_bytes << "\n";
   }
 
   // Send it.
@@ -77,24 +91,33 @@ void Messenger::unlockedPoll(unique_lock<mutex>& reader_lock) {
 
   MessageHeader header;
   reader_.read(&header);
+  string bytes = reader_.readString();
+
+  if (options::verbose) {
+    const char hex[] = "0123456789abcdef";
+    bool first = true;
+    string readable_bytes;
+    for (char byte : bytes) {
+      if (first) {
+        first = false;
+      } else {
+        readable_bytes.push_back(' ');
+      }
+      readable_bytes.push_back(hex[static_cast<uint8_t>(byte) >> 4]);
+      readable_bytes.push_back(hex[byte & 0xF]);
+    }
+
+    verr << "RECEIVED(" << header.type << "): " << readable_bytes << "\n";
+  }
+
   if (handlers_.count(header.type) == 0) {
     cerr << "Warning: Not handling message with type " << header.type << ".\n";
     // Unrecognised ID. Discard the message.
-    const uint64_t BUFFER_SIZE = 32;
-    char buffer[32];
-    uint64_t length = header.length;
-    
-    while (length > 0) {
-      if (length > BUFFER_SIZE) {
-        reader.readBytes(buffer, BUFFER_SIZE);
-        length -= BUFFER_SIZE;
-      } else {
-        reader.readBytes(buffer, length);
-        length = 0;
-      }
-    }
+  } else {
+    // Handle the message.
+    istringstream temp(move(bytes), std::ios::binary);
+    StandardInputStream stream(temp);
+    BinaryReader reader(stream);
+    handlers_.at(header.type)(reader);
   }
-
-  // Handle the message.
-  handlers_.at(header.type)();
 }

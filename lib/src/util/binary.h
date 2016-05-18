@@ -43,6 +43,7 @@ class BinaryReader {
   double readDouble();
 
   void readBytes(char buffer[], int64_t num_bytes);
+  std::string readBytes(int64_t num_bytes);
 
   // Reads a varint representing the length, and then reads that many bytes
   // into the string.

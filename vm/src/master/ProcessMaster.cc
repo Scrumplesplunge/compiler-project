@@ -136,10 +136,14 @@ void ProcessMaster::serve() {
 
   // Start it on the last worker.
   worker_id root_worker = workers_.size() - 1;
-  instance_id id = process_tree_.createRootInstance(
-      InstanceInfo(root_worker, descriptor));
-  workers_[root_worker]->startInstance(
-      id, descriptor, process_tree_.link(id, root_worker));
+  instance_id id;
+  {
+    unique_lock<mutex> process_lock(process_mu_);
+    id = process_tree_.createRootInstance(
+        InstanceInfo(root_worker, descriptor));
+    workers_[root_worker]->startInstance(
+        id, descriptor, process_tree_.link(id, root_worker));
+  }
 
   verr << "Spawning root process on " << workers_[root_worker]->hostPort()
        << "..\n";
@@ -174,6 +178,8 @@ void ProcessMaster::serve() {
 
 void ProcessMaster::onRequestInstance(
     worker_id worker, MESSAGE(REQUEST_INSTANCE)&& message) {
+  unique_lock<mutex> process_lock(process_mu_);
+
   // TODO: Decide more sensibly about where to start the next process.
   worker_id new_worker = (next_worker_to_use_++) % workers_.size();
 
@@ -195,10 +201,11 @@ void ProcessMaster::onRequestInstance(
 
 void ProcessMaster::onInstanceExited(
     worker_id worker, MESSAGE(INSTANCE_EXITED)&& message) {
-  verr << "Instance " << message.id << " exited.\n";
+  unique_lock<mutex> process_lock(process_mu_);
+
+  verr << "Instance " << message.id << " exited (worker = " << worker << ").\n";
   // Look up the parent instance ID.
   InstanceInfo info = process_tree_.info(message.id);
-  process_tree_.endInstance(message.id);
   
   // If the instance had a parent, inform the corresponding worker.
   if (info.id == info.parent_id) {
@@ -208,4 +215,6 @@ void ProcessMaster::onInstanceExited(
     verr << "Informing parent at " << parent_info.location << "..\n";;
     workers_[parent_info.location]->send(move(message));
   }
+
+  process_tree_.endInstance(message.id);
 }

@@ -1,5 +1,9 @@
 #include "network.h"
 
+#include "util.h"
+
+#include <util/atomic_output.h>
+
 using namespace std;
 
 // InstanceDescriptor
@@ -95,7 +99,9 @@ void BinaryWriter::write(const Ancestry& ancestry) {
 
   bool first = true;
   InstanceInfo info;
-  for (const InstanceInfo& instance : ancestry.contents) {
+  for (auto i = ancestry.contents.rbegin();
+       i != ancestry.contents.rend(); i++) {
+    const InstanceInfo& instance = *i;
     if (first) {
       // Write the first entry. This is not delta encoded.
       write(instance);
@@ -113,10 +119,14 @@ template <>
 void BinaryReader::read(Channel* channel) {
   channel->owner = readVarUint();
   channel->address = readInt32();
+  verr << "READ CHANNEL: (" << channel->owner << ", "
+       << addressString(channel->address) << ")\n";
 };
 
 template <>
 void BinaryWriter::write(const Channel& channel) {
+  verr << "WRITE CHANNEL: (" << channel.owner << ", "
+       << addressString(channel.address) << ")\n";
   writeVarUint(channel.owner);
   writeInt32(channel.address);
 }
@@ -197,9 +207,11 @@ DEFINE_MESSAGE(INSTANCE_EXITED);
 
 READER(INSTANCE_EXITED) {
   message->id = readVarUint();
+  verr << "READ INSTANCE_EXITED: " << message->id << "\n";
 }
 
 WRITER(INSTANCE_EXITED) {
+  verr << "WRITE INSTANCE_EXITED: " << message.id << "\n";
   writeVarUint(message.id);
 }
 

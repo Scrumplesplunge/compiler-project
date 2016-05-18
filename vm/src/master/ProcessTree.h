@@ -50,8 +50,7 @@ class ProcessTree {
     std::condition_variable on_done;
   };
 
-  std::mutex mu_;
-
   instance_id next_id_ = 1;
+  std::mutex exit_mu_;
   std::unordered_map<instance_id, std::shared_ptr<InstanceInfoNode>> instances_;
 };

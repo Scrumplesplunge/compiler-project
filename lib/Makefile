@@ -1,6 +1,5 @@
 MAKEFLAGS = -j8
-CXXFLAGS = -std=c++14 -Igen -I../lib -Ofast -s -flto -Wall -Wl,--gc-sections  \
-					 -pthread
+CXXFLAGS = -std=c++14 -Igen -I../lib -pthread -g #-Ofast -s -flto -Wall -Wl,--gc-sections
 
 .PHONY: all clean
 

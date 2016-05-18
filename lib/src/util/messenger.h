@@ -17,7 +17,7 @@
 typedef uint64_t MessageTypeID;
 
 // Base handler for incoming messages.
-typedef std::function<void()> MessageHandlerBase;
+typedef std::function<void(BinaryReader& reader)> MessageHandlerBase;
 
 // Message handlers for message of type M.
 template <typename M>
@@ -34,16 +34,16 @@ class Messenger {
   template <typename T>
   void on(MessageTypeID type, MessageHandler<T> handler) {
     // Wrap the handler with a decoder for the message.
-    on(type, [this, handler]() {
+    on(type, [handler](BinaryReader& reader) {
       T message;
-      reader_.read(&message);
+      reader.read(&message);
       handler(std::move(message));
     });
   }
 
   template <typename T>
   void send(MessageTypeID type, const T& message) {
-    std::ostringstream builder;
+    std::ostringstream builder(std::ios::binary);
     StandardOutputStream output(builder);
     BinaryWriter(output).write<T>(message);
     sendBytes(type, builder.str());
