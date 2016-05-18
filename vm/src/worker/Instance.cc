@@ -30,9 +30,11 @@ void Instance::altWake(int32_t workspace_descriptor) {
   unique_lock<mutex> queue_lock(queue_mu_);
   waiting_processes_--;
   int32_t workspace_pointer = makeWptr(workspace_descriptor);
-  write(workspace_pointer - 12, Ready);
-  schedule(workspace_descriptor, queue_lock);
-  on_wake_.notify_all();
+  if (read(workspace_pointer - 12) != Ready) {
+    write(workspace_pointer - 12, Ready);
+    schedule(workspace_descriptor, queue_lock);
+    on_wake_.notify_all();
+  }
 }
 
 void Instance::childStarted(int32_t handle_address, instance_id id) {
@@ -181,7 +183,7 @@ void Instance::indirect_DISC() {
 void Instance::indirect_ENBC() {
   if (!A) return;
 
-  Channel channel = server_.process_tree_.channel(id_, C);
+  Channel channel = server_.process_tree_.channel(id_, B);
   if (server_.channels_.enable(this, makeWdesc(Wptr), channel)) {
     // Guard is ready.
     write(Wptr - 12, Ready);

@@ -1,5 +1,6 @@
 #include "PartialProcessTree.h"
 
+#include "../util.h"
 #include <util/atomic_output.h>
 
 using namespace std;
@@ -109,8 +110,11 @@ Channel PartialProcessTree::channel(
       return Channel{node->info.id, channel_address};
     }
 
-    if (node->info.id == node->info.parent_id)
-      throw logic_error("Instance used channel with unreachable address.");
+    if (node->info.id == node->info.parent_id) {
+      throw logic_error(
+          "Instance used channel " + addressString(channel_address) +
+          ", which is unreachable.");
+    }
 
     node = node->parent.get();
   }

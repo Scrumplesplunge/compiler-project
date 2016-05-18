@@ -148,13 +148,23 @@ bool ChannelServer::output(
       // Need to wait for DONE.
       return false;
     case LOCAL_ENABLED:
-    case REMOTE_ENABLED:
       // Channel is now ready.
-      state.type = (state.type == LOCAL_ENABLED ? LOCAL_READY : REMOTE_READY);
-     
+      state.type = LOCAL_READY;
       state.writer =
           Writer(instance, source_address, length, workspace_descriptor);
-
+      state.enabler.instance->altWake(state.enabler.workspace_descriptor);
+      return false;
+    case REMOTE_ENABLED:
+      // Channel is now ready.
+      state.type = REMOTE_READY;
+      state.writer =
+          Writer(instance, source_address, length, workspace_descriptor);
+      {
+        MESSAGE(CHANNEL_OUTPUT) message;
+        message.channel = channel;
+        message.data = instance->exportBytes(source_address, length);
+        server_.send(message);
+      }
       // Have to wait for reader.
       return false;
     default:
