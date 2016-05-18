@@ -158,13 +158,15 @@ DEFINE_MESSAGE(REQUEST_INSTANCE);
 
 READER(REQUEST_INSTANCE) {
   message->parent_id = readVarUint();
-  message->parent_workspace_descriptor = readInt32();
+  message->handle_address = readInt32();
+  message->initialization_value = readVarInt();
   read(&message->descriptor);
 }
 
 WRITER(REQUEST_INSTANCE) {
   writeVarUint(message.parent_id);
-  writeInt32(message.parent_workspace_descriptor);
+  writeInt32(message.handle_address);
+  writeVarInt(message.initialization_value);
   write(message.descriptor);
 }
 
@@ -173,12 +175,14 @@ DEFINE_MESSAGE(START_INSTANCE);
 
 READER(START_INSTANCE) {
   message->id = readVarUint();
+  message->initialization_value = readVarInt();
   read(&message->descriptor);
   read(&message->ancestry);
 }
 
 WRITER(START_INSTANCE) {
   writeVarUint(message.id);
+  writeVarInt(message.initialization_value);
   write(message.descriptor);
   write(message.ancestry);
 }
@@ -189,13 +193,13 @@ DEFINE_MESSAGE(INSTANCE_STARTED);
 READER(INSTANCE_STARTED) {
   message->id = readVarUint();
   message->parent_id = readVarUint();
-  message->parent_workspace_descriptor = readInt32();
+  message->handle_address = readInt32();
 }
 
 WRITER(INSTANCE_STARTED) {
   writeVarUint(message.id);
   writeVarUint(message.parent_id);
-  writeInt32(message.parent_workspace_descriptor);
+  writeInt32(message.handle_address);
 }
 
 // INSTANCE_EXITED

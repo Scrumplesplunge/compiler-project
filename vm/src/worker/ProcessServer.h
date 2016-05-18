@@ -37,7 +37,7 @@ class ProcessServer {
   // corresponding process. The process will be rescheduled when the instance ID
   // has been returned.
   void requestInstance(InstanceDescriptor descriptor, instance_id parent,
-                       int32_t workspace_descriptor);
+                       int32_t handle_address, int32_t initialization_value);
 
   void notifyExited(instance_id id);
 

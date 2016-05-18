@@ -35,6 +35,30 @@ void Instance::altWake(int32_t workspace_descriptor) {
   on_wake_.notify_all();
 }
 
+void Instance::childStarted(int32_t handle_address, instance_id id) {
+  unique_lock<mutex> queue_lock(queue_mu_);
+  ChildHandle& handle = children_.at(handle_address);
+  switch (handle.state) {
+    case ChildHandle::NO_ID:
+      // Parent is not waiting.
+      verr << "Child ID arrived: " << id << "\n";
+      handle.state = ChildHandle::ID;
+      handle.id = id;
+      break;
+    case ChildHandle::JOIN_NO_ID:
+      // Parent is waiting, but not on the instance. Now that the ID has
+      // arrived, the join can be converted to the correct type.
+      verr << "Joining child " << id << "\n";
+      queue_lock.unlock();
+      server_.joinInstance(id, id_, handle.workspace_descriptor);
+      queue_lock.lock();
+      children_.erase(handle_address);
+      break;
+    default:
+      throw logic_error("Bad handle state in childStarted().");
+  }
+}
+
 string Instance::toString() {
   return "Instance = " + to_string(id_) + "\t" + VM::toString();
 }
@@ -75,36 +99,43 @@ void Instance::startInstance() {
   descriptor.instruction_pointer = A;
   descriptor.bytes_needed = 4 * B;
 
-  // Save the handle address into Wptr[0].
-  write(Wptr, C);
-
-  // Deschedule this process.
   {
-    unique_lock<mutex> lock(queue_mu_);
-    waiting_processes_++;
-    write(Wptr - 4, Iptr);
+    unique_lock<mutex> queue_lock(queue_mu_);
+    children_.emplace(C, ChildHandle());
   }
 
   // Send the request.
-  server_.requestInstance(descriptor, id_, makeWdesc(Wptr));
-
-  unique_lock<mutex> lock(queue_mu_);
-  resumeNext(lock);
+  server_.requestInstance(descriptor, id_, C, read(C));
 }
 
 void Instance::joinInstance() {
   // Deschedule this process.
-  {
-    unique_lock<mutex> lock(queue_mu_);
-    waiting_processes_++;
-    write(Wptr - 4, Iptr);
+  unique_lock<mutex> queue_lock(queue_mu_);
+  waiting_processes_++;
+  write(Wptr - 4, Iptr);
+
+  ChildHandle& handle = children_.at(A);
+
+  switch (handle.state) {
+    case ChildHandle::NO_ID:
+      verr << "Instance " << id_ << " waiting for child ID.\n";
+      // No ID is available. Wait for the ID to arrive.
+      handle.state = ChildHandle::JOIN_NO_ID;
+      handle.workspace_descriptor = makeWdesc(Wptr);
+      break;
+    case ChildHandle::ID:
+      verr << "Instance " << id_ << " waiting for " << handle.id << ".\n";
+      // ID is available. Wait for the process to finish.
+      queue_lock.unlock();
+      server_.joinInstance(handle.id, id_, makeWdesc(Wptr));
+      queue_lock.lock();
+      children_.erase(A);
+      break;
+    default:
+      throw logic_error("Bad handle state in joinInstance().");
   }
 
-  // Wait for the process to finish.
-  server_.joinInstance(A, id_, makeWdesc(Wptr));
-
-  unique_lock<mutex> lock(queue_mu_);
-  resumeNext(lock);
+  resumeNext(queue_lock);
 }
 
 void Instance::indirect_ALT() {

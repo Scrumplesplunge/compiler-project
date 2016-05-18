@@ -23,6 +23,8 @@ bool ChannelServer::input(
     Instance* instance, int32_t workspace_descriptor,
     int32_t destination_address, int32_t length, Channel channel) {
   unique_lock<mutex> lock(mu_);
+  verr << "INPUT (" << channel.owner << ", " << addressString(channel.address)
+       << ")\n";
   ChannelState& state = get(channel);
 
   switch (state.type) {
@@ -89,6 +91,8 @@ bool ChannelServer::output(
     Instance* instance, int32_t workspace_descriptor,
     int32_t source_address, int32_t length, Channel channel) {
   unique_lock<mutex> lock(mu_);
+  verr << "OUTPUT (" << channel.owner << ", " << addressString(channel.address)
+       << ")\n";
   ChannelState& state = get(channel);
 
   switch (state.type) {

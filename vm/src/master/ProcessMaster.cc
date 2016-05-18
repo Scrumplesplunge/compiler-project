@@ -53,20 +53,22 @@ ProcessServerHandle::ProcessServerHandle(
 }
 
 void ProcessServerHandle::startInstance(
-    instance_id id, InstanceDescriptor descriptor, Ancestry ancestry) {
+    instance_id id, InstanceDescriptor descriptor, Ancestry ancestry,
+    int32_t initialization_value) {
   MESSAGE(START_INSTANCE) message;
   message.ancestry = ancestry;
   message.descriptor = descriptor;
   message.id = id;
+  message.initialization_value = initialization_value;
   send(message);
 }
 
-void ProcessServerHandle::instanceStarted(instance_id id, instance_id parent_id,
-                                          int32_t parent_workspace_descriptor) {
+void ProcessServerHandle::instanceStarted(
+    instance_id id, instance_id parent_id, int32_t handle_address) {
   MESSAGE(INSTANCE_STARTED) message;
   message.id = id;
   message.parent_id = parent_id;
-  message.parent_workspace_descriptor = parent_workspace_descriptor;
+  message.handle_address = handle_address;
   send(message);
 }
 
@@ -142,7 +144,7 @@ void ProcessMaster::serve() {
     id = process_tree_.createRootInstance(
         InstanceInfo(root_worker, descriptor));
     workers_[root_worker]->startInstance(
-        id, descriptor, process_tree_.link(id, root_worker));
+        id, descriptor, process_tree_.link(id, root_worker), 0);
   }
 
   verr << "Spawning root process on " << workers_[root_worker]->hostPort()
@@ -192,11 +194,12 @@ void ProcessMaster::onRequestInstance(
   verr << "Spawning instance " << id << " with parent " << message.parent_id
        << " on worker " << new_worker << "..\n";
   workers_[new_worker]->startInstance(
-      id, message.descriptor, process_tree_.link(id, new_worker));
+      id, message.descriptor, process_tree_.link(id, new_worker),
+      message.initialization_value);
   
   // Send the instance ID to the parent.
   workers_[worker]->instanceStarted(
-      id, message.parent_id, message.parent_workspace_descriptor);
+      id, message.parent_id, message.handle_address);
 }
 
 void ProcessMaster::onInstanceExited(

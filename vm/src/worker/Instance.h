@@ -19,6 +19,7 @@ class Instance : public VM {
 
   void reschedule(int32_t workspace_descriptor);
   void altWake(int32_t workspace_descriptor);
+  void childStarted(int32_t handle_address, instance_id id);
 
   std::string toString() override;
 
@@ -41,7 +42,15 @@ class Instance : public VM {
  private:
   std::condition_variable on_wake_;
 
+  struct ChildHandle {
+    enum State { NO_ID, ID, JOIN_NO_ID };
+    State state = NO_ID;
+    instance_id id;
+    int32_t workspace_descriptor;
+  };
+
   // These are protected by queue_mu_.
+  std::unordered_map<int32_t, ChildHandle> children_;
   int32_t waiting_processes_ = 0;
 
   const instance_id id_;

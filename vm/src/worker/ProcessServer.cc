@@ -55,13 +55,14 @@ bool ProcessServer::hasInstance(instance_id id) {
 }
 
 void ProcessServer::requestInstance(
-    InstanceDescriptor descriptor, instance_id parent,
-    int32_t workspace_descriptor) {
+    InstanceDescriptor descriptor, instance_id parent, int32_t handle_address,
+    int32_t initialization_value) {
   // Send the request.
   MESSAGE(REQUEST_INSTANCE) message;
   message.parent_id = parent;
   message.descriptor = descriptor;
-  message.parent_workspace_descriptor = workspace_descriptor;
+  message.handle_address = handle_address;
+  message.initialization_value = initialization_value;
   send(message);
 }
 
@@ -128,7 +129,8 @@ void ProcessServer::onStartProcessServer(
 void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
   verr << ::toString(message.type) << "(" << message.id << ") with Wptr = "
        << addressString(message.descriptor.workspace_pointer) << ", Iptr = "
-       << addressString(message.descriptor.instruction_pointer) << "\n";
+       << addressString(message.descriptor.instruction_pointer) << ", IV = "
+       << message.initialization_value << "\n";
 
   // Add it to the process tree.
   process_tree_.addLocalInstance(
@@ -142,6 +144,8 @@ void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
         *this, message.id, message.descriptor, bytecode_.c_str(),
         bytecode_.length(), data_.get(), data_size_));
     instance = instances_.at(message.id).get();
+    instance->write(message.descriptor.workspace_pointer,
+                    message.initialization_value);
   }
 
   // Run it.
@@ -162,10 +166,7 @@ void ProcessServer::onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message) {
 
   // Write back the instance handle and wake up the process.
   Instance& instance = *instances_.at(message.parent_id);
-  int32_t workspace_pointer =
-      Instance::makeWptr(message.parent_workspace_descriptor);
-  instance.write(instance.read(workspace_pointer), message.id);
-  instance.wake(message.parent_workspace_descriptor);
+  instance.childStarted(message.handle_address, message.id);
 }
 
 void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {

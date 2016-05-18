@@ -28,9 +28,10 @@ class ProcessServerHandle {
       std::string bytecode);
 
   void startInstance(
-      instance_id id, InstanceDescriptor descriptor, Ancestry ancestry);
-  void instanceStarted(instance_id id, instance_id parent_id,
-                       int32_t parent_workspace_descriptor);
+      instance_id id, InstanceDescriptor descriptor, Ancestry ancestry,
+      int32_t initialization_value);
+  void instanceStarted(
+      instance_id id, instance_id parent_id, int32_t handle_address);
 
   void serve();
 

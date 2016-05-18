@@ -109,13 +109,15 @@ DECLARE_MESSAGE(START_PROCESS_SERVER) {
 
 DECLARE_MESSAGE(REQUEST_INSTANCE) {
   instance_id parent_id = 0;
-  int32_t parent_workspace_descriptor = 0;
+  int32_t handle_address = 0;
+  int32_t initialization_value = 0;
 
   InstanceDescriptor descriptor;
 };
 
 DECLARE_MESSAGE(START_INSTANCE) {
   instance_id id = 0;
+  int32_t initialization_value = 0;
 
   InstanceDescriptor descriptor;
   Ancestry ancestry;
@@ -123,7 +125,7 @@ DECLARE_MESSAGE(START_INSTANCE) {
 
 DECLARE_MESSAGE(INSTANCE_STARTED) {
   instance_id id = 0, parent_id = 0;
-  int32_t parent_workspace_descriptor = 0;
+  int32_t handle_address = 0;
 };
 
 DECLARE_MESSAGE(INSTANCE_EXITED) {

@@ -671,7 +671,7 @@ gen_dist_par rp =
                              comment "Spawn remote instances.", Code scs,
                              comment "Run local process.", cp,
                              comment "Wait for remote instances.",
-                             Code (map (\i -> Raw [LDL i, JOINI])
+                             Code (map (\i -> Raw [LDLP i, JOINI])
                                        [1..fromIntegral (length pgs)]),
                              Raw [AJW (fromIntegral (length pgs))]]
     Replicated (Range i a b) p -> (promise { depth_required = d }, code)
@@ -705,7 +705,7 @@ gen_dist_par rp =
               else do
                 -- Allocate handles.
                 let num_handles = n - 1
-                let space_required = 4 + num_handles
+                let space_required = 3 + num_handles
                 let ctx' = allocate ctx "$" space_required
                 setup_loop <- label "SETUP_LOOP"
                 setup_loop_end <- label "SETUP_LOOP_END"
@@ -723,38 +723,34 @@ gen_dist_par rp =
                 cp <- gp ctx'''
                 return $ Code [desc, Raw [AJW (-space_required)],
                                comment "Set up the loop.", ca,
-                               -- 1 -> channel, 2 -> i, 3 -> num iterations,
-                               -- 4 -> first i
-                               Raw [DUP, STL 4, ADC 1, STL 2, LDC num_handles,
-                                    STL 3, LDLP 1, RESETCH],
+                               -- 1 -> i, 2 -> num iterations, 3 -> first i
+                               Raw [DUP, STL 3, ADC 1, STL 1, LDC num_handles,
+                                    STL 2],
                                Label setup_loop,
                                comment ("Spawn remote process " ++ i ++ "."),
                                Raw [COMMENT ("Spawn instance " ++ i ++ "."),
                                     -- handle[count]
-                                    LDL 3, LDLP 4, WSUB,
+                                    LDL 2, LDLP 3, WSUB, DUP,
+                                    LDL 1, REV, STNL 0,
                                     -- Pause space, call, i, depth.
                                     LDC (6 + 5 + depth_required pp),
                                     STARTI remote_stub,
-                                    COMMENT ("Send " ++ i ++ "."),
-                                    -- channel ! i
-                                    LDLP 1, LDL 2, OUTWORD,
-                                    LDLP 2, LEND setup_loop setup_loop_end],
+                                    LDLP 1, LEND setup_loop setup_loop_end],
                                Label setup_loop_end,
+                               comment ("Run the local process."),
+                               Raw [AJW (-1), LDL 4, STL 1, CALL proc, AJW 1],
                                Raw [J next],
                                Label remote_stub,
                                -- channel ? local i
-                               Raw [AJW (-1), LDLP 1, LDLP 2, IN 4, CALL proc,
-                                    STOPP],
+                               Raw [AJW (-1), CALL proc, STOPP],
                                Label proc,
                                cp, Raw [RET],
                                Label next,
-                               comment ("Run the local process."),
-                               Raw [AJW (-1), LDL 5, STL 1, CALL proc, AJW 1],
                                comment "Wait for instances to finish.",
                                Raw [LDC 1, STL 1, LDC num_handles, STL 2],
                                Label shutdown_loop,
                                Raw [COMMENT ("Wait for instance " ++ i ++ "."),
-                                    LDL 2, LDLP 4, WSUB, LDNL 0, JOINI, LDLP 1,
+                                    LDL 2, LDLP 3, WSUB, JOINI, LDLP 1,
                                     LEND shutdown_loop shutdown_loop_end],
                                Label shutdown_loop_end,
                                Raw [AJW space_required]]
