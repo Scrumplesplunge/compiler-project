@@ -56,23 +56,6 @@ void Messenger::sendBytes(MessageTypeID type, const string& bytes) {
     message = builder.str();
   }
 
-  if (options::verbose) {
-    const char hex[] = "0123456789abcdef";
-    bool first = true;
-    string readable_bytes;
-    for (char byte : bytes) {
-      if (first) {
-        first = false;
-      } else {
-        readable_bytes.push_back(' ');
-      }
-      readable_bytes.push_back(hex[static_cast<uint8_t>(byte) >> 4]);
-      readable_bytes.push_back(hex[byte & 0xF]);
-    }
-
-    verr << "SEND(" << type << "): " << readable_bytes << "\n";
-  }
-
   // Send it.
   unique_lock<mutex> writer_lock(writer_mutex_);
   writer_.writeBytes(message.c_str(), message.length());
@@ -92,23 +75,6 @@ void Messenger::unlockedPoll(unique_lock<mutex>& reader_lock) {
   MessageHeader header;
   reader_.read(&header);
   string bytes = reader_.readString();
-
-  if (options::verbose) {
-    const char hex[] = "0123456789abcdef";
-    bool first = true;
-    string readable_bytes;
-    for (char byte : bytes) {
-      if (first) {
-        first = false;
-      } else {
-        readable_bytes.push_back(' ');
-      }
-      readable_bytes.push_back(hex[static_cast<uint8_t>(byte) >> 4]);
-      readable_bytes.push_back(hex[byte & 0xF]);
-    }
-
-    verr << "RECEIVED(" << header.type << "): " << readable_bytes << "\n";
-  }
 
   if (handlers_.count(header.type) == 0) {
     cerr << "Warning: Not handling message with type " << header.type << ".\n";

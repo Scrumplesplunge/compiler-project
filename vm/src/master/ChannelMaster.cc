@@ -17,10 +17,6 @@ void ChannelMaster::onInput(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case NORMAL:
       // Reader arrived first.
@@ -56,10 +52,6 @@ void ChannelMaster::onOutput(
     worker_id worker, MESSAGE(CHANNEL_OUTPUT)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
-
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -100,10 +92,6 @@ void ChannelMaster::onEnable(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case NORMAL:
       // Enabler arrived first.
@@ -143,10 +131,6 @@ void ChannelMaster::onDisable(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case ENABLED:
       // No writer arrived.
@@ -172,10 +156,6 @@ void ChannelMaster::onResolved(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case INPUT_WAIT:
     case OUTPUT_WAIT:
@@ -191,10 +171,6 @@ void ChannelMaster::onDone(
     worker_id worker, MESSAGE(CHANNEL_DONE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
-
-  verr << ::toString(state.type) << " : " << ::toString(message.type)
-       << " on (" << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case OUTPUT_WAIT:

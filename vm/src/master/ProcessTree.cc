@@ -73,8 +73,6 @@ Ancestry ProcessTree::link(instance_id id, worker_id worker) {
 }
 
 void ProcessTree::endInstance(instance_id id) {
-  verr << "ENDING INSTANCE " << id << "\n";
-
   // Find the instance.
   auto i = instances_.find(id);
   if (i == instances_.end())

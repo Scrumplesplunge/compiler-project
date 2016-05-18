@@ -25,9 +25,6 @@ bool ChannelServer::input(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(channel);
 
-  verr << ::toString(state.type) << " : LOCAL_INPUT on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
-
   switch (state.type) {
     case NORMAL:
       // Reader arrived first.
@@ -78,8 +75,6 @@ bool ChannelServer::input(
       {
         MESSAGE(CHANNEL_DONE) message;
         message.channel = channel;
-        verr << "OUTGOING: CHANNEL_DONE (" << channel.owner << ", "
-             << addressString(channel.address) << ")\n";
         server_.send(message);
       }
 
@@ -95,9 +90,6 @@ bool ChannelServer::output(
     int32_t source_address, int32_t length, Channel channel) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(channel);
-
-  verr << ::toString(state.type) << " : LOCAL_OUTPUT on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -171,9 +163,6 @@ bool ChannelServer::enable(
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(channel);
 
-  verr << ::toString(state.type) << " : LOCAL_ENABLE on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
-
   switch (state.type) {
     case NORMAL:
       // No writer is waiting.
@@ -199,9 +188,6 @@ bool ChannelServer::disable(Channel channel) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(channel);
 
-  verr << ::toString(state.type) << " : LOCAL_DISABLE on (" << channel.owner
-       << ", " << addressString(channel.address) << ")\n";
-
   switch (state.type) {
     case LOCAL_ENABLED:
       // No writer is waiting.
@@ -220,10 +206,6 @@ bool ChannelServer::disable(Channel channel) {
 void ChannelServer::onInput(MESSAGE(CHANNEL_INPUT)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
-
-  verr << ::toString(state.type) << " : REMOTE_INPUT on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -256,10 +238,6 @@ void ChannelServer::onOutput(MESSAGE(CHANNEL_OUTPUT)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_OUTPUT on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case NORMAL:
       // Remote output has arrived first.
@@ -282,8 +260,6 @@ void ChannelServer::onOutput(MESSAGE(CHANNEL_OUTPUT)&& message) {
       {
         MESSAGE(CHANNEL_DONE) done;
         done.channel = message.channel;
-        verr << "OUTGOING: CHANNEL_DONE (" << message.channel.owner << ", "
-             << addressString(message.channel.address) << ")\n";
         server_.send(done);
       }
 
@@ -304,10 +280,6 @@ void ChannelServer::onOutput(MESSAGE(CHANNEL_OUTPUT)&& message) {
 void ChannelServer::onEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
-
-  verr << ::toString(state.type) << " : REMOTE_ENABLE on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case NORMAL:
@@ -339,10 +311,6 @@ void ChannelServer::onDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : REMOTE_DISABLE on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case REMOTE_ENABLED:
       // No writer is waiting.
@@ -364,10 +332,6 @@ void ChannelServer::onResolved(MESSAGE(CHANNEL_RESOLVED)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
 
-  verr << ::toString(state.type) << " : RESOLVED on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
-
   switch (state.type) {
     case REMOTE_ENABLED:
     case REMOTE_INPUT_WAIT:
@@ -383,10 +347,6 @@ void ChannelServer::onResolved(MESSAGE(CHANNEL_RESOLVED)&& message) {
 void ChannelServer::onDone(MESSAGE(CHANNEL_DONE)&& message) {
   unique_lock<mutex> lock(mu_);
   ChannelState& state = get(message.channel);
-
-  verr << ::toString(state.type) << " : DONE on ("
-       << message.channel.owner << ", "
-       << addressString(message.channel.address) << ")\n";
 
   switch (state.type) {
     case LOCAL_OUTPUT_WAIT:

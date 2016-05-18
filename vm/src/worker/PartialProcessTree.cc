@@ -103,7 +103,6 @@ Channel PartialProcessTree::channel(
 
   // Loop until the channel is found.
   while (true) {
-    verr << "node = " << node << "\n";
     if (node->info.memory_start <= channel_address &&
         channel_address < node->info.memory_end) {
       // Owner discovered.
@@ -115,13 +114,4 @@ Channel PartialProcessTree::channel(
 
     node = node->parent.get();
   }
-}
-
-PartialProcessTree::InstanceInfoNode::InstanceInfoNode(InstanceInfo base)
-    : info(base) {
-  verr << "Node " << info.id << " created.\n";
-}
-
-PartialProcessTree::InstanceInfoNode::~InstanceInfoNode() {
-  verr << "Node " << info.id << " discarded.\n";
 }

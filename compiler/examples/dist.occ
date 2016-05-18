@@ -5,9 +5,6 @@ DEF message.length = 13 :
 PROC putc(VALUE c) =
   SKIP
 :
-PROC print.dec(VALUE i) =
-  SKIP
-:
 
 CHAN network[message.length] :
 

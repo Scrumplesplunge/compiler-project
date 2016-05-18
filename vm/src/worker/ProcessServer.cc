@@ -70,7 +70,6 @@ void ProcessServer::notifyExited(instance_id id) {
   process_tree_.removeLocalInstance(id);
 
   // Send the exit notification.
-  verr << "OUTGOING: INSTANCE_EXITED(" << id << ").\n";
   MESSAGE(INSTANCE_EXITED) exit_message;
   exit_message.id = id;
   send(exit_message);
@@ -159,7 +158,6 @@ void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
 }
 
 void ProcessServer::onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message) {
-  verr << ::toString(message.type) << "(" << message.id << ") received.\n";
   unique_lock<mutex> lock(instance_mu_);
 
   // Write back the instance handle and wake up the process.
@@ -171,7 +169,6 @@ void ProcessServer::onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message) {
 }
 
 void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
-  verr << ::toString(message.type) << "(" << message.id << ") received.\n";
   bool waiting;
   WaitingProcess process;
   {

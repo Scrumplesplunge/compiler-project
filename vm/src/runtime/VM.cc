@@ -82,11 +82,11 @@ void VM::step() {
     if (op == OPR) {
       // Show the indirect instruction.
       Indirect code = static_cast<Indirect>(final_operand);
-      verr << registers << "\t" << ::toString(code) << "\n";
+      atomic_cout << registers << "\t" << ::toString(code) << "\n";
     } else {
       // Show the direct instruction.
-      verr << registers << "\t" << ::toString(op) << " "
-           << to_string(final_operand) << "\n";
+      atomic_cout << registers << "\t" << ::toString(op) << " "
+                  << to_string(final_operand) << "\n";
     }
   }
 

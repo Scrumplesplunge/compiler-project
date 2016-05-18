@@ -119,14 +119,10 @@ template <>
 void BinaryReader::read(Channel* channel) {
   channel->owner = readVarUint();
   channel->address = readInt32();
-  verr << "READ CHANNEL: (" << channel->owner << ", "
-       << addressString(channel->address) << ")\n";
 };
 
 template <>
 void BinaryWriter::write(const Channel& channel) {
-  verr << "WRITE CHANNEL: (" << channel.owner << ", "
-       << addressString(channel.address) << ")\n";
   writeVarUint(channel.owner);
   writeInt32(channel.address);
 }
@@ -207,11 +203,9 @@ DEFINE_MESSAGE(INSTANCE_EXITED);
 
 READER(INSTANCE_EXITED) {
   message->id = readVarUint();
-  verr << "READ INSTANCE_EXITED: " << message->id << "\n";
 }
 
 WRITER(INSTANCE_EXITED) {
-  verr << "WRITE INSTANCE_EXITED: " << message.id << "\n";
   writeVarUint(message.id);
 }
 

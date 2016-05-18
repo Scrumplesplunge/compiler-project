@@ -62,7 +62,6 @@ void Instance::onEmptyProcessQueue(unique_lock<mutex>& lock) {
 }
 
 void Instance::wake(int32_t workspace_descriptor) {
-  verr << "instance[" << id_ << "].wake()\n";
   unique_lock<mutex> lock(queue_mu_);
   schedule(workspace_descriptor, lock);
   waiting_processes_--;
@@ -89,10 +88,8 @@ void Instance::startInstance() {
   // Send the request.
   server_.requestInstance(descriptor, id_, makeWdesc(Wptr));
 
-  verr << "Descheduling process " << Wptr << "\n";
   unique_lock<mutex> lock(queue_mu_);
   resumeNext(lock);
-  verr << "Next process: " << Wptr << "\n";
 }
 
 void Instance::joinInstance() {

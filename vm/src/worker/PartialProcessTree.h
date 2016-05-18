@@ -31,8 +31,8 @@ class PartialProcessTree {
 
  private:
   struct InstanceInfoNode {
-    InstanceInfoNode(InstanceInfo base);
-    ~InstanceInfoNode();
+    InstanceInfoNode(InstanceInfo base)
+        : info(base) {}
 
     InstanceInfo info;
     std::shared_ptr<InstanceInfoNode> parent;

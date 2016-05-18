@@ -202,8 +202,8 @@ void ProcessMaster::onRequestInstance(
 void ProcessMaster::onInstanceExited(
     worker_id worker, MESSAGE(INSTANCE_EXITED)&& message) {
   unique_lock<mutex> process_lock(process_mu_);
+  verr << "Instance " << message.id << " exited.\n";
 
-  verr << "Instance " << message.id << " exited (worker = " << worker << ").\n";
   // Look up the parent instance ID.
   InstanceInfo info = process_tree_.info(message.id);
   
