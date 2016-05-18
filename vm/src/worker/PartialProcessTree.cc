@@ -32,6 +32,8 @@ InstanceInfo PartialProcessTree::info(instance_id id) {
 
 void PartialProcessTree::addLocalInstance(
     InstanceInfo info, const Ancestry& ancestry) {
+  unique_lock<mutex> lock(mu_);
+
   info.id = ancestry.subject;
   if (ancestry.contents.size() > 0) {
     // Instance has a parent.
@@ -56,8 +58,10 @@ void PartialProcessTree::addLocalInstance(
   // Create all ancestors.
   for (const InstanceInfo& info : ancestry.contents) {
     // Check that the node does not already exist.
-    if (instances_.count(info.id) && !instances_.at(info.id).expired())
+    if (instances_.count(info.id) && !instances_.at(info.id).expired()) {
+      node = instances_.at(info.id).lock();
       continue;
+    }
 
     // Construct this instance.
     auto temp = make_shared<InstanceInfoNode>(info);
@@ -82,6 +86,8 @@ void PartialProcessTree::addLocalInstance(
 }
 
 void PartialProcessTree::removeLocalInstance(instance_id id) {
+  unique_lock<mutex> lock(mu_);
+
   if (local_instances_.count(id) == 0)
     throw logic_error("Removing instance that does not exist.");
   local_instances_.erase(id);
@@ -97,6 +103,7 @@ Channel PartialProcessTree::channel(
 
   // Loop until the channel is found.
   while (true) {
+    verr << "node = " << node << "\n";
     if (node->info.memory_start <= channel_address &&
         channel_address < node->info.memory_end) {
       // Owner discovered.

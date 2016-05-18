@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <stdexcept>
+#include <util/atomic_output.h>
 
 using namespace std;
 
@@ -60,8 +61,10 @@ void VM::run() {
   } while (running_);
 }
 
-void VM::step(bool debug) {
-  if (debug) cerr << toString() << "\t";
+void VM::step() {
+  string registers;
+  if (options::debug)
+    registers = toString();
   
   int8_t code = fetch();
   Direct op = static_cast<Direct>(code & 0xF0);
@@ -74,15 +77,16 @@ void VM::step(bool debug) {
     argument = code & 0xF;
   }
 
-  if (debug) {
+  if (options::debug) {
     int32_t final_operand = Oreg | argument;
     if (op == OPR) {
       // Show the indirect instruction.
       Indirect code = static_cast<Indirect>(final_operand);
-      cerr << ::toString(code) << "\n";
+      verr << registers << "\t" << ::toString(code) << "\n";
     } else {
       // Show the direct instruction.
-      cerr << ::toString(op) << " " << to_string(final_operand) << "\n";
+      verr << registers << "\t" << ::toString(op) << " "
+           << to_string(final_operand) << "\n";
     }
   }
 
@@ -159,6 +163,29 @@ void VM::writeByte(int32_t address, int8_t value) {
   int shift = 8 * static_cast<int>(static_cast<uint32_t>(address) % 4);
   int32_t mask = ~(0xFF << shift);
   write(address, (word & mask) | (value << shift));
+}
+
+void VM::importBytes(const char* data, int32_t address, int32_t length) {
+  for (int32_t i = 0; i < length; i++) writeByte(address + i, data[i]);
+}
+
+void VM::exportBytes(char* data, int32_t address, int32_t length) {
+  for (int32_t i = 0; i < length; i++) data[i] = readByte(address + i);
+}
+
+string VM::exportBytes(int32_t address, int32_t length) {
+  string out;
+
+  for (int32_t i = 0; i < length; i++)
+    out.push_back(readByte(address + i));
+
+  return out;
+}
+
+void VM::transferBytesFrom(VM* other, int32_t source_address,
+                           int32_t destination_address, int32_t length) {
+  for (int32_t i = 0; i < length; i++)
+    writeByte(destination_address + i, other->readByte(source_address + i));
 }
 
 int32_t VM::readAfterEnd(int32_t address) {

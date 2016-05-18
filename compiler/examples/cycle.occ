@@ -1,0 +1,17 @@
+CHAN chan[3] :
+
+PROC print.dec(VALUE i) =
+  SKIP
+:
+
+PAR
+  DIST PAR i = [0 FOR 3]
+    VAR x :
+    SEQ
+      -- Read the value, increment it, and pass it on.
+      chan[i] ? x
+      print.dec(x)
+      chan[(i + 1) \ 3] ! (x + 1)
+  SEQ
+    -- Start the sequence.
+    chan[0] ! 0

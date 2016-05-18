@@ -3,7 +3,6 @@
 using namespace std;
 
 // InstanceDescriptor
-
 template <>
 void BinaryReader::read(InstanceDescriptor* descriptor) {
   // Workspace pointer is likely to be very negative.
@@ -20,7 +19,6 @@ void BinaryWriter::write(const InstanceDescriptor& descriptor) {
 }
 
 // InstanceInfo
-
 InstanceInfo::InstanceInfo(
     worker_id worker, const InstanceDescriptor& descriptor) {
   location = worker;
@@ -69,7 +67,6 @@ void writeDelta(BinaryWriter* writer, const InstanceInfo& previous,
 }
 
 // Ancestry
-
 template <>
 void BinaryReader::read(Ancestry* ancestry) {
   ancestry->subject = readVarUint();
@@ -112,7 +109,6 @@ void BinaryWriter::write(const Ancestry& ancestry) {
 }
 
 // Channel
-
 template <>
 void BinaryReader::read(Channel* channel) {
   channel->owner = readVarUint();
@@ -125,25 +121,14 @@ void BinaryWriter::write(const Channel& channel) {
   writeInt32(channel.address);
 }
 
-// ChannelEvent
-
-template <>
-void BinaryReader::read(ChannelEvent* event) {
-  read(&event->channel);
-  event->actor = readVarUint();
-}
-
-template <>
-void BinaryWriter::write(const ChannelEvent& event) {
-  write(event.channel);
-  writeVarUint(event.actor);
+size_t ChannelHasher::operator()(const Channel& channel) const {
+  return channel.owner ^ channel.address;
 }
 
 #define DEFINE_MESSAGE(name)  \
   template <> Network MessageNameChecker<name>::type = name
 
 // START_PROCESS_SERVER
-
 DEFINE_MESSAGE(START_PROCESS_SERVER);
 
 READER(START_PROCESS_SERVER) {
@@ -163,7 +148,6 @@ WRITER(START_PROCESS_SERVER) {
 }
 
 // REQUEST_INSTANCE
-
 DEFINE_MESSAGE(REQUEST_INSTANCE);
 
 READER(REQUEST_INSTANCE) {
@@ -179,7 +163,6 @@ WRITER(REQUEST_INSTANCE) {
 }
 
 // START_INSTANCE
-
 DEFINE_MESSAGE(START_INSTANCE);
 
 READER(START_INSTANCE) {
@@ -195,7 +178,6 @@ WRITER(START_INSTANCE) {
 }
 
 // INSTANCE_STARTED
-
 DEFINE_MESSAGE(INSTANCE_STARTED);
 
 READER(INSTANCE_STARTED) {
@@ -211,7 +193,6 @@ WRITER(INSTANCE_STARTED) {
 }
 
 // INSTANCE_EXITED
-
 DEFINE_MESSAGE(INSTANCE_EXITED);
 
 READER(INSTANCE_EXITED) {
@@ -222,71 +203,81 @@ WRITER(INSTANCE_EXITED) {
   writeVarUint(message.id);
 }
 
-// CHANNEL_IN
+// CHANNEL_OUTPUT
+DEFINE_MESSAGE(CHANNEL_OUTPUT);
 
-DEFINE_MESSAGE(CHANNEL_IN);
-
-READER(CHANNEL_IN) { read<ChannelEvent>(message); }
-WRITER(CHANNEL_IN) { write<ChannelEvent>(message); }
-
-// CHANNEL_OUT
-
-DEFINE_MESSAGE(CHANNEL_OUT);
-
-READER(CHANNEL_OUT) {
-  read<ChannelEvent>(message);
+READER(CHANNEL_OUTPUT) {
+  read(&message->channel);
   message->data = readString();
 }
 
-WRITER(CHANNEL_OUT) {
-  write<ChannelEvent>(message);
+WRITER(CHANNEL_OUTPUT) {
+  write(message.channel);
   writeString(message.data);
 }
 
-// CHANNEL_OUT_DONE
+// CHANNEL_INPUT
+DEFINE_MESSAGE(CHANNEL_INPUT);
 
-DEFINE_MESSAGE(CHANNEL_OUT_DONE);
-
-READER(CHANNEL_OUT_DONE) {
-  read<ChannelEvent>(message);
-  message->writer = readVarUint();
+READER(CHANNEL_INPUT) {
+  read(&message->channel);
 }
 
-WRITER(CHANNEL_OUT_DONE) {
-  write<ChannelEvent>(message);
-  writeVarUint(message.writer);
+WRITER(CHANNEL_INPUT) {
+  write(message.channel);
 }
 
 // CHANNEL_ENABLE
-
 DEFINE_MESSAGE(CHANNEL_ENABLE);
 
-READER(CHANNEL_ENABLE) { read<ChannelEvent>(message); }
-WRITER(CHANNEL_ENABLE) { write<ChannelEvent>(message); }
+READER(CHANNEL_ENABLE) {
+  read(&message->channel);
+}
+
+WRITER(CHANNEL_ENABLE) {
+  write(message.channel);
+}
 
 // CHANNEL_DISABLE
-
 DEFINE_MESSAGE(CHANNEL_DISABLE);
 
-READER(CHANNEL_DISABLE) { read<ChannelEvent>(message); }
-WRITER(CHANNEL_DISABLE) { write<ChannelEvent>(message); }
+READER(CHANNEL_DISABLE) {
+  read(&message->channel);
+}
 
-// CHANNEL_RESET
+WRITER(CHANNEL_DISABLE) {
+  write(message.channel);
+}
 
-DEFINE_MESSAGE(CHANNEL_RESET);
+// CHANNEL_RESOLVED
+DEFINE_MESSAGE(CHANNEL_RESOLVED);
 
-READER(CHANNEL_RESET) { read<ChannelEvent>(message); }
-WRITER(CHANNEL_RESET) { write<ChannelEvent>(message); }
+READER(CHANNEL_RESOLVED) {
+  read(&message->channel);
+}
+
+WRITER(CHANNEL_RESOLVED) {
+  write(message.channel);
+}
+
+// CHANNEL_DONE
+DEFINE_MESSAGE(CHANNEL_DONE);
+
+READER(CHANNEL_DONE) {
+  read(&message->channel);
+}
+
+WRITER(CHANNEL_DONE) {
+  write(message.channel);
+}
 
 // PING
-
 DEFINE_MESSAGE(PING);
 
 READER(PING) {}
 WRITER(PING) {}
 
 // PONG
-
 DEFINE_MESSAGE(PONG);
 
 READER(PONG) {}

@@ -70,17 +70,12 @@ struct Channel {
   int32_t address = 0;
 };
 
-template <> void BinaryReader::read(Channel* channel);
-template <> void BinaryWriter::write(const Channel& channel);
-
-// Base class for channel events.
-struct ChannelEvent {
-  Channel channel;
-  instance_id actor = 0;
+struct ChannelHasher {
+  size_t operator()(const Channel& channel) const;
 };
 
-template <> void BinaryReader::read(ChannelEvent* channel);
-template <> void BinaryWriter::write(const ChannelEvent& channel);
+template <> void BinaryReader::read(Channel* channel);
+template <> void BinaryWriter::write(const Channel& channel);
 
 #define READER(name)  \
   template <> void BinaryReader::read(name##_Message* message)
@@ -135,19 +130,21 @@ DECLARE_MESSAGE(INSTANCE_EXITED) {
   instance_id id = 0;
 };
 
-DECLARE_MESSAGE(CHANNEL_IN), public ChannelEvent {};
-
-DECLARE_MESSAGE(CHANNEL_OUT), public ChannelEvent {
+DECLARE_MESSAGE(CHANNEL_OUTPUT) {
+  bool is_local = false;  // True if the message originated from the channel owner.
+  Channel channel;
   std::string data;
 };
 
-DECLARE_MESSAGE(CHANNEL_OUT_DONE), public ChannelEvent {
-  int32_t writer;
+DECLARE_MESSAGE(CHANNEL_INPUT) {
+  Channel channel;
+  std::string data;
 };
 
-DECLARE_MESSAGE(CHANNEL_ENABLE), public ChannelEvent {};
-DECLARE_MESSAGE(CHANNEL_DISABLE), public ChannelEvent {};
-DECLARE_MESSAGE(CHANNEL_RESET), public ChannelEvent {};
+DECLARE_MESSAGE(CHANNEL_ENABLE) { Channel channel; };
+DECLARE_MESSAGE(CHANNEL_DISABLE) { Channel channel; };
+DECLARE_MESSAGE(CHANNEL_RESOLVED) { Channel channel; };
+DECLARE_MESSAGE(CHANNEL_DONE) { Channel channel; };
 
 DECLARE_MESSAGE(PING) {};
 DECLARE_MESSAGE(PONG) {};

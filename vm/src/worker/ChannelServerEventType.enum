@@ -1,0 +1,17 @@
+# This is the enumeration of all possible transition events between different
+# ChannelStates.
+
+LOCAL_INPUT  # Local reader is trying to input.
+REMOTE_INPUT  # Remote reader is trying to input.
+
+LOCAL_OUTPUT  # Local writer is trying to output.
+REMOTE_OUTPUT  # Remote writer is trying to output.
+
+LOCAL_ENABLE  # Local reader is enabling alternative input.
+REMOTE_ENABLE  # Remote reader is enabling alternative input.
+
+LOCAL_DISABLE  # Local reader is disabling alternative input.
+REMOTE_DISABLE  # Remote reader is disabling alternative input.
+
+RESOLVED  # A channel event has been satisfied elsewhere.
+DONE  # Write has completed.

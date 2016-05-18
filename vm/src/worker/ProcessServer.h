@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../channel_info.h"
 #include "../network.h"
+#include "ChannelServer.h"
 #include "Instance.h"
 #include "PartialProcessTree.h"
 
@@ -23,6 +23,13 @@ class ProcessServer {
 
   void serve();
 
+  bool hasInstance(instance_id id);
+
+  template <typename T>
+  void send(const T& message) {
+    messenger_.send(message.type, message);
+  }
+
  private:
   friend class Instance;
 
@@ -37,28 +44,10 @@ class ProcessServer {
   void joinInstance(instance_id join_id, instance_id waiter_id,
                     int32_t workspace_descriptor);
 
-  template <typename T>
-  void send(const T& message) {
-    messenger_.send(message.type, message);
-  }
-
   void onStartProcessServer(MESSAGE(START_PROCESS_SERVER)&& message);
   void onStartInstance(MESSAGE(START_INSTANCE)&& message);
   void onInstanceStarted(MESSAGE(INSTANCE_STARTED)&& message);
   void onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message);
-
-  void resolveChannel(
-      Channel channel, WaitingReader reader, WaitingWriter writer);
-
-  void resolveEnabled(
-      Channel channel, WaitingReader reader, WaitingWriter writer);
-
-  void onChannelInput(MESSAGE(CHANNEL_IN)&& message);
-  void onChannelOutput(MESSAGE(CHANNEL_OUT)&& message);
-  void onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message);
-  void onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message);
-  void onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message);
-  void onChannelReset(MESSAGE(CHANNEL_RESET)&& message);
 
   void onPing(MESSAGE(PING)&& message);
 
@@ -77,14 +66,18 @@ class ProcessServer {
 
   std::string bytecode_;
 
+  struct WaitingProcess {
+    instance_id id;
+    int32_t workspace_descriptor;
+  };
+
   // At most one process can wait for another to exit, and this should be its
   // parent.
   std::mutex exit_mu_;  // Guards unjoined_exits_ and on_exited_.
   std::unordered_set<instance_id> unjoined_exits_;
   std::unordered_map<instance_id, WaitingProcess> on_exited_;
 
-  // Info about active channels.
-  ChannelInfo channels_;
+  ChannelServer channels_;
 
   Messenger messenger_;
 };

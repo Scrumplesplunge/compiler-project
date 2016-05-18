@@ -1,5 +1,5 @@
 MAKEFLAGS = -j8
-CXXFLAGS = -std=c++14 -pthread -Igen -I../lib/src -Og -g #-Ofast -s -flto -Wall  \
+CXXFLAGS = -std=c++14 -pthread -Igen -I../lib/src -g #-Ofast -s -flto -Wall  \
 					 -Wl,--gc-sections
 
 .PHONY: all clean
@@ -28,11 +28,13 @@ VM_DEPS =  \
   obj/util.o obj/runtime/metadata.o  \
   ${ARGS} ${BINARY} ${JSON} ${OPERATIONS} ${VM}
 MASTER_DEPS =  \
-  obj/util.o obj/channel_info.o obj/runtime/metadata.o  \
+  obj/util.o obj/runtime/metadata.o  \
   $(addprefix obj/master/, config.o ProcessTree.o ProcessMaster.o)  \
   ${ARGS} ${JSON} ${BINARY} ${NETWORK} ${VM} ${OPERATIONS}
 WORKER_DEPS =  \
-  obj/util.o obj/channel_info.o  \
+  obj/util.o  \
+	$(addprefix gen/worker/, ChannelServerStateType.o ChannelServerEventType.o)  \
+	$(addprefix obj/worker/, ChannelServer.o)  \
   $(addprefix obj/worker/, Instance.o PartialProcessTree.o ProcessServer.o)  \
   ${ARGS} ${JSON} ${BINARY} ${NETWORK} ${OPERATIONS} ${VM}
 
@@ -58,8 +60,8 @@ ${ENUM}:
 
 # Generated code.
 gen/%.h gen/%.cc: src/%.enum | ${ENUM}
-	@mkdir -p gen
-	cd gen && ../${ENUM} ../$^ $*
+	@mkdir -p gen/$(dir $*)
+	cd gen/$(dir $*) && ${PWD}/${ENUM} ${PWD}/$^ $(basename $(notdir $*))
 
 gen/%.o: gen/%.cc | gen/%.h
 	${CXX} ${CXXFLAGS} -c $^ -o $@

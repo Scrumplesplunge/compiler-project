@@ -50,12 +50,12 @@ class VM {
   // If the debug flag is set, this will display the state of the registers
   // *before* executing the instruction, and will print the instruction that is
   // about to be performed.
-  void step(bool debug = false);
+  void step();
 
   // Check whether the program is running.
   bool running() const { return running_; }
 
-  std::string toString();
+  virtual std::string toString();
 
   int32_t& operator[](int32_t address);
 
@@ -64,6 +64,13 @@ class VM {
 
   void write(int32_t address, int32_t value);
   void writeByte(int32_t address, int8_t value);
+
+  void importBytes(const char* data, int32_t address, int32_t length);
+  void exportBytes(char* data, int32_t address, int32_t length);
+  std::string exportBytes(int32_t address, int32_t length);
+
+  void transferBytesFrom(VM* other, int32_t source_address,
+                         int32_t destination_address, int32_t length);
 
   // Returns the total number of cycles performed.
   int64_t cycles() const { return op_count_; }

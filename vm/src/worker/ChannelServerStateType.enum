@@ -1,0 +1,18 @@
+# This is the enumeration of all possible states of a channel according to a
+# ChannelServer.
+
+NORMAL  # Channel is not in use.
+
+LOCAL_ENABLED  # Channel is enabled by a local alternative.
+REMOTE_ENABLED  # Channel is enabled by a remote alternative.
+
+LOCAL_READY  # Channel is locally enabled with a waiting writer.
+REMOTE_READY  # Channel is locally enabled with a waiting writer.
+
+LOCAL_INPUT_WAIT  # Local reader is waiting to receive.
+REMOTE_INPUT_WAIT  # Remote reader is waiting to receive.
+
+LOCAL_OUTPUT_WAIT  # Local writer is waiting to send.
+REMOTE_OUTPUT_WAIT  # Remote writer is waiting to send.
+
+DONE_WAIT  # Local writer is waiting for reader to finish.

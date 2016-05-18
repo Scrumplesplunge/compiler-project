@@ -24,13 +24,12 @@ INSTANCE_STARTED
 INSTANCE_EXITED
 
 # Channel messages.
-CHANNEL_IN
-CHANNEL_OUT
-CHANNEL_OUT_DONE
-CHANNEL_ENABLE
-CHANNEL_DISABLE
-CHANNEL_RESET
-CHANNEL_ABORT
+CHANNEL_OUTPUT    # Local or remote output.
+CHANNEL_INPUT     # Remote input.
+CHANNEL_ENABLE    # Remote enable.
+CHANNEL_DISABLE   # Remote disable.
+CHANNEL_RESOLVED  # Communication resolved by sender.
+CHANNEL_DONE      # Communication completed.
 
 # Establish the latency in a connection.
 PING

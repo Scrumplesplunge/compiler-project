@@ -77,7 +77,7 @@ int main(int argc, char* args[]) {
     vm.begin();
 
     while (vm.running()) {
-      vm.step(true);
+      vm.step();
 
       // Wait for input between steps if manually stepping.
       if (options::step) cin.get();

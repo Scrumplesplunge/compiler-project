@@ -11,7 +11,7 @@ using namespace std;
 using namespace std::placeholders;
 
 ProcessServer::ProcessServer(Socket&& socket)
-    : messenger_(move(socket)) {
+    : channels_(*this), messenger_(move(socket)) {
   verr << "Configuring messenger channel..\n";
   messenger_.ON(START_PROCESS_SERVER,
                 bind(&ProcessServer::onStartProcessServer, this, _1));
@@ -22,19 +22,6 @@ ProcessServer::ProcessServer(Socket&& socket)
   messenger_.ON(INSTANCE_EXITED,
                 bind(&ProcessServer::onInstanceExited, this, _1));
 
-  messenger_.ON(CHANNEL_IN,
-                bind(&ProcessServer::onChannelInput, this, _1));
-  messenger_.ON(CHANNEL_OUT,
-                bind(&ProcessServer::onChannelOutput, this, _1));
-  messenger_.ON(CHANNEL_OUT_DONE,
-                bind(&ProcessServer::onChannelOutputDone, this, _1));
-  messenger_.ON(CHANNEL_ENABLE,
-                bind(&ProcessServer::onChannelEnable, this, _1));
-  messenger_.ON(CHANNEL_DISABLE,
-                bind(&ProcessServer::onChannelDisable, this, _1));
-  messenger_.ON(CHANNEL_RESET,
-                bind(&ProcessServer::onChannelReset, this, _1));
-
   messenger_.ON(PING, bind(&ProcessServer::onPing, this, _1));
 }
 
@@ -43,10 +30,15 @@ void ProcessServer::serve() {
     verr << "Serving " << messenger_.hostPort() << "\n";
     messenger_.serve();
   } catch (const socket_error& error) {
-    verr << "Connection closed. Shutting down.\n";
+    verr << "Connection closed: " << error.what() << "\n";
   } catch (const read_error& error) {
-    verr << "Read failed. Shutting down.\n";
+    verr << "Read failed: " << error.what() << "\n";
   }
+}
+
+bool ProcessServer::hasInstance(instance_id id) {
+  unique_lock<mutex> instance_lock(instance_mu_);
+  return instances_.count(id) > 0;
 }
 
 void ProcessServer::requestInstance(
@@ -61,6 +53,8 @@ void ProcessServer::requestInstance(
 }
 
 void ProcessServer::notifyExited(instance_id id) {
+  verr << "Instance " << id << " exited.\n";
+
   // Remove the instance from the process tree.
   process_tree_.removeLocalInstance(id);
 
@@ -119,7 +113,7 @@ void ProcessServer::onStartProcessServer(
 }
 
 void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
-  verr << "Starting instance " << message.id << " with Wptr = "
+  verr << ::toString(message.type) << "(" << message.id << ") with Wptr = "
        << addressString(message.descriptor.workspace_pointer) << ", Iptr = "
        << addressString(message.descriptor.instruction_pointer) << "\n";
 
@@ -142,9 +136,7 @@ void ProcessServer::onStartInstance(MESSAGE(START_INSTANCE)&& message) {
     if (options::debug) {
       verr << "Running in debug mode.\n";
       instance->begin();
-      while (instance->running()) {
-        instance->step(true);
-      }
+      while (instance->running()) instance->step();
     } else {
       instance->run();
     }
@@ -182,266 +174,6 @@ void ProcessServer::onInstanceExited(MESSAGE(INSTANCE_EXITED)&& message) {
   if (waiting) {
     unique_lock<mutex> lock(instance_mu_);
     instances_.at(process.id)->wake(process.workspace_descriptor);
-  }
-}
-
-void ProcessServer::resolveChannel(
-    Channel channel, WaitingReader reader, WaitingWriter writer) {
-  Instance* reader_instance;
-  Instance* writer_instance;
-  bool reader_local, writer_local;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-
-    reader_local = (instances_.count(reader.id) > 0);
-    writer_local = (instances_.count(writer.id) > 0);
-    if (reader_local) reader_instance = instances_.at(reader.id).get();
-    if (writer_local) writer_instance = instances_.at(writer.id).get();
-  }
-
-  verr << "Reader is " << (reader_local ? "local" : "not local")
-       << ", writer is " << (writer_local ? "local" : "not local")
-       << ".\n";
-
-  if (reader_local && writer_local) {
-    // Both are local. Resolve here.
-    reader_instance->channelInputDone(channel, move(writer.data));
-    writer_instance->channelOutputDone(channel);
-  } else if (reader_local && !writer_local) {
-    // Wake up the reader and inform the writer.
-    reader_instance->channelInputDone(channel, move(writer.data));
-    MESSAGE(CHANNEL_OUT_DONE) response;
-    response.actor = reader.id;
-    response.writer = writer.id;
-    response.channel = channel;
-    send(response);
-  } else if (!reader_local && writer_local) {
-    // Forward the write.
-    MESSAGE(CHANNEL_OUT) forward;
-    forward.actor = writer.id;
-    forward.channel = channel;
-    forward.data = move(writer.data);
-    send(forward);
-  }
-}
-
-void ProcessServer::resolveEnabled(
-    Channel channel, WaitingReader reader, WaitingWriter writer) {
-  Instance* reader_instance;
-  bool reader_local, writer_local;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-
-    reader_local = (instances_.count(reader.id) > 0);
-    writer_local = (instances_.count(writer.id) > 0);
-    if (reader_local) reader_instance = instances_.at(reader.id).get();
-  }
-
-  if (reader_local) {
-    // Both are local. Wake the reader.
-    reader_instance->altWake(channel);
-  } else if (writer_local) {
-    // Forward the write.
-    MESSAGE(CHANNEL_OUT) forward;
-    forward.actor = writer.id;
-    forward.channel = channel;
-    forward.data = move(writer.data);
-    send(forward);
-  }
-}
-
-void ProcessServer::onChannelInput(MESSAGE(CHANNEL_IN)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  WaitingReader reader;
-  reader.id = message.actor;
- 
-  bool writer_waiting;
-  WaitingWriter writer;
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    writer_waiting = (channels_.writers.count(message.channel) > 0);
-    if (writer_waiting) {
-      writer = move(channels_.writers.at(message.channel));
-      channels_.writers.erase(message.channel);
-    } else {
-      channels_.readers.emplace(message.channel, reader);
-    }
-  }
-
-  if (writer_waiting) {
-    // Writer has already acted, so the transaction can be resolved
-    // immediately.
-    verr << "Writer was waiting. Resolving..\n";
-    resolveChannel(message.channel, reader, writer);
-  } else {
-    // Writer has not yet acted. Save the reader in the reader map and propogate
-    // it.
-    bool reader_local, owner_local;
-    {
-      unique_lock<mutex> instance_lock(instance_mu_);
-      reader_local = (instances_.count(reader.id) > 0);
-      owner_local = (instances_.count(message.channel.owner) > 0);
-    }
-    verr << "Reader is " << (reader_local ? "local" : "not local")
-         << ", owner is " << (owner_local ? "local" : "not local")
-         << ".\n";
-    if (reader_local && !owner_local) {
-      // Inform the master.
-      verr << "Informing master.\n";
-      send(message);
-    }
-  }
-}
-
-void ProcessServer::onChannelOutput(MESSAGE(CHANNEL_OUT)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  WaitingWriter writer;
-  writer.id = message.actor;
-  writer.data = message.data;
-
-  bool reader_waiting, enabled;
-  WaitingReader reader;
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    reader_waiting = (channels_.readers.count(message.channel) > 0);
-    enabled = (channels_.enabled.count(message.channel) > 0);
-    if (reader_waiting) {
-      reader = move(channels_.readers.at(message.channel));
-      channels_.readers.erase(message.channel);
-    } else if (enabled) {
-      reader = move(channels_.enabled.at(message.channel));
-      channels_.enabled.erase(message.channel);
-    } else {
-      channels_.writers.emplace(message.channel, writer);
-    }
-  }
-  if (reader_waiting) {
-    // Reader is already waiting, so the transaction can be resolved
-    // immediately.
-    verr << "Reader was waiting. Resolving..\n";
-    resolveChannel(message.channel, reader, writer);
-  } else if (enabled) {
-    // Reader is waiting in an ALT.
-    verr << "Channel is enabled. Resolving..\n";
-    resolveEnabled(message.channel, reader, writer);
-  } else {
-    bool writer_local, owner_local;
-    {
-      unique_lock<mutex> instance_lock(instance_mu_);
-      writer_local = (instances_.count(writer.id) > 0);
-      owner_local = (instances_.count(message.channel.owner) > 0);
-    }
-    verr << "Writer is " << (writer_local ? "local" : "not local")
-         << ", owner is " << (owner_local ? "local" : "not local")
-         << ".\n";
-    if (writer_local && !owner_local) {
-      // Inform the master.
-      verr << "Informing master.\n";
-      send(message);
-    }
-  }
-}
-
-void ProcessServer::onChannelOutputDone(MESSAGE(CHANNEL_OUT_DONE)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    channels_.enabled.erase(message.channel);
-    channels_.readers.erase(message.channel);
-    channels_.writers.erase(message.channel);
-  }
-
-  bool reader_local, writer_local;
-  Instance* writer_instance;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-    reader_local = (instances_.count(message.actor) > 0);
-    writer_local = (instances_.count(message.writer) > 0);
-    if (writer_local) writer_instance = instances_.at(message.writer).get();
-  }
-  verr << "Reader is " << (reader_local ? "local" : "not local")
-       << ", writer is " << (writer_local ? "local" : "not local")
-       << ".\n";
-  if (writer_local) {
-    // Inform the local process.
-    writer_instance->channelOutputDone(message.channel);
-  } else if (reader_local) {
-    // Need to inform a remote process. Propogate the message.
-    send(message);
-  }
-}
-
-void ProcessServer::onChannelEnable(MESSAGE(CHANNEL_ENABLE)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  WaitingReader reader;
-  reader.id = message.actor;
-
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    channels_.enabled.emplace(message.channel, reader);
-  }
-
-  bool reader_local, owner_local;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-    reader_local = (instances_.count(reader.id) > 0);
-    owner_local = (instances_.count(message.channel.owner) > 0);
-  }
-  if (reader_local && !owner_local) {
-    // Inform the master.
-    send(message);
-  }
-}
-
-void ProcessServer::onChannelDisable(MESSAGE(CHANNEL_DISABLE)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    channels_.enabled.erase(message.channel);
-  }
-
-  bool reader_local, owner_local;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-    reader_local = (instances_.count(message.actor) > 0);
-    owner_local = (instances_.count(message.channel.owner) > 0);
-  }
-  if (reader_local && !owner_local) {
-    // Inform the master.
-    send(message);
-  }
-}
-
-void ProcessServer::onChannelReset(MESSAGE(CHANNEL_RESET)&& message) {
-  verr << ::toString(message.type) << "("
-       << addressString(message.channel.address) << ") received.\n";
-
-  {
-    unique_lock<mutex> channel_lock(channels_.mutex);
-    channels_.enabled.erase(message.channel);
-    channels_.readers.erase(message.channel);
-    channels_.writers.erase(message.channel);
-  }
-
-  bool actor_local, owner_local;
-  {
-    unique_lock<mutex> instance_lock(instance_mu_);
-    actor_local = (instances_.count(message.actor) > 0);
-    owner_local = (instances_.count(message.channel.owner) > 0);
-  }
-  if (actor_local && !owner_local) {
-    // Inform the master.
-    send(message);
   }
 }
 

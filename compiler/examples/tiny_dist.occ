@@ -1,0 +1,24 @@
+CHAN a, b :
+
+PROC print.dec(VALUE i) =
+  SKIP
+:
+
+DIST PAR
+  VAR temp :
+  SEQ i = [0 FOR 10]
+    SEQ
+      a ? temp
+      print.dec(temp)
+      b ! temp
+  VAR temp :
+  SEQ
+    a ! 42
+    SEQ i = [0 FOR 9]
+      SEQ
+        b ? temp
+        print.dec(temp)
+        a ! temp
+    b ? temp
+    print.dec(temp)
+
