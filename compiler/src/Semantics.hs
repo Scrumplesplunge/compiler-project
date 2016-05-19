@@ -31,11 +31,10 @@ check_replicable compile_time check_a (AST.Basic as) = do
   as' <- mapM check_a as
   return (Basic as')
 check_replicable
-    compile_time check_a (AST.Replicated r@(AST.Range (L n loc) _ _) a) =
-  new_scope (do
-    r' <- check_replicator compile_time r
-    a' <- add_name n (INT, loc) (check_a a)
-    return (Replicated r' a'))
+    compile_time check_a (AST.Replicated r@(AST.Range (L n loc) _ _) a) = do
+  r' <- check_replicator compile_time r
+  a' <- add_name n (INT, loc) (check_a a)
+  return (Replicated r' a')
 
 check_nestable :: (a -> SemanticAnalyser a2) -> (b -> SemanticAnalyser b2)
                -> AST.Nestable a b -> SemanticAnalyser (Nestable a2 b2)
@@ -209,10 +208,9 @@ check_definition ((L d loc) : ds) p = do
       ds' <- add_name name (CONST t value, loc) $ check_definition ds p
       return $ DefineConstant name value ds'
     AST.DefineProcedure name formals proc -> do
-      t <- new_scope (do
-        let formals' = formal_types formals
-        proc' <- add_formals formals $ check_process proc
-        return (PROC formals' proc'))
+      let formals' = formal_types formals
+      proc' <- add_formals formals $ check_process proc
+      let t = PROC formals' proc'
       ds' <- add_name name (t, loc) $ check_definition ds p
       return $ DefineProcedure name ds'
 
