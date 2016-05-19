@@ -15,8 +15,7 @@ import Result
 
 -- Helpers for the replicable and nestable types.
 check_replicator :: Bool -> AST.Replicator -> SemanticAnalyser Replicator
-check_replicator compile_time (AST.Range (L n loc') a b) = do
-  add_name n (INT, loc')
+check_replicator compile_time (AST.Range (L n _) a b) = do
   -- TODO: Check types.
   (t1, a') <- check_rvalue a
   if compile_time then do
@@ -31,10 +30,11 @@ check_replicable :: Bool -> (a -> SemanticAnalyser a2) -> AST.Replicable a
 check_replicable compile_time check_a (AST.Basic as) = do
   as' <- mapM check_a as
   return (Basic as')
-check_replicable compile_time check_a (AST.Replicated r a) =
+check_replicable
+    compile_time check_a (AST.Replicated r@(AST.Range (L n loc) _ _) a) =
   new_scope (do
     r' <- check_replicator compile_time r
-    a' <- check_a a
+    a' <- add_name n (INT, loc) (check_a a)
     return (Replicated r' a'))
 
 check_nestable :: (a -> SemanticAnalyser a2) -> (b -> SemanticAnalyser b2)
@@ -189,8 +189,7 @@ check_definition ((L d loc) : ds) p = do
   case d of
     AST.DefineSingle t name -> do
       -- Define the variable.
-      add_name name (raw_type t, loc)
-      ds' <- check_definition ds p
+      ds' <- add_name name (raw_type t, loc) $ check_definition ds p
       return $ Define t name 1 ds'
     AST.DefineVector t name l_expr -> do
       -- Compute the (constant) size of the vector.
@@ -198,8 +197,8 @@ check_definition ((L d loc) : ds) p = do
       case value of
         Integer size -> do
           -- Define the array.
-          add_name name (raw_array_type t (fromIntegral size), loc)
-          ds' <- check_definition ds p
+          ds' <- add_name name (raw_array_type t (fromIntegral size), loc)
+                          (check_definition ds p)
           return $ Define t name (fromIntegral size) ds'
         _ -> do
           type_mismatch (AST.location l_expr) INT t'
@@ -207,31 +206,33 @@ check_definition ((L d loc) : ds) p = do
     AST.DefineConstant name l_expr -> do
       -- Compute the constant value.
       (t, value) <- check_and_compute_constexpr l_expr
-      add_name name (CONST t value, loc)
-      ds' <- check_definition ds p
+      ds' <- add_name name (CONST t value, loc) $ check_definition ds p
       return $ DefineConstant name value ds'
     AST.DefineProcedure name formals proc -> do
       t <- new_scope (do
-        formals' <- mapM check_formal formals
-        proc' <- check_process proc
+        let formals' = formal_types formals
+        proc' <- add_formals formals $ check_process proc
         return (PROC formals' proc'))
-      add_name name (t, loc)
-      ds' <- check_definition ds p
+      ds' <- add_name name (t, loc) $ check_definition ds p
       return $ DefineProcedure name ds'
 
-check_formal :: L AST.Formal -> SemanticAnalyser Type
-check_formal (L (AST.Single r n) loc) = do
-  let t = raw_type r
-  add_name n (t, loc)
-  return t
+add_formals :: [L AST.Formal] -> SemanticAnalyser a -> SemanticAnalyser a
+add_formals [] analyser = analyser
+add_formals (f@(L (AST.Single r n) loc) : fs) analyser =
+  add_name n (formal_type f, loc) analyser
+add_formals (f@(L (AST.Vector r n) loc) : fs) analyser =
+  add_name n (formal_type f, loc) analyser
 
-check_formal (L (AST.Vector r n) loc) = do
-  let t = (case raw_type r of
-             BYTE -> BYTE_ARRAY_REF
-             CHAN -> CHAN_ARRAY_REF
-             INT -> INT_ARRAY_REF)
-  add_name n (t, loc)
-  return t
+formal_types :: [L AST.Formal] -> [Type]
+formal_types = map formal_type
+
+formal_type :: L AST.Formal -> Type
+formal_type (L (AST.Single r n) loc) = raw_type r
+formal_type (L (AST.Vector r n) loc) =
+  case raw_type r of
+    BYTE -> BYTE_ARRAY_REF
+    CHAN -> CHAN_ARRAY_REF
+    INT -> INT_ARRAY_REF
 
 check_delay :: L AST.Expression -> SemanticAnalyser Process
 check_delay expr = do
