@@ -1,6 +1,6 @@
 DEF n = 10 :
 VAR x[n] :
-CHAN send[10] :
+CHAN send[n] :
 
 -- These procedures are built into the compiler, but still require declaring.
 PROC putc(VALUE c) =
@@ -12,7 +12,7 @@ PROC print.dec(VALUE i) =
 :
 
 -- Create n instances of the inner-parallel.
-PAR i = [1 FOR n]
+PAR i = [0 FOR n]
   -- Create two processes: one for calculation, one for presentation.
   PAR
     -- In one process, calculate the square and send them via a channel.
