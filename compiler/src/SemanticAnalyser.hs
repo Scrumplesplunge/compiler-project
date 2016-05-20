@@ -16,14 +16,15 @@ type NameInfo = (Type, Location)
 -- All names defined thus far.
 type Environment = [(AST.Name, NameInfo)]
 
+-- Information about variables defined in the static chain.
+type StaticChain = [Int32]
+
 data State = State {
   num_errors :: Integer,
   num_warnings :: Integer,
   next_static_address :: Int32,  -- Next address to assign to static data.
   static :: [(Int32, Static)]    -- Static data currently defined.
 }
-
-type StaticChain = [Int32]
 
 instance Show State where
   show s = show_data

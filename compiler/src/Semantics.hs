@@ -63,7 +63,7 @@ check_name check_type loc x = do
   x' <- find_name x
   case x' of
     Nothing -> do
-      print_error loc ("Undefined name " ++ show x)
+      print_error loc ("Undefined name " ++ show x ++ ".")
       return ""
     Just (t, loc') -> do
       case t of
@@ -72,15 +72,15 @@ check_name check_type loc x = do
             return ()
           else do
             print_error loc
-                ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
-            print_note (show x ++ " is defined at " ++ show loc')
+                ("Name " ++ show x ++ " is of the wrong type: " ++ show t ++ ".")
+            print_note (show x ++ " is defined at " ++ show loc' ++ ".")
         _ ->
           if check_type t then
             return ()
           else do
             print_error loc
-                ("Unexpected name " ++ show x ++ " of type " ++ show t ++ ".")
-            print_note (show x ++ " is defined at " ++ show loc')
+                ("Name " ++ show x ++ " is of the wrong type: " ++ show t ++ ".")
+            print_note (show x ++ " is defined at " ++ show loc' ++ ".")
       return x
 
 check_process :: L AST.Process -> SemanticAnalyser Process

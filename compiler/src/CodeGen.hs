@@ -849,13 +849,10 @@ assemble ctx process output = do
   let (pp, gp) = gen_proc process
   let text = run_generator (do
         code <- gp ctx
-        let static_size = stack_depth ctx
         let stack_size = depth_required pp
-        let comment1 =
-              comment ("Static data size: " ++ show static_size ++ " word(s)")
-        let comment2 =
+        let summary =
               comment ("Stack space required: " ++ show stack_size ++
                        " word(s)")
-        showCode $ Code [comment1, comment2, code, Raw [STOPP]])
+        showCode $ Code [summary, code, Raw [STOPP]])
   hPutStr output text
   return (depth_required pp)
