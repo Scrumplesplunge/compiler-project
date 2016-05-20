@@ -190,4 +190,24 @@
   }
 }
 
+\newglossaryentry{static-chain}{
+  name = Static Chain,
+  text = static chain,
+  description = {
+    The static chain is the list formed by repeatedly dereferencing the
+    \gls{static-link} pointer. It is used to implement closure semantics.
+  }
+}
+
+\newglossaryentry{static-link}{
+  name = Static Link,
+  text = static link,
+  description = {
+    The static link is a pointer which is at a known location in the workspace
+    of a process, which points to the location where variables in the enclosing
+    scope can be found. This allows the same code to be called within different
+    contexts, and is used to implement closure semantics.
+  }
+}
+
 \glossarystyle{altlist}

@@ -1,0 +1,7 @@
+PROC print.dec(VALUE i) =
+  SKIP  -- Built-in function, definition is ignored.
+:
+DEF message = "Hello!", message.length = 6 :
+IF i = [0 FOR message.length]
+  message[BYTE i] = 'o'
+    print.dec(i)

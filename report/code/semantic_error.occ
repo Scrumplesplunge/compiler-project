@@ -1,0 +1,3 @@
+CHAN c :
+SEQ
+  c := 2

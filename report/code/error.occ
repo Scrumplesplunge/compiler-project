@@ -1,0 +1,7 @@
+VAR x :
+SEQ
+  VAR x :       -- Redeclaring x.
+  VAR foo[x] :  -- Arrays must have a compile-time constant size.
+  SEQ
+    x := 2
+    foo[0] ! 3  -- foo[0] is not a channel.

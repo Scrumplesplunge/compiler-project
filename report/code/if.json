@@ -1,0 +1,5 @@
+{
+  "static_data" : [72, 101, 108, 108, 111, 33],
+  "root_process_size" : 40,
+  "assembly_file" : "code.s"
+}

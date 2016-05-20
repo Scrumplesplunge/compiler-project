@@ -27,6 +27,7 @@
 \titlespacing*{\chapter}{0pt}{30pt}{10pt}
 
 % Code listing style.
+\definecolor{label}{rgb}{0.0, 0.5, 0.8}
 \definecolor{comment}{rgb}{0.0, 0.5, 0.0}
 \definecolor{keyword}{rgb}{0.0, 0.0, 0.5}
 \definecolor{string}{rgb}{0.4, 0.4, 0.4}
@@ -52,6 +53,27 @@
   morestring=[b]',
   morestring=[b]",
   sensitive=true
+}
+
+\lstdefinelanguage{assembly}{
+  keywords={
+    % Direct operations.
+    j, ldlp, pfix, ldnl, ldc, ldnlp, nfix, ldl, adc, call, cj, ajw, eqc, stl,
+    stnl, opr,
+    % Indirect operations.
+    add, and, diff, diss, div, dup, enbs, endp, gt, lb, ldpi, lend, mint, mul,
+    not, or, outword, rem, ret, rev, runp, sb, shl, shr, startp, stopp, sub,
+    wsub, xor,
+    % Debugging operations.
+    putc, puts, printdec, printhex, printr
+  },
+  identifierstyle=\color{label},
+  morecomment=[l]{\#},
+  sensitive=true
+}
+
+\lstdefinelanguage{json}{
+  morestring=[b]",
 }
 
 \input{chapters/glossary}
@@ -102,7 +124,7 @@
   \appendix
 
   \chapter{Parser Evaluation Rules} \label{parser-lib}
-    \lstinputlisting[firstline=76, lastline=137, language=haskell]{code.txt}
+    \lstinputlisting[language=haskell]{code/run_parser.hs}
 
   \clearpage
   \addcontentsline{toc}{chapter}{Bibliography}

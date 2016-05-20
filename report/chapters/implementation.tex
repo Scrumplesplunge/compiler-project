@@ -70,9 +70,11 @@ tokens are produced.
 The main source of complexity with this implementation is with handling
 continuation lines: some lines may be prematurely broken in order to improve
 readability. For instance, the statement
-\lstinputlisting[firstline=33, lastline=33, language=occam]{code.txt}
+\lstinputlisting[firstline=2, lastline=2, language=occam]
+    {code/line_continuation.occ}
 could be rewritten as
-\lstinputlisting[firstline=35, lastline=36, language=occam]{code.txt}
+\lstinputlisting[firstline=5, lastline=6, language=occam]
+    {code/line_continuation.occ}
 to improve readability. In this case, the indentation of the second line must
 not be converted into \texttt{INDENT} tokens, and any subsequent lines should
 not produce \texttt{DEDENT} lines because of it.
@@ -88,7 +90,8 @@ level.
 \subsection{Parser}
 
 Section \ref{design-parser} explains that the parser for this project is
-implemented from scratch, and that it is broken into two parts:
+implemented from scratch, and that it is broken into two parts: the parsing
+library, and the Occam parser.
 
 \subsubsection{The Parsing Library}
 
@@ -96,13 +99,13 @@ The parsing library defines a \texttt{Parser} monad along with a collection of
 combinators for building parsers. The \texttt{Parser} type is defined
 as\footnote{This uses the Generalised Algebraic Data-Types extension to GHC to
 allow for more complicated type definitions.}:
-\lstinputlisting[firstline=44, lastline=50, language=haskell]{code.txt}
+\lstinputlisting[language=haskell]{code/parser_monad.hs}
 These parser types can be summarised as follows:
 \begin{description}
   \item[\texttt{Epsilon}] matches the empty-string.
-  \item[\texttt{Match "foo" f}] matches tokens which satisfy the predicate \texttt{f},
-    and displays \texttt{foo} in error messages which concern this location in
-    the parse tree.
+  \item[\texttt{Match "foo" f}] matches tokens which satisfy the predicate
+    \texttt{f}, and displays \texttt{foo} in error messages which concern this
+    location in the parse tree.
   \item[\texttt{Union ps}] matches any of the parsers in \texttt{ps}.
   \item[\texttt{Concat p q}] matches the concatenation of parsers \texttt{p} and
     \texttt{q}.
@@ -113,7 +116,8 @@ These parser types can be summarised as follows:
 \end{description}
 Combinations of these parsers can be used to parse any of the grammars that we
 will need to parse. A parser can be invoked with:
-\lstinputlisting[firstline=52, lastline=53, language=haskell]{code.txt}
+\lstinputlisting[firstline=10, lastline=11, language=haskell]
+    {code/run_parser.hs}
 That is, \texttt{run\_parser p ts} will run the parser \texttt{p} on the token
 list \texttt{ts}, and produce a list of \texttt{Result}s, each of which is
 either \texttt{Success (partial\_parse, remaining\_tokens)} or
@@ -161,56 +165,177 @@ following infix combinators:
 
     \texttt{p >>> f = Reduce f p}.
 \end{description}
-
 Together, these combinators allow a parser definition such as
-\lstinputlisting[firstline=55, lastline=58, language=haskell]{code.txt}
+\lstinputlisting[firstline=3, lastline=6, language=haskell]
+    {code/infix_parser.hs}
 to be rewritten as
-\lstinputlisting[firstline=60, lastline=63, language=haskell]{code.txt}
+\lstinputlisting[firstline=10, lastline=13, language=haskell]
+    {code/infix_parser.hs}
 It is arguably more clear what is being parsed by the second version than the
-first.
+first. Note the type \texttt{L a}, which denotes an \texttt{a} which is
+additionally tagged with a source location.
 
 The one remaining quirk of the parsing library is that due to the way that the
 combinators are implemented, it is necessary to explicitly denote left-recursive
 grammars so that they can be treated differently:
-\lstinputlisting[firstline=65, lastline=74, language=haskell]{code.txt}
+\lstinputlisting[language=haskell]{code/left_recursion.hs}
 
 \subsubsection{The Occam Parser} \label{occam-parser-impl}
 
 Implementing the Occam parser was mostly a case of transcribing the Occam
 grammar as described in \cite{jones}. However, directly transcribing the rules
 for expressions gave the following definition:
-\lstinputlisting[firstline=139, lastline=151, language=haskell]{code.txt}
+\lstinputlisting[firstline=2, lastline=14, language=haskell]{code/expression.hs}
 Parts have been excluded for the sake of brevity. A large number of the rules
 here start with the same component: \texttt{operand}. This meant that when the
 expression being parsed was, for example, \texttt{(complicated expression) * 2},
 the \texttt{complicated expression} would be parsed from scratch for every
 branch of the union up until the branch for multiplication expressions. By
 refactoring this code into the following, the parsing time was reduced by 97\%:
-\lstinputlisting[firstline=154, lastline=167, language=haskell]{code.txt}
+\lstinputlisting[firstline=17, lastline=31, language=haskell]
+    {code/expression.hs}
+
+One major divergence from the grammar rules in the source materials was to parse
+the left hand side of assignments, the right hand side of inputs, and all
+channels as expressions. The set of valid syntactic forms that can be in these
+positions is a struct subset of the set of expressions, but parsing in this
+manner allows the compiler to produce more meaningful error messages when the
+user has mixed up types.
 
 \subsection{Semantic Analysis}
 
-{
-  \color{red}
-  Things to mention:
+Similar to the parser, the semantic analysis phase is broken into two parts: one
+part provides the basic building blocks for the semantic analyser, and the other
+provides the specific analysis for Occam.
 
-  \begin{itemize}
-    \item SemanticAnalyser monad.
-    \item Constant expression handling.
-  \end{itemize}
-}
+\subsubsection{The SemanticAnalyser Monad}
+
+Semantic analysis is the stage which is responsible for most of the feedback
+which is sent to the user. Thus, it has to be capable of producing error
+messages or warnings whilst simultaneously transforming the abstract syntax and
+aggregating various global information such as static data. The
+\texttt{SemanticAnalyser} monad encapsulates this functionality:
+\lstinputlisting[language=haskell]{code/semantic_analyser.hs}
+The \texttt{Environment} datatype contains all variables that are currently in
+scope. For each variable, its type and the location of its declaration are
+stored. The type information is used for performing type checks throughout the
+remainder of the analysis, whilst the location is used purely for generating
+useful error messages.
+
+When code has to refer to variables which are syntactically in scope but are at
+an unknown location relative to the workspace of the code, they must be accessed
+via the \textit{\gls{static-chain}}. The \texttt{StaticChain} datatype describes
+stores the current state of the static chain, and is used to identify the static
+level and offset of variables.
+
+The \texttt{State} datatype tracks properties about the program that need to be
+accumulated before code generation can take place. The number of errors produced
+will determine whether or not compilation continues after the semantic analysis
+finishes\footnote{Rather trivially, if the number is non-zero then compilation
+halts.}, and the values \texttt{next\_static\_address} and \texttt{static}
+aggregate all of the static constants that are defined throughout the program.
+As described in \ref{static-blob}, these need to be treated separately from the
+program code.
+
+Finally, the \texttt{SemanticAnalyser} monad is an encapsulation of the full
+semantic analysis process, allowing the \texttt{AST} to be transformed into an
+\texttt{AnnotatedAST} whilst checking that the program makes sense. The usage
+pattern for the monad is:
+\lstinputlisting[language=haskell]{code/semantics.hs}
+This would be the function for checking an \texttt{AST} node called
+\texttt{Foo}. The semantic analysis would be performed, and some number of
+warnings may be produced. If the code is invalid, some errors may be produced.
+When such an error occurs, the analyser may try to guess an alteration which
+would fix the code (purely so analysis can continue and further errors can be
+found). If no errors occurred, or the errors were not fatal, then the analyser
+would return an \texttt{AnnotatedAST.Foo}, and update the state in the
+\texttt{SemanticAnalyser} accordingly.
+
+\subsubsection{The Occam Semantic Analyser}
+
+The semantic analysis for the compiler consists of a collection of functions of
+the form described above. The functions perform tasks such as verifying that all
+referenced variables have been declared and are in scope. The analyser also
+produces warnings when variables are declared with the same name as other
+variables in scope. Where expressions are required to be compile-time constants,
+the analyser verifies this and computes the value of the constants. Since all
+channels and l-values have been parsed as expressions, the type of these
+expressions must be checked to verify that it makes sense to assign to them, or
+to treat them like channels.
+
+Below is listed a program which contains mistakes which are detected by the
+analyser and result in errors and warnings. The compiler realises that this
+program does not make any sense and refuses to produce code for it:
+\lstinputlisting[language=occam]{code/error.occ}
+Executing the compiler on this program results in the following output:
+\lstinputlisting[breaklines=true]{code/error_example.txt}
 
 \subsection{Code Generation}
 
-{
-  \color{red}
-  Things to mention:
+The code generation stage is the largest part of the compiler. There are several
+reasons why this is the case:
 
-  \begin{itemize}
-    \item Two-stage compilation.
-    \item Comments generated in assembly output.
-  \end{itemize}
-}
+\begin{itemize}
+  \item
+    As mentioned in \ref{code-gen}, it is necessary to compute unique labels
+    throughout the code generation process. However, to make these more
+    readable, each label consists of a name which corresponds to its purpose,
+    and a unique integer which deduplicates the labels.
+  \item
+    When compiling expressions, the compiler may make use of the register stack
+    in the transputer to store intermediate values. However, these are not
+    guaranteed to be conserved if the process is descheduled, so it is necessary
+    to avoid using instructions that can cause the process to be descheduled
+    whilst computing the value of expressions.
+  \item
+    When compiling a particularly complicated expression, the number of
+    registers required to store all intermediate values may exceed the register
+    stack. Sometimes this can be resolved by reordering the computation of the
+    components of the expression, but often it is necessary to allocate
+    temporary variables to store the intermediate values.
+  \item
+    When compiling \texttt{PAR} constructs, it is necessary to know how much
+    stack space is going to be required by each of the sub-processes before the
+    code for the construct can be generated. However, generating the code for
+    the sub-processes requires information about where the process is located in
+    memory so that references to external variables can be resolved.
+    
+    To solve this seemingly circular dependency, the code generation is broken
+    into two phases. During the first phase, the amount of space required by
+    each component of the program is computed, and then during the second phase
+    this information is used to generate the code. The first phase could have
+    easily been performed as part of the semantic analysis, but the advantage of
+    having it here is that the code for generating a component is in exactly the
+    same place as the promise about how much space that component will take.
+  \item
+    In order to facilitate debugging, the compiler generates comments that
+    describe what each part of the assembly code is doing. These comments
+    include fragments of the original source code so that the assembly can
+    easily be cross-referenced with the Occam code that generated it.
+\end{itemize}
+
+Figure \ref{code-example} shows a complete example of the code generated by
+compiling a short example program. The metadata file contains information needed
+to execute the program which can't be expressed in the program code. This
+includes the static data\footnote{This could technically be encoded as a vast
+sequence of \texttt{ldc} and \texttt{stnl} instructions, but it would be
+incredibly inefficient.} and the amount of memory required to run the program.
+Note that while the code only allocates four words (16 bytes) of space, it
+implicitly uses a small number of additional words as part of the implementation
+of task switching and alternative input, as the Transputer did. This accounts
+for the additional six words (24 bytes) which is reported in the
+\texttt{root\_process\_size} field of the metadata file.
+
+\begin{figure}[p]
+  \label{code-example}
+  Input program:
+  \lstinputlisting[language=occam]{code/if.occ}
+  Generated metadata file:
+  \lstinputlisting[language=json]{code/if.json}
+  Generated assembly file:
+  \lstinputlisting[language=assembly]{code/if.s}
+  \caption{Files generated by compiling a small program.}
+\end{figure}
 
 \section{Assembler}
 

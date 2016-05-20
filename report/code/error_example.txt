@@ -1,0 +1,7 @@
+joe@thirio> bin/occ --source_file examples/error.occ
+Warning at line 3, character 7: Declaration of 'x' shadows existing declaration at line 1, character 5.
+Error at line 4, character 11: Use of non-constant name 'x' (defined at line 3, character 7) in constant expression.
+Error at line 7, character 5: Name "foo" is of the wrong type: INT[0].
+Note: "foo" is defined at line 4, character 7.
+Compilation failed with 2 error(s) and 1 warning(s).
+
