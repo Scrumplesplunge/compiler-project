@@ -94,11 +94,6 @@
   \setcounter{page}{1}
   \input{chapters/abstract}
 
-  \clearpage
-  \addcontentsline{toc}{chapter}{Glossary}
-    \printglossaries
-  \clearpage
-
   \tableofcontents
   \clearpage
 
@@ -177,7 +172,9 @@
   \chapter{Replication in Occam} \label{adx-occam}
     \input{chapters/occam}
 
-  \clearpage
+  \addcontentsline{toc}{chapter}{Glossary}
+    \printglossaries
+
   \addcontentsline{toc}{chapter}{Bibliography}
     \input{chapters/bibliography}
 \end{document}

@@ -24,6 +24,8 @@ tools:
 
 status:
 	@echo "===== REPORT ====="
-	@find report -name '*.tex' | xargs texcount -nosub -total | tail -n +2
+	@find report -name '*.tex' -not -name 'glossary*' |  \
+	 xargs texcount -nosub -total |  \
+	 tail -n +2
 	@echo "===== CODE ====="
 	@cloc -quiet . | tail -n +3
