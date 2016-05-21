@@ -1,8 +1,8 @@
 \makeglossaries
 
 \newglossaryentry{fsa}{
-  name = Finite State Automata,
-  text = finite state automata,
+  name = Finite State Automaton,
+  text = finite state automaton,
   description = {
     Given an alphabet $\Sigma$, a finite state automaton can be defined by a
     collection of states $S$, a starting state $s_0 \in S$, a set of accepting
@@ -36,7 +36,7 @@
     described or recognised by any regular language, as the corresponding
     automata would have to be infinite in size in order to deal with the
     arbitrarily deep nesting. Perhaps the most common way of expressing a
-    regular language is to use \textit{\gls{regex}}.
+    regular language is to use a \textit{\gls{regex}}.
   }
 }
 
@@ -44,8 +44,9 @@
   name = Context-Free Language,
   text = context-free language,
   description = {
-    The collection of context-free languages is a strict superset of the
-    collection of \gls{reglang}.
+    A context-free language is a language which can be matched by some
+    context-free grammer. The collection of context-free languages is a strict
+    superset of the collection of \gls{reglang}.
   }
 }
 
@@ -53,9 +54,8 @@
   name = Context-Free Grammar,
   text = context-free grammar,
   description = {
-    Just as \gls{regex}s are a way of describing \gls{reglang}s, context-free
-    grammars are a way of describing \gls{cflang}s. A context-free grammar is
-    made up of a collection of rules describing reductions. The rule
+    Context-free grammars are a way of describing \gls{cflang}s, and are
+    made up of collections of rules which describe reductions. The rule
     $A \to \texttt{abc}$ states that the grammar symbol $A$ can be reduced to
     the collection of language symbols \texttt{abc}. Rules may be recursive, and
     may reference other rules. For example, the rule
@@ -63,7 +63,7 @@
     reduced to either the expression $\texttt{(}A\texttt{)}A$, or to the empty
     string which is denoted by $\epsilon$. Context-free grammars are therefore
     able to match patterns such as nested brackets, making them far more
-    suitable for programming languages than \gls{reglang}s.
+    suitable for describing programming languages than \gls{reglang}s are.
   }
 }
 
@@ -71,9 +71,9 @@
   name = Lexing,
   text = lexing,
   description = {
-    The process of converting a stream of characters into a (smaller) stream of
+    The process of converting a stream of characters into a (shorter) stream of
     tokens. In the context of compilers, these tokens are usually things such as
-    keywords, identifiers, and numbers.
+    keywords, identifiers, and literals.
   }
 }
 
@@ -83,7 +83,7 @@
   description = {
     A processor architecture developed in the 1980s which was designed alongside
     Occam with the intention of being programmed exclusively in Occam. See
-    \ref{transputer} for a more detailed description.
+    section \ref{transputer} for a more detailed description.
   }
 }
 
@@ -91,7 +91,7 @@
   name = Direct Instruction,
   text = direct instruction,
   description = {
-    In the Transputer instruction set, Direct Instructions are those which can
+    In the Transputer instruction set, direct instructions are those which can
     be executed without use of the \texttt{OPR} instruction. There are 13 such
     instructions, each with a 4-bit operand which can be extended via the
     \gls{prefix-instructions}.
@@ -114,7 +114,7 @@
   name = Indirect Instruction,
   text = indirect instruction,
   description = {
-    In the Transputer instruction set, Indirect Instructions are those which are
+    In the Transputer instruction set, indirect instructions are those which are
     executed via the \texttt{OPR} instruction. Exactly 16 of these require only
     a single byte (the operation number fits inside the 4-bit operand of the
     \texttt{OPR} instruction), but an arbitrarily large number of additional
@@ -173,8 +173,8 @@
   name = Virtual Machine,
   text = virtual machine,
   description = {
-    The Virtual Machine interprets and executes program bytecode. See \ref{vm}
-    for details.
+    The Virtual Machine interprets and executes program bytecode. See section
+    \ref{vm} for details.
   }
 }
 
@@ -182,11 +182,11 @@
   name = Lazy Evaluation,
   text = lazy evaluation,
   description = {
-    Intuitively, lazy evaluation is a reduction strategy which only performs
-    work that is essential for computing the overall result. This results in a
-    slight performance overhead in cases where all intermediate calculations are
+    Lazy evaluation is a reduction strategy which only performs work that is
+    essential for computing the overall result. This results in a slight
+    performance overhead in cases where all intermediate calculations are
     necessary, but can often significantly reduce the computational complexity
-    of na\"ive implementations.
+    of na\"ive algorithms.
   }
 }
 
@@ -217,6 +217,27 @@
     To improve network utilisation, Nagle's algorithm buffers output for a short
     period before sending so that a sequence of small messages can be sent as
     one larger one, thereby reducing the overhead by sending fewer TCP headers.
+  }
+}
+
+\newglossaryentry{combinator}{
+  name = Combinator,
+  text = combinator,
+  description = {
+    A combinator, in the context of formal languages, is a function which
+    modifies or combines some number of languages to form a new language. In the
+    case of regular expressions, the combinators are functions such as union,
+    concatenation, and klein star (zero or more repetitions).
+  }
+}
+
+\newglossaryentry{l-value}{
+  name = L-Value,
+  text = l-value,
+  description = {
+    An l-value is any construct which can be meaningfully assigned to. The term
+    "l-value" is short for "left-value", and is borrowed from C nomenclature
+    where the assignee appears to the left of the assignment operator.
   }
 }
 

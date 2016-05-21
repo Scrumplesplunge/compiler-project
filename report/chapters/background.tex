@@ -45,7 +45,9 @@ The above (meaningless) program demonstrates some of the details of the
 language. Note that unlike many other languages, Occam requires sequences of
 statements to be explicitly denoted by the keyword \texttt{SEQ}. In fact, the
 textual syntax is remarkably similar to the abstract syntax that one might
-expect to find in the compiler.
+expect to find in the compiler. Note the \textit{replication} on the
+\texttt{PAR} and \texttt{SEQ} statements on line 2 and 21 respectively; appendix
+\ref{adx-occam} briefly covers the semantics of this feature.
 
 \section{The Transputer} \label{transputer}
 
@@ -53,9 +55,10 @@ The Transputer was an advanced processor which presented several advanced
 features aimed at facilitating concurrent programming. The processor supported
 synchronous communication over each of its four external serial connections, as
 well as time-sliced concurrent processes, all through microcoded instructions
-that made it possible to do these things with only a handful of assembly.
+that made it possible to do these things with only a handful of lines of
+assembly code.
 
-More like a microprocessor than merely a CPU, the Transputer incorporated all
+More like a microcontroller than merely a CPU, the Transputer incorporated all
 the circuitry required for it to function, and it was the intention of INMOS to
 market the Transputer as a one-size-fits-all solution for both areas. The aim
 was for each unit to cost no more than a few dollars, and for it to be used for
@@ -92,16 +95,18 @@ via message passing. What makes this impressive is that to the programmer, there
 is no difference (other than a memory address) between communicating between
 processes on the same Transputer, and communicating between two different
 Transputers. The instructions remain the same, and the difference is handled in
-the microcode. If one process tries to send a message to another before the
-second is ready for it, then the first will wait until the second is ready
-before sending, and it will not proceed until the second has received the
-message. In this way, the channels can be used to synchronise separate threads.
+the microcode.
+
+If one process tries to send a message to another before the second is ready for
+it, then the first will wait until the second is ready before sending, and it
+will not proceed until the second has received the message. In this way, the
+channels can be used to synchronise separate threads.
 
 \subsection{Concurrency}
 
 The Transputer provides a small selection of instructions which schedule new
-processes to run alongside the current. Only one process is truly running at any
-given time, but the processor time-slices between the scheduled processes so
+processes to run alongside the current one. Only one process is truly running at
+any given time, but the processor time-slices between the scheduled processes so
 that all may proceed. It does so when particular instructions are performed
 which can cause the process to yield control to another. If a process performs a
 blocking action (eg. waiting upon a channel) then it will be descheduled until

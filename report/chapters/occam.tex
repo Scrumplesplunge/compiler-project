@@ -1,0 +1,12 @@
+In Occam, any of the \texttt{IF}, \texttt{SEQ}, or \texttt{PAR} constructs can
+be \textit{replicated}. What this means depends upon the construct:
+\lstinputlisting[language=occam]{code/if.occ}
+Here, the \texttt{IF} statement on line 4 is equivalent to the following:
+\lstinputlisting[language=occam]{code/if2.occ}
+As you can see, allowing replication on \texttt{IF} statements drastically
+reduces the amount of code required in such cases, without complicating the
+simple cases.
+
+Applying replication to \texttt{SEQ} is roughly equivalent to a \texttt{for}
+loop in C, while applying replication to \texttt{PAR} is like a \texttt{for}
+loop which runs all of its iterations in parallel.

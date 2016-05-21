@@ -22,10 +22,15 @@ transformation is described in the first three sections below.
 
 The Lexer is responsible for performing the first stage of the parsing. The
 plain text of the source code is taken as input, and a stream of tokens is
-produced. Each token consists of one lexical unit from the source code. At this
-stage each unit is a terminal token, meaning that there is no sub-structure in
-a given token, but a clearly defined meaning.
+produced. Each token consists of one lexical unit from the source code, and is
+associated with some semantic interpretation. At this stage each unit is
+a terminal token, meaning that there is no sub-structure in a given
+token\footnote{Some tokens may have structure, such as string constants, but
+this structure is eradicated during the tokenisation to leave only the
+contents.}.
 
+\pagebreak
+\noindent
 The Occam syntax has only a handful of different token types:
 \begin{itemize}
   \item \texttt{CHAR c} - A character literal, e.g. \texttt{'a'}.
@@ -82,12 +87,12 @@ parser from scratch.
 
 The parser consists of two main parts. The first part is a collection of
 functions which describe parsing behaviour for each of a collection of
-context-free combinators, as well as reduction rules which are used to construct
-the \textit{\gls{ast}} from the source. This loosely acts as an alternative to a
-parser generator, but makes it much easier to track source locations for error
-messages. The second part is an expression of each of the grammar rules of Occam
-in terms of these combinators. Together, they form a complete parser for the
-Occam language.
+context-free \gls{combinator}s, as well as reduction rules which are used to
+construct the \textit{\gls{ast}} from the source. This loosely acts as an
+alternative to a parser generator, but makes it much easier to track source
+locations for error messages. The second part is an expression of each of the
+grammar rules of Occam in terms of these combinators. Together, they form
+a complete parser for the Occam language.
 
 \subsection{Semantic Checking}
 
@@ -99,12 +104,14 @@ Grammatically, there is nothing wrong with the line \texttt{c := 2}. However,
 semantically, it makes no sense to assign an integer value to a channel. Thus,
 it is necessary to perform semantic analysis to ensure that the program makes
 sense. The list of checks that the semantic analyser could feasibly perform is
-practically endless, but many are beyond the scope of this project. Checks that
+practically endless and many are beyond the scope of this project. Checks that
 the analyser will perform include:
 \begin{itemize}
-  \item Checks that variables are defined before they are used,
-  \item Checks that types match the requirements in expressions and statements,
-  \item Verification that constant-expressions are compile-time computable,
+  \item Checking that variables are defined before they are used,
+  \item Checking that types match the requirements in expressions and
+        statements,
+  \item Verification that constant-expressions are compile-time
+        computable,
 \end{itemize}
 among other simple assertions. The analyser may also warn about things which are
 not categorically errors, but resemble common programmer mistakes, or could have
@@ -162,8 +169,8 @@ Each line in the input consists (in the following order) of:
 \begin{itemize}
   \item An optional label, e.g. \texttt{START:}
   \item An optional \gls{mnemonic}, e.g. \texttt{opr}
-  \item If an instruction was given, an optional argument. This can either be
-        numeric (e.g. \texttt{-123}, \texttt{0xDEADBEEF}) or symbolic
+  \item An optional argument (if an instruction was specified). This can either
+        be numeric (e.g. \texttt{-123}, \texttt{0xDEADBEEF}) or symbolic
         (e.g. \texttt{FOO} or \texttt{BAR - BAZ}).
   \item An optional comment, e.g. \texttt{\# Hello, World!}
 \end{itemize}
@@ -243,12 +250,12 @@ assemble so far have assembled with no more than 5-10 iterations.}.
 
 The virtual machine will execute the bytecode produced by the assembler. It will
 implement most of the Transputer instruction set, with some exceptions and
-alterations. Some of the more complicated Transputer instructions are wholly
-unnecessary for implementing the version of Occam which I am aiming to
-implement\footnote{Two-dimensional block move instructions and floating point
-support, to name a few.}. Additionally, it is convenient to have direct
-instructions for printing values to the terminal, so that programs can display
-debugging information.
+alterations. Some of the more complicated Transputer
+instructions\footnote{Two-dimensional block move instructions and floating point
+support, to name a few.} are wholly unnecessary for implementing the version of
+Occam which I am aiming to implement. Additionally, it is convenient to have
+direct instructions for printing values to the terminal, so that programs can
+display debugging information.
 
 \subsection{Target Executable Format} \label{binary-format}
 
@@ -300,8 +307,9 @@ its address, and the ID of the instance that allocated it.
 The process server is responsible for hosting several instances of the virtual
 machine. The server has one copy of the bytecode and one copy of the static data
 for the entire program, which it shares with the VM instances that rely on them.
-The process server is started by the process master on one of the worker
-machines, and is stopped when the program terminates.
+The process server is started by the process master (described in
+\ref{process-master}) on one of the worker machines, and is stopped when the
+program terminates.
 
 The main responsibility of the process server is to act as an intermediary for
 communications between VM instances and the process master, but it can also

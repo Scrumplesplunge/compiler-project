@@ -19,12 +19,12 @@
 \newcommand{\projectsubtitle}
     {Compiling a CSP-like language for a distributed system}
 
-\titleformat{\chapter}
-    {\Large\bfseries}    % Format
-    {\huge\thechapter)}  % Label
-    {20pt}               % Separation
-    {\huge}              % Before-code
-\titleclass{\chapter}{straight}
+%\titleformat{\chapter}
+%    {\Large\bfseries}    % Format
+%    {\huge\thechapter)}  % Label
+%    {20pt}               % Separation
+%    {\huge}              % Before-code
+%\titleclass{\chapter}{straight}
 \titlespacing*{\chapter}{0pt}{30pt}{10pt}
 
 % Code listing style.
@@ -74,7 +74,7 @@
 }
 
 \lstdefinelanguage{json}{
-  morestring=[b]",
+  morestring=[b]"
 }
 
 \lstdefinelanguage{enum}{
@@ -173,6 +173,9 @@
         the workers running on a Raspberry Pi 3 which is 40 miles away.
       }
     \end{figure}
+  
+  \chapter{Replication in Occam} \label{adx-occam}
+    \input{chapters/occam}
 
   \clearpage
   \addcontentsline{toc}{chapter}{Bibliography}

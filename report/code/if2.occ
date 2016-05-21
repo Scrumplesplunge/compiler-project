@@ -1,0 +1,20 @@
+SEQ
+  DEF OTHERWISE = TRUE :
+  VAR i, found :
+  i := 0
+  found := FALSE
+  WHILE i < message.length        -- Loop over i = [0 FOR message.length].
+    SEQ
+      IF
+        message[BYTE i] = 'o'       -- Check if the letter is an 'o'.
+          SEQ
+            print.dec(i)            -- It is. Print and exit the loop.
+            found.letter := TRUE
+        OTHERWISE
+          SKIP
+      i := i + 1
+  IF
+    found.letter
+      SKIP                        -- Some branch succeeded.
+    OTHERWISE
+      STOP                        -- No branch succeeded. Stop the process.
