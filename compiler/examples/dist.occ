@@ -1,7 +1,7 @@
 DEF message = "Hello, World!" :
 DEF message.length = 13 :
 
--- Built in.
+-- Built in. Needs declaring, but implementation is ignored.
 PROC putc(VALUE c) =
   SKIP
 :

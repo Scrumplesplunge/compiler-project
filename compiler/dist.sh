@@ -2,7 +2,7 @@
 
 # Compile the source file.
 echo "Compiling.."
-bin/occ --assembly_file code.s --metadata_file metadata.json --source_file $1 
+bin/occ --source_file $1 
 if [[ $? -ne 0 ]]; then
   echo "Compilation failed."
   exit 1
@@ -31,9 +31,11 @@ echo "Constructing job file.."
 }
 EOF
 
+echo job.json
+
 # Execute the binary.
 echo "Executing program.."
-../vm/bin/master --job_file job.json $2
+../vm/bin/master --job_file job.json "${@:2}"
 if [[ $? -ne 0 ]]; then
   echo "VM terminated unsuccessfully.";
   exit 1
