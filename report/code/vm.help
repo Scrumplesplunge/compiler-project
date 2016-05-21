@@ -1,0 +1,14 @@
+Usage: vm --bytecode_file [filename] --metadata_file [filename]
+
+Execute a program using the virtual machine.
+
+  --bytecode_file   File containing the application bytecode to be executed.    
+  --debug           Enable debugging features, if present.                      
+  --defaults        List the default values for all special arguments.          
+  --help            Show this help message.                                     
+  --metadata_file   File containing the application data and configuration      
+                    parameters. This will be used to initialize the RAM of the  
+                    virtual machine before the program is started.              
+  --step            Run the program step-by-step.                               
+  --summary         Show a performance summary upon completion.                 
+  --verbose         Print additional information to stderr whilst running.      

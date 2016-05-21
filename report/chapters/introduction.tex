@@ -1,1 +1,25 @@
+Many programming languages support concurrency and parallelism, but often this
+functionality was added as an afterthought in libraries or as extensions. Very
+few languages make multithreading simple, and fewer still do so without risking
+data-races or other multithreading catastrophes.
 
+\textit{Communicating Sequential Processes}, or \textit{CSP}, is a formal
+language presented in 1984 by Brookes, Hoare, and Roscoe. The language is an
+algebra for describing concurrent processes, and solves the problem of
+thread-safe communication by synchronising on \textit{events}. In
+implementation, these events correspond to synchronous channels that allow two
+processes to communicate with each other by explicitly passing data between
+themselves.
+
+Not many languages choose to implement this approach to multithreading, instead
+opting for primitives such as \textit{mutexes} and \textit{condition variables}.
+Occam is a programming language which was designed to use these synchronous
+channels instead, and this report will cover the implementation of a compiler
+for Occam that targets a modern computer. Further, the report will show how the
+language can be adapted so that the programs may run on a collection of machines
+rather than just one, allowing for massive parallelism.
+
+The report will start by laying out the objectives and the scope of this
+project, and will then cover the design and implementation of an Occam compiler
+in detail, before going on to cover the construction of a distributed back-end
+that allows the language to truly take advantage of any available parallelism.

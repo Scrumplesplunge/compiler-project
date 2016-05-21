@@ -155,7 +155,7 @@ operations. In reality, the instruction set of the transputer was implemented in
 microcode for a much simpler underlying processor, but a virtual machine can
 implement these instructions directly.
 
-\subsection{Assembler Syntax}
+\subsection{Assembler Syntax} \label{asm-syntax}
 
 In order to make parsing simple, the syntax for the assembler is very basic.
 Each line in the input consists (in the following order) of:
@@ -197,7 +197,7 @@ Absolute locations can be computed with the combination of \texttt{ldc LABEL}
 and \texttt{ldpi}\footnote{\texttt{ldpi} loads the value of the instruction
 pointer and adds it to the value in register A.}.
 
-\subsection{Variable-length Instructions}
+\subsection{Variable-length Instructions} \label{var-len}
 
 As explained in \ref{ops}, the \Gls{transputer} has only 13 \gls{direct}s. The
 rest of the instruction set is accessed via the \texttt{opr} instruction, and
@@ -270,16 +270,38 @@ collection of records, each containing:
 
 \section{Runtime System}
 
-The runtime system described in \ref{dist-system} can be broken into two
-components.
+The runtime system described in \ref{dist-system} can be broken into three main
+components: Instances (which run the code), the Process Server (which maintains
+a collection of instances), and the Process Master (which maintains a collection
+ of process servers).
+
+\subsection{Instances}
+
+An instance is a specialisation of the virtual machine which provides additional
+functionality to allow the program to communicate with other instances. This
+functionality includes:
+\begin{itemize}
+  \item The ability to spawn new instances, potentially on a different machine.
+  \item The ability to communicate via channels with other instances, provided
+        that the two instances both share access to the same channel.
+\end{itemize}
+
+When a process requests a new instance, it provides the address of the
+instruction which that new instance should execute next, as well as specifying
+how much memory will be required by the new instance. It also implicitly
+provides its own workspace pointer, which is used as the initial workspace
+address of the new instance. The reason for doing this is so that the newly
+created instance is capable of addressing channels which were allocated in the
+workspace of the parent instance. The channel becomes uniquely identifiable by
+its address, and the ID of the instance that allocated it.
 
 \subsection{Process Server}
 
 The process server is responsible for hosting several instances of the virtual
-machine. The server has one copy of the bytecode for the entire program which it
-shares with the VM instances that rely on this code. The process server is
-started by the process master on one of the worker machines, and is stopped when
-the program terminates.
+machine. The server has one copy of the bytecode and one copy of the static data
+for the entire program, which it shares with the VM instances that rely on them.
+The process server is started by the process master on one of the worker
+machines, and is stopped when the program terminates.
 
 The main responsibility of the process server is to act as an intermediary for
 communications between VM instances and the process master, but it can also
@@ -289,9 +311,26 @@ forward the communications to the process master only to have it returned.
 Instead, the message can be directly copied from the memory of one instance into
 the memory of the other.
 
-\subsection{Process Master}
+\subsection{Process Master} \label{process-master}
 
-The process master is responsible for starting the process servers, distributing
-the program code and data to each of them, adjudicating the construction of new
-instances when requested by the program, and transferring messages between
-separate process servers.
+The process master is what initiates the execution of a program. The user
+provides a \textit{job file}, which is a JSON file containing configuration for
+the job. This specifies the code and data files, as well as listing the
+host/port addresses of each of the worker machines that should be used for the
+task. The process master connects to each of these and instructs them each to
+spawn a new process server. It then initiates the root process on one of the
+process servers and waits for that process to finish before exiting. Whilst it
+is waiting, it serves the following tasks:
+
+\begin{itemize}
+  \item
+    Instances running on any of the process servers may request the process
+    master to spawn new instances to run sub-processes. The master decides where
+    to create these instances and then instructs the corresponding process
+    server to start running that instance.
+  \item
+    An instance may attempt to communicate with any channel that it can address.
+    If this results in two instances communicating with each other from separate
+    process servers, then the communication has to be resolve via the process
+    master.
+\end{itemize}

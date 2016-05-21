@@ -1,0 +1,18 @@
+joe@thirio> cat examples/helloworld.occ
+DEF message = "Hello, World!",
+    length = 13 :
+
+-- Built-in procedure.
+PROC putc(VALUE i) =
+  SKIP
+:
+
+SEQ
+  -- Print the message.
+  SEQ i = [0 FOR length]
+    putc(message[BYTE i])
+  -- Terminate the line.
+  putc('*N')
+joe@thirio> ./run.sh examples/helloworld.occ
+Hello, World!
+joe@thirio>

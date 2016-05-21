@@ -2,6 +2,7 @@
 
 \usepackage{color}
 \usepackage{fancyhdr}
+\usepackage{float}
 \usepackage[a4paper, width=150mm, top=25mm, bottom=25mm]{geometry}
 \usepackage[nopostdot]{glossaries}
 \usepackage{graphicx}
@@ -76,6 +77,10 @@
   morestring=[b]",
 }
 
+\lstdefinelanguage{enum}{
+  morecomment=[l]{\#}
+}
+
 \input{chapters/glossary}
 
 \begin{document}
@@ -121,10 +126,53 @@
   \chapter*{Acknowledgements} \label{acknowledgements}
     \input{chapters/acknowledgements}
 
+  \clearpage
   \appendix
 
   \chapter{Parser Evaluation Rules} \label{parser-lib}
     \lstinputlisting[language=haskell]{code/run_parser.hs}
+  
+  \chapter{Execution Example} \label{run-example}
+    \begin{figure}[H]
+      \lstinputlisting[language=bash]{code/run.sh}
+      \caption{
+        Shell script for compiling, assembling, and executing programs on the
+        virtual machine.
+      }
+      \label{run-sh}
+    \end{figure}
+    \begin{figure}[H]
+      \lstinputlisting{code/run.txt}
+      \caption{
+        Running the simple "Hello, World!" program on the virtual machine.
+      }
+    \end{figure}
+
+  \chapter{Distributed Example} \label{dist-example}
+    \begin{figure}[H]
+      \lstinputlisting[language=bash]{code/dist.sh}
+      \caption{
+        Shell script for compiling, assembling, and executing programs on the
+        distributed virtual machine.
+      }
+      \label{dist-sh}
+    \end{figure}
+    \begin{figure}[H]
+      \includegraphics[width=\textwidth]{images/distributed}
+      \caption{
+        Running a distributed "Hello, World!" program on the distributed
+        virtual machine with two workers. Left is master, top right is the program,
+        middle right is the first worker (with --verbose), and bottom right is the
+        second worker.
+      }
+    \end{figure}
+    \begin{figure}[H]
+      \includegraphics[width=\textwidth]{images/distributed_pi}
+      \caption{
+        Running the same distributed "Hello, World!" program, but with one of
+        the workers running on a Raspberry Pi 3 which is 40 miles away.
+      }
+    \end{figure}
 
   \clearpage
   \addcontentsline{toc}{chapter}{Bibliography}

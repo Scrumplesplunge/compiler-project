@@ -1,1 +1,64 @@
-...
+This project has been a rigorous and first-hand experience in not only writing
+a compiler, but producing an efficient distributed runtime system for
+simple multiprocessing.
+
+\section{The Results}
+
+The final state of the project has a collection of six applications:
+
+\begin{itemize}
+  \item \texttt{occ} - The Occam compiler.
+  \item \texttt{as} - The assembler.
+  \item \texttt{das} - The disassembler.
+  \item \texttt{vm} - The virtual machine binary for fast single-threaded execution.
+  \item \texttt{master} - The process master binary for distributed execution.
+  \item \texttt{worker} - The worker binary for distributed execution.
+\end{itemize}
+
+Together, these form a fully useable collection of utilities. However, many of
+the features mentioned in \ref{beyond-scope} would be highly desirable if these
+were to be put into regular use. In summary, I think that I have achieved what
+I set out to achieve: build a compiler which generates distributed programs.
+
+\section{Continuation}
+
+There are literally hundreds of things that could be done to extend this
+project. These range from relatively benign things such as fleshing out the
+semantic analysis, to more major changes such as adding support for floating
+point values or compound datatypes. However, there are some particularly
+interesting ideas which I intended to try if I found the time:
+
+\subsection{Remote Memory Access}
+
+When I implemented the instance spawning code and decided to make the workspace
+of the new process start at the same address as the parent workspace at the time
+of spawning the child, I had in mind the idea of potentially allowing child
+instances to read and write the variables defined in the workspaces of their
+ancestors.
+
+In order to implement this efficiently, reads to external addresses could fetch
+chunks in a similar fashion to fetching cache lines, and writes could be locally
+cached and only be flushed when the instance exited. Due to the restrictive
+nature of Occam's memory model, this would not be detectably different from
+performing the reads and writes directly, but it would be much faster, and would
+effectively make the \texttt{DIST PAR} construct a drop-in replacement for
+\texttt{PAR}.
+
+\subsection{Procedures and Recursion}
+
+I did not implement procedures in my compiler, but if I had they would likely
+have not allowed recursion. This is due to the way that processes are laid out
+in memory by the compiler. However, with the distributed model, it would be
+possible to implement recursion by spawning recursive calls in new instances.
+To make this more efficient, it would probably be sensible to have different
+instructions for explicitly requesting the instances to be spawned on the same
+machine.
+
+\subsection{Load Balancing}
+
+The manner by which instances are distributed between process servers in my
+implementation is a simple round-robin approach. However, it would be entirely
+plausible for the process master to periodically query the relative loads of
+each worker, and to take into account different factors such as the amount of
+free memory on each worker, and the relative speeds of each processor if the
+workers are not running on a homogeneous collection of machines.

@@ -210,4 +210,14 @@
   }
 }
 
+\newglossaryentry{nagles-algo}{
+  name = Nagle's Algorithm,
+  text = Nagle's algorithm,
+  description = {
+    To improve network utilisation, Nagle's algorithm buffers output for a short
+    period before sending so that a sequence of small messages can be sent as
+    one larger one, thereby reducing the overhead by sending fewer TCP headers.
+  }
+}
+
 \glossarystyle{altlist}

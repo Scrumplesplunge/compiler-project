@@ -1,1 +1,27 @@
-...
+Throughout the course of this project, I have made sure to have many clear
+interfaces between components where the functionality can be tested. In most
+cases this has simply been by inputting values manually to confirm that the
+correct behaviour is exhibited in the output, but since this is a compiler
+project, the simplest way of testing that it was working was to have example
+code for it to compile.
+
+For the compiler, I have a collection of 11 Occam programs which utilise the
+various features of the language. These were written prior to implementing the
+corresponding features, and acted as the test that each feature had been
+implemented properly.
+
+For the assembler, the simplest thing to do was to verify manually that the
+bytecode which was generated corresponded to the instructions in the assembly
+file. This was made much simpler by the disassembler which I wrote. However, the
+most effective way of testing this was to test it in conjunction with the
+virtual machine, by having a selection of assembly files which I could assemble
+and run, in a similar manner to the compiler examples.
+
+In order to test the complete software stack for the standard (single-machine)
+system, I produced a short shell script which compiles, assembles, and executes
+an Occam program using the tools that I have written (see Appendix
+\ref{run-example}).  For the distributed system, the setup is more complicated.
+However, a similar
+shell script can spawn the master as long as the workers are already running
+(see Appendix \ref{dist-example}).
+
