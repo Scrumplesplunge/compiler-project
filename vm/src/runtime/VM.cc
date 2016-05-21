@@ -134,10 +134,14 @@ int32_t VM::read(int32_t address) {
     return static_data_[index];
   }
 
-  if (__builtin_expect((address >= memory_end_), 0)) {
-    // Access to memory after end bound. Pass to external handler.
-    return readAfterEnd(address);
-  }
+  #ifdef DISABLE_BOUND_CHECKS
+    #warning "readAfterEnd() won't be called: bound checks are disabled."
+  #else
+    if (__builtin_expect((address >= memory_end_), 0)) {
+      // Access to memory after end bound. Pass to external handler.
+      return readAfterEnd(address);
+    }
+  #endif
 
   int32_t value = (*this)[address];
   return value;
@@ -197,7 +201,7 @@ void VM::runSpecialInstruction(Indirect op) {
   throw runtime_error("Unimplemented instruction " + ::toString(op));
 }
 
-void VM::onEmptyProcessQueue(unique_lock<mutex>& lock) {
+void VM::onEmptyProcessQueue(lock_t lock) {
   running_ = false;
 }
 
@@ -251,12 +255,12 @@ void VM::performIndirect(Indirect op) {
   }
 }
 
-void VM::deschedule(unique_lock<mutex>& lock) {
+void VM::deschedule(lock_t lock) {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   resumeNext(lock);
 }
 
-void VM::schedule(int32_t desc, unique_lock<mutex>& lock) {
+void VM::schedule(int32_t desc, lock_t lock) {
   int32_t new_Wptr = makeWptr(desc);
 
   // Set the next pointer of the new process.
@@ -264,13 +268,13 @@ void VM::schedule(int32_t desc, unique_lock<mutex>& lock) {
   enqueueProcess(desc, lock);
 }
 
-void VM::schedule(unique_lock<mutex>& lock) {
+void VM::schedule(lock_t lock) {
   write(Wptr - 4, Iptr);        // Save the instruction pointer.
   write(Wptr - 8, NotProcess);  // This process is at the back of the queue.
   schedule(makeWdesc(Wptr), lock);
 }
 
-void VM::resumeNext(unique_lock<mutex>& lock) {
+void VM::resumeNext(lock_t lock) {
   next_yield_ = op_count_ + time_slice_;
   int32_t next_Wdesc;
   if (FptrReg != NotProcess) {
@@ -283,7 +287,7 @@ void VM::resumeNext(unique_lock<mutex>& lock) {
   Iptr = read(Wptr - 4);
 }
 
-void VM::yield(unique_lock<mutex>& lock) {
+void VM::yield(lock_t lock) {
   // Yield only if the process has been running for long enough.
   if (op_count_ >= next_yield_) {
     schedule(lock);
@@ -291,11 +295,11 @@ void VM::yield(unique_lock<mutex>& lock) {
   }
 }
 
-void VM::stop(unique_lock<mutex>& lock) {
+void VM::stop(lock_t lock) {
   deschedule(lock);
 }
 
-void VM::enqueueProcess(int32_t desc, unique_lock<mutex>& lock) {
+void VM::enqueueProcess(int32_t desc, lock_t lock) {
   // Point the previous process (if it exists) at this one.
   if (FptrReg == NotProcess) {
     // Queue was empty. Make the new process the front process.
@@ -307,7 +311,7 @@ void VM::enqueueProcess(int32_t desc, unique_lock<mutex>& lock) {
   BptrReg = desc;
 }
 
-int32_t VM::dequeueProcess(unique_lock<mutex>& lock) {
+int32_t VM::dequeueProcess(lock_t lock) {
   int32_t desc = FptrReg;
 
   // Update the front pointer if necessary.

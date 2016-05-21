@@ -49,8 +49,12 @@ void VM::direct_J() {
   Iptr += Oreg;
   Oreg = 0;
 
-  unique_lock<mutex> lock(queue_mu_);
-  yield(lock);
+  #ifdef DISABLE_MUTEX
+    yield(nullptr);
+  #else
+    unique_lock<mutex> lock(queue_mu_);
+    yield(lock);
+  #endif
 }
 
 // Load constant.

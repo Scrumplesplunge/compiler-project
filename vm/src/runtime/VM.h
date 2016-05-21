@@ -13,6 +13,8 @@
 //                        and program memory will not be performed. This
 //                        improves performance by a significant amount in
 //                        optimised builds.
+// DISABLE_MUTEX        - If defined, the VM will not protect itself against
+//                        concurrent access.
 
 class VM {
  public:
@@ -85,25 +87,31 @@ class VM {
   // Handler used when an unrecognised indirect instructino is executed.
   virtual void runSpecialInstruction(Indirect op);
 
-  // Handler used when the the only active process stops.
-  virtual void onEmptyProcessQueue(std::unique_lock<std::mutex>& lock);
-
   int8_t fetch();  // Fetch a single instruction for execution.
   void performDirect(Direct op, int32_t argument);
   void performIndirect(Indirect op);
 
+  // Handler used when the the only active process stops.
+  #ifdef DISABLE_MUTEX
+    typedef void* lock_t;
+  #else
+    typedef std::unique_lock<std::mutex>& lock_t;
+  #endif 
+
+  virtual void onEmptyProcessQueue(lock_t lock);
+
   // Remove the running process from the process queue.
-  void deschedule(std::unique_lock<std::mutex>& lock);
+  void deschedule(lock_t lock);
   // Schedule the specified process.
-  void schedule(int32_t desc, std::unique_lock<std::mutex>& lock);
+  void schedule(int32_t desc, lock_t lock);
   // Schedule the running process (ie. pause it).
-  void schedule(std::unique_lock<std::mutex>& lock);
+  void schedule(lock_t lock);
   // Resume the next process.
-  void resumeNext(std::unique_lock<std::mutex>& lock);
+  void resumeNext(lock_t lock);
   // Conditionally schedule(); resumeNext();
-  void yield(std::unique_lock<std::mutex>& lock);
+  void yield(lock_t lock);
   // End current process and resume the next.
-  void stop(std::unique_lock<std::mutex>& lock);
+  void stop(lock_t lock);
 
   // Convert between workspace descriptor and workspace pointer. In this case,
   // these are identity functions, but are abstracted in case this changes.
@@ -111,11 +119,11 @@ class VM {
   static int32_t makeWptr(int32_t Wdesc) { return Wdesc; }
 
   // Enqueues the process with the specified workspace descriptor.
-  void enqueueProcess(int32_t desc, std::unique_lock<std::mutex>& lock);
+  void enqueueProcess(int32_t desc, lock_t lock);
 
   // Dequeues a process from the process queue and returns its workspace
   // descriptor.
-  int32_t dequeueProcess(std::unique_lock<std::mutex>& lock);
+  int32_t dequeueProcess(lock_t lock);
 
   // Direct operations.
   #define DIRECT(type) void direct_##type()
@@ -166,7 +174,10 @@ class VM {
   int32_t A = 0, B = 0, C = 0;  // Register stack.
   int32_t Oreg = 0;             // Operand register.
 
+  #ifndef DISABLE_MUTEX
   std::mutex queue_mu_;
+  #endif
+
   int32_t BptrReg = NotProcess; // Back pointers for process queues.
   int32_t FptrReg = NotProcess; // Front pointers for process queues.
 

@@ -66,9 +66,13 @@ void VM::indirect_ENDP() {
   } else {
     // Release control.
     write(A + 4, read(A + 4) - 1);
-    
-    unique_lock<mutex> lock(queue_mu_);
-    stop(lock);
+   
+    #ifdef DISABLE_MUTEX
+      stop(nullptr);
+    #else
+      unique_lock<mutex> lock(queue_mu_);
+      stop(lock);
+    #endif
   }
 }
 
@@ -96,8 +100,12 @@ void VM::indirect_LEND() {
     Iptr -= A;
   }
 
-  unique_lock<mutex> lock(queue_mu_);
-  yield(lock);
+  #ifdef DISABLE_MUTEX
+    yield(nullptr);
+  #else
+    unique_lock<mutex> lock(queue_mu_);
+    yield(lock);
+  #endif
 }
 
 // Minimum integer.
@@ -187,8 +195,12 @@ void VM::indirect_SHR() {
 
 // Start process.
 void VM::indirect_STARTP() {
-  unique_lock<mutex> lock(queue_mu_);
-  schedule(lock);
+  #ifdef DISABLE_MUTEX
+    schedule(nullptr);
+  #else
+    unique_lock<mutex> lock(queue_mu_);
+    schedule(lock);
+  #endif
 
   Wptr = A;
   Iptr += B;
@@ -196,8 +208,12 @@ void VM::indirect_STARTP() {
 
 // Stop process.
 void VM::indirect_STOPP() {
-  unique_lock<mutex> lock(queue_mu_);
-  stop(lock);
+  #ifdef DISABLE_MUTEX
+    stop(nullptr);
+  #else
+    unique_lock<mutex> lock(queue_mu_);
+    stop(lock);
+  #endif
 }
 
 // Subtract.
@@ -276,8 +292,12 @@ void VM::indirect_ALTEND() {
 void VM::indirect_ALTWT() {
   write(Wptr, NoneSelected);  // Indicate that no branch yet selected.
   if (read(Wptr - 12) != Ready) {
-    unique_lock<mutex> lock(queue_mu_);
-    deschedule(lock);
+    #ifdef DISABLE_MUTEX
+      deschedule(nullptr);
+    #else
+      unique_lock<mutex> lock(queue_mu_);
+      deschedule(lock);
+    #endif
   }
 }
 
@@ -334,8 +354,12 @@ void VM::indirect_IN() {
     write(B, makeWdesc(Wptr));
     write(Wptr - 12, C);
 
-    unique_lock<mutex> lock(queue_mu_);
-    deschedule(lock);
+    #ifdef DISABLE_MUTEX
+      deschedule(nullptr);
+    #else
+      unique_lock<mutex> lock(queue_mu_);
+      deschedule(lock);
+    #endif
   } else {
     // A process is waiting. The communication can proceed.
     int32_t source = read((chan_value & ~0x3) - 12);
@@ -344,10 +368,14 @@ void VM::indirect_IN() {
       writeByte(C + i, readByte(source + i));
 
     // Reschedule the other thread.
-    {
-      unique_lock<mutex> lock(queue_mu_);
-      schedule(chan_value, lock);
-    }
+    #ifdef DISABLE_MUTEX
+      schedule(chan_value, nullptr);
+    #else
+      {
+        unique_lock<mutex> lock(queue_mu_);
+        schedule(chan_value, lock);
+      }
+    #endif
 
     // Reset the channel.
     write(B, NotProcess);
@@ -363,8 +391,12 @@ void VM::indirect_OUT() {
     write(B, makeWdesc(Wptr));
     write(Wptr - 12, C);
 
-    unique_lock<mutex> lock(queue_mu_);
-    deschedule(lock);
+    #ifdef DISABLE_MUTEX
+      deschedule(nullptr);
+    #else
+      unique_lock<mutex> lock(queue_mu_);
+      deschedule(lock);
+    #endif
   } else {
     int32_t dest_address = (chan_value & ~0x3) - 12;
     int32_t dest = read(dest_address);
@@ -376,18 +408,27 @@ void VM::indirect_OUT() {
       write(dest_address, Ready);
       write(Wptr - 12, C);
 
-      unique_lock<mutex> lock(queue_mu_);
-      schedule(chan_value, lock);
-      deschedule(lock);
+      #ifdef DISABLE_MUTEX
+        schedule(chan_value, nullptr);
+        deschedule(nullptr);
+      #else
+        unique_lock<mutex> lock(queue_mu_);
+        schedule(chan_value, lock);
+        deschedule(lock);
+      #endif
     } else {
       // A process is waiting directly. The communication can proceed.
       for (int i = 0; i < A; i++)
         writeByte(dest + i, readByte(C + i));
       // Reschedule the other thread.
-      {
-        unique_lock<mutex> lock(queue_mu_);
-        schedule(chan_value, lock);
-      }
+      #ifdef DISABLE_MUTEX
+        schedule(chan_value, nullptr);
+      #else
+        {
+          unique_lock<mutex> lock(queue_mu_);
+          schedule(chan_value, lock);
+        }
+      #endif
 
       // Reset the channel.
       write(B, NotProcess);

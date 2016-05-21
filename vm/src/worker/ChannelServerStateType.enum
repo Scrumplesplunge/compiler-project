@@ -7,7 +7,7 @@ LOCAL_ENABLED  # Channel is enabled by a local alternative.
 REMOTE_ENABLED  # Channel is enabled by a remote alternative.
 
 LOCAL_READY  # Channel is locally enabled with a waiting writer.
-REMOTE_READY  # Channel is locally enabled with a waiting writer.
+REMOTE_READY  # Channel is remotely enabled with a waiting writer.
 
 LOCAL_INPUT_WAIT  # Local reader is waiting to receive.
 REMOTE_INPUT_WAIT  # Remote reader is waiting to receive.
